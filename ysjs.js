@@ -1,15 +1,15 @@
 // ==UserScript==
 // @name         数据采集器
 // @namespace    http://tampermonkey.net/
-// @version      1.2.32
+// @version      1.2.33
 // @description  话题30天数据 + 用户微博数据，统一面板导出表格（多Sheet）
 // @author       Your Name
 // @match        https://m.weibo.cn/*
 // @match        https://m.s.weibo.com/*
 // @match        https://w.yangshipin.cn/*
 // @match        https://yangshipin.cn/*
-// @updateURL    https://raw.githubusercontent.com/Noah-Wu66/Scraper/main/ysjs.js
-// @downloadURL  https://raw.githubusercontent.com/Noah-Wu66/Scraper/main/ysjs.js
+// @updateURL    https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysjs.js
+// @downloadURL  https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysjs.js
 // @require      https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js
 // @grant        GM_getValue
 // @grant        GM_setValue

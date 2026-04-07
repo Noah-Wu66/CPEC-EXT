@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频 AI 视频分析助手
 // @namespace    http://tampermonkey.net/
-// @version      1.2.1
+// @version      1.2.2
 // @description  使用 Qwen3.5-Omni / MiMo-V2-Omni 模型分析央视频视频内容，支持浅色/深色/跟随系统主题
 // @author       CPEC
 // @match        https://yangshipin.cn/video/*
@@ -13,8 +13,8 @@
 // @connect      dashscope.aliyuncs.com
 // @connect      zenmux.ai
 // @run-at       document-idle
-// @updateURL    https://github.com/Noah-Wu66/Standardization/raw/refs/heads/main/yangshipin-ai-analyzer.user.js
-// @downloadURL  https://github.com/Noah-Wu66/Standardization/raw/refs/heads/main/yangshipin-ai-analyzer.user.js
+// @updateURL    https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/yangshipin-ai-analyzer.user.js
+// @downloadURL  https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/yangshipin-ai-analyzer.user.js
 // ==/UserScript==
 
 (function () {
