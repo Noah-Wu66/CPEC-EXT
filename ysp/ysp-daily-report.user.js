@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.23
+// @version      1.2.24
 // @description  在标准化系统页面按日期区间和编组子品类采集日报，并静默缓存到本地
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -24,7 +24,7 @@
   }
   window.__YSP_DAILY_REPORTER__ = true;
 
-  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.23';
+  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.24';
 
   const PANEL_STYLE = `
 #ysp-daily-panel-root {
@@ -520,31 +520,31 @@
       subgroups: [
         {
           id: 'knowledge-core',
-          label: '文史、自然、科技、教育',
+          label: '文史、教育、自然、科技',
           categories: [
             { key: 'knowledge-history', label: '文史', queryLabel: '文史' },
+            { key: 'knowledge-education', label: '教育', queryLabel: '教育' },
             { key: 'knowledge-nature', label: '自然', queryLabel: '自然科学', exportLabel: '自然' },
-            { key: 'knowledge-technology', label: '科技', queryLabel: '科技' },
-            { key: 'knowledge-education', label: '教育', queryLabel: '教育' }
+            { key: 'knowledge-technology', label: '科技', queryLabel: '科技' }
           ]
         },
         {
           id: 'knowledge-life',
-          label: '生活、健康、美食、青少',
+          label: '青少、健康、美食、生活',
           categories: [
-            { key: 'knowledge-life-style', label: '生活', queryLabel: '生活方式', exportLabel: '生活' },
+            { key: 'knowledge-youth', label: '青少', queryLabel: '青少' },
             { key: 'knowledge-health', label: '健康', queryLabel: '健康' },
             { key: 'knowledge-food', label: '美食', queryLabel: '美食' },
-            { key: 'knowledge-youth', label: '青少', queryLabel: '青少' }
+            { key: 'knowledge-life-style', label: '生活', queryLabel: '生活方式', exportLabel: '生活' }
           ]
         },
         {
           id: 'knowledge-animals',
-          label: '动物、法治、时尚',
+          label: '时尚、法治、动物',
           categories: [
-            { key: 'knowledge-animal', label: '动物', queryLabel: '动物' },
+            { key: 'knowledge-fashion', label: '时尚', queryLabel: '时尚' },
             { key: 'knowledge-law', label: '法治', queryLabel: '法治' },
-            { key: 'knowledge-fashion', label: '时尚', queryLabel: '时尚' }
+            { key: 'knowledge-animal', label: '动物', queryLabel: '动物' }
           ]
         }
       ]
@@ -556,11 +556,11 @@
       subgroups: [
         {
           id: 'information-world',
-          label: '国际、军事、体育',
+          label: '国际、体育、军事',
           categories: [
             { key: 'information-international', label: '国际', queryLabel: '国际/港澳台', exportLabel: '国际/港澳台' },
-            { key: 'information-military', label: '军事', queryLabel: '军事' },
-            { key: 'information-sports', label: '体育', queryLabel: '体育' }
+            { key: 'information-sports', label: '体育', queryLabel: '体育' },
+            { key: 'information-military', label: '军事', queryLabel: '军事' }
           ]
         },
         {
@@ -574,10 +574,10 @@
         },
         {
           id: 'information-public',
-          label: '民生、社会、三农',
+          label: '社会、民生、三农',
           categories: [
-            { key: 'information-livelihood', label: '民生', queryLabel: '民生' },
             { key: 'information-society', label: '社会', queryLabel: '社会' },
+            { key: 'information-livelihood', label: '民生', queryLabel: '民生' },
             { key: 'information-agriculture', label: '三农', queryLabel: '三农' }
           ]
         },
@@ -590,12 +590,12 @@
       subgroups: [
         {
           id: 'culture-stage',
-          label: '综艺、曲艺、音乐、舞蹈、搞笑',
+          label: '综艺、音乐、舞蹈、曲艺、搞笑',
           categories: [
             { key: 'culture-variety', label: '综艺', queryLabel: '综艺' },
-            { key: 'culture-folk-art', label: '曲艺', queryLabel: '曲艺' },
             { key: 'culture-music', label: '音乐', queryLabel: '音乐' },
             { key: 'culture-dance', label: '舞蹈', queryLabel: '舞蹈' },
+            { key: 'culture-folk-art', label: '曲艺', queryLabel: '曲艺' },
             { key: 'culture-comedy', label: '搞笑', queryLabel: '搞笑' }
           ]
         },
