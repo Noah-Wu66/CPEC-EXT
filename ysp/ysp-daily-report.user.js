@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         YSP 日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.2
-// @description  在标准化系统页面按单日和主品类采集日报并导出 Excel
+// @version      1.2.0
+// @description  在标准化系统页面按单日和编组子品类采集日报，并在面板内下载 Excel
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
 // @match        https://std.video.cloud.cctv.com/*
@@ -24,7 +24,7 @@
   }
   window.__YSP_DAILY_REPORTER__ = true;
 
-  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.1.2';
+  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.0';
 
   const PANEL_STYLE = `
 #ysp-daily-panel-root {
@@ -32,61 +32,160 @@
   top: 16px;
   right: 16px;
   z-index: 2147483646;
-  width: 380px;
-  color: #17212b;
-  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  width: 456px;
+  max-height: calc(100vh - 32px);
+  color: #17304b;
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
 }
 
 .ysp-daily-panel {
+  position: relative;
   overflow: hidden;
-  border: 1px solid rgba(20, 43, 62, 0.12);
-  border-radius: 18px;
+  border: 1px solid rgba(21, 54, 85, 0.12);
+  border-radius: 24px;
   background:
-    linear-gradient(135deg, rgba(255, 249, 239, 0.98), rgba(246, 251, 255, 0.98)),
+    linear-gradient(180deg, rgba(252, 248, 241, 0.98), rgba(244, 249, 255, 0.98)),
     #ffffff;
-  box-shadow: 0 18px 50px rgba(17, 40, 67, 0.18);
-  backdrop-filter: blur(12px);
+  box-shadow: 0 24px 60px rgba(19, 45, 71, 0.2);
+  backdrop-filter: blur(18px);
+}
+
+.ysp-daily-panel::before,
+.ysp-daily-panel::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(4px);
+}
+
+.ysp-daily-panel::before {
+  top: -84px;
+  right: -42px;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(254, 202, 137, 0.34), rgba(254, 202, 137, 0));
+}
+
+.ysp-daily-panel::after {
+  bottom: -96px;
+  left: -54px;
+  width: 260px;
+  height: 260px;
+  background: radial-gradient(circle, rgba(121, 166, 215, 0.28), rgba(121, 166, 215, 0));
 }
 
 .ysp-daily-panel__header {
+  position: relative;
+  padding: 20px 22px 16px;
+  color: #f9fbff;
+  background:
+    linear-gradient(135deg, rgba(15, 41, 66, 0.98), rgba(27, 82, 122, 0.94)),
+    #17314b;
+}
+
+.ysp-daily-panel__header::after {
+  content: "";
+  position: absolute;
+  inset: auto 22px 0 22px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0));
+}
+
+.ysp-daily-panel__header-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px 12px;
-  background: linear-gradient(135deg, #18344c, #2b5b80);
-  color: #f8fbff;
+  gap: 14px;
+}
+
+.ysp-daily-panel__eyebrow {
+  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .ysp-daily-panel__title {
   margin: 0;
-  font-size: 18px;
+  font-family: "STZhongsong", "Songti SC", "Noto Serif SC", serif;
+  font-size: 22px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .ysp-daily-panel__subtitle {
-  margin-top: 6px;
+  margin-top: 8px;
+  max-width: 320px;
   font-size: 12px;
-  line-height: 1.5;
-  color: rgba(248, 251, 255, 0.78);
+  line-height: 1.65;
+  color: rgba(247, 250, 255, 0.78);
 }
 
 .ysp-daily-panel__version {
-  padding: 4px 10px;
+  flex-shrink: 0;
+  padding: 6px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   font-size: 11px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   white-space: nowrap;
 }
 
-.ysp-daily-panel__body {
-  padding: 16px 18px 18px;
+.ysp-daily-panel__headline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-top: 16px;
 }
 
-.ysp-daily-panel__section + .ysp-daily-panel__section {
-  margin-top: 14px;
+.ysp-daily-panel__headline-card {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ysp-daily-panel__headline-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.ysp-daily-panel__headline-value {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.ysp-daily-panel__body {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding: 18px 18px 20px;
+}
+
+.ysp-daily-panel__section {
+  position: relative;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(25, 56, 84, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.ysp-daily-panel__section--compact {
+  padding: 14px 16px;
+}
+
+.ysp-daily-panel__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
 .ysp-daily-panel__label {
@@ -97,90 +196,238 @@
   color: #18344c;
 }
 
+.ysp-daily-panel__toolbar .ysp-daily-panel__label {
+  margin-bottom: 0;
+}
+
 .ysp-daily-panel__hint {
-  margin-top: 6px;
   font-size: 12px;
-  line-height: 1.5;
-  color: #58708a;
+  line-height: 1.55;
+  color: #5d7690;
+}
+
+.ysp-daily-panel__toolbar-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #37617f;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ysp-daily-panel__toolbar-button:hover {
+  color: #17344d;
 }
 
 .ysp-daily-panel__date {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
-  border: 1px solid rgba(24, 52, 76, 0.16);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 14px;
-  color: #17212b;
-}
-
-.ysp-daily-panel__categories {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  max-height: 248px;
-  padding: 4px;
-  overflow-y: auto;
+  padding: 12px 14px;
   border: 1px solid rgba(24, 52, 76, 0.12);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  color: #17212b;
+  box-shadow: inset 0 1px 2px rgba(17, 41, 66, 0.04);
 }
 
-.ysp-daily-panel__category {
+.ysp-daily-panel__selection-summary {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  min-height: 38px;
+  margin-top: 12px;
+}
+
+.ysp-daily-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
   padding: 0 10px;
-  border: 1px solid rgba(24, 52, 76, 0.08);
-  border-radius: 12px;
-  background: #ffffff;
-  font-size: 13px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 999px;
+  background: rgba(23, 52, 77, 0.08);
+  color: #204160;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.ysp-daily-panel__category:hover {
-  border-color: rgba(50, 99, 140, 0.28);
-  box-shadow: 0 6px 16px rgba(37, 86, 126, 0.08);
+.ysp-daily-panel__catalog {
+  display: grid;
+  gap: 12px;
+  max-height: 360px;
+  padding-right: 4px;
+  overflow-y: auto;
 }
 
-.ysp-daily-panel__category input {
+.ysp-daily-panel__group {
+  --accent: #3276aa;
+  --accent-soft: rgba(50, 118, 170, 0.1);
+  --accent-border: rgba(50, 118, 170, 0.16);
+  --accent-ink: #214866;
+  padding: 14px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 252, 255, 0.8)),
+    #ffffff;
+  border: 1px solid var(--accent-border);
+  box-shadow: 0 10px 24px rgba(23, 56, 84, 0.06);
+}
+
+.ysp-daily-panel__group[data-theme="knowledge"] {
+  --accent: #cf7d2e;
+  --accent-soft: rgba(207, 125, 46, 0.12);
+  --accent-border: rgba(207, 125, 46, 0.16);
+  --accent-ink: #7d4b1f;
+}
+
+.ysp-daily-panel__group[data-theme="information"] {
+  --accent: #4b7fab;
+  --accent-soft: rgba(75, 127, 171, 0.12);
+  --accent-border: rgba(75, 127, 171, 0.16);
+  --accent-ink: #274766;
+}
+
+.ysp-daily-panel__group[data-theme="culture"] {
+  --accent: #be6b58;
+  --accent-soft: rgba(190, 107, 88, 0.12);
+  --accent-border: rgba(190, 107, 88, 0.16);
+  --accent-ink: #733d31;
+}
+
+.ysp-daily-panel__group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ysp-daily-panel__group-title {
   margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+
+.ysp-daily-panel__group-meta {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #61788f;
+}
+
+.ysp-daily-panel__group-action {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ysp-daily-panel__subgroups {
+  display: grid;
+  gap: 10px;
+}
+
+.ysp-daily-panel__subgroup {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(24, 52, 76, 0.08);
+}
+
+.ysp-daily-panel__subgroup-title {
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.55;
+  color: #38536e;
+}
+
+.ysp-daily-panel__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ysp-daily-panel__chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(24, 52, 76, 0.1);
+  background: #ffffff;
+  color: #28445f;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.ysp-daily-panel__chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(35, 89, 128, 0.22);
+  box-shadow: 0 8px 18px rgba(26, 65, 98, 0.08);
+}
+
+.ysp-daily-panel__chip.is-checked {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  box-shadow: 0 10px 18px rgba(31, 77, 116, 0.1);
+}
+
+.ysp-daily-panel__chip input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ysp-daily-panel__chip-text {
+  position: relative;
+  z-index: 1;
 }
 
 .ysp-daily-panel__actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1.3fr 0.8fr 0.8fr;
   gap: 10px;
 }
 
 .ysp-daily-panel__button {
-  min-height: 42px;
+  min-height: 44px;
   padding: 10px 12px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
 }
 
-.ysp-daily-panel__button:disabled {
-  cursor: default;
-  opacity: 0.56;
-  transform: none;
-  box-shadow: none;
-}
-
 .ysp-daily-panel__button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
+.ysp-daily-panel__button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
 .ysp-daily-panel__button--primary {
-  background: linear-gradient(135deg, #0f7c92, #1f5f87);
+  background: linear-gradient(135deg, #0f7d94, #1f5f86);
   color: #ffffff;
-  box-shadow: 0 12px 24px rgba(31, 95, 135, 0.2);
+  box-shadow: 0 14px 28px rgba(31, 95, 134, 0.2);
 }
 
 .ysp-daily-panel__button--secondary {
@@ -189,14 +436,75 @@
 }
 
 .ysp-daily-panel__button--ghost {
-  background: #fff6eb;
-  color: #8a4b12;
+  background: #fff2e4;
+  color: #874d1a;
+}
+
+.ysp-daily-panel__report {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(252, 244, 234, 0.9), rgba(238, 246, 255, 0.9));
+  border: 1px solid rgba(25, 56, 84, 0.08);
+}
+
+.ysp-daily-panel__report-empty {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #5d7690;
+}
+
+.ysp-daily-panel__report-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ysp-daily-panel__report-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #18344c;
+}
+
+.ysp-daily-panel__report-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #54708a;
+}
+
+.ysp-daily-panel__download {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #d37d2a, #b85e3c);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(184, 94, 60, 0.2);
+}
+
+.ysp-daily-panel__download:disabled {
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
+}
+
+.ysp-daily-panel__report-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .ysp-daily-panel__status {
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(24, 52, 76, 0.06);
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(24, 52, 76, 0.05);
   font-size: 13px;
   line-height: 1.6;
   color: #28445f;
@@ -207,94 +515,161 @@
 }
 
 .ysp-daily-panel__summary {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(24, 52, 76, 0.14);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(24, 52, 76, 0.12);
   font-size: 12px;
   color: #46617b;
 }
 
 .ysp-daily-panel__logs {
-  max-height: 180px;
+  max-height: 220px;
   overflow-y: auto;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(24, 52, 76, 0.1);
+  padding-right: 2px;
 }
 
 .ysp-daily-panel__log {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(24, 52, 76, 0.08);
   font-size: 12px;
   line-height: 1.6;
   color: #39556f;
 }
 
 .ysp-daily-panel__log + .ysp-daily-panel__log {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px dashed rgba(24, 52, 76, 0.08);
+  margin-top: 8px;
 }
 
-.ysp-daily-panel__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.ysp-daily-panel__toolbar-button {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: #386282;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.ysp-daily-panel__toolbar-button:hover {
-  color: #14344d;
-}
-
-@media (max-width: 1280px) {
+@media (max-width: 1366px) {
   #ysp-daily-panel-root {
-    width: 340px;
+    width: 408px;
   }
 }
   `;
 
-  const CATEGORY_ORDER = [
-    '社会',
-    '时政',
-    '国际/港澳台',
-    '民生',
-    '财经',
-    '体育',
-    '综艺',
-    '音乐',
-    '舞蹈',
-    '文史',
-    '电影',
-    '电视剧',
-    '曲艺',
-    '搞笑',
-    '动漫',
-    '青少',
-    '健康',
-    '教育',
-    '美食',
-    '时尚',
-    '军事',
-    '三农',
-    '法治',
-    '动物',
-    '自然科学',
-    '科技',
-    '旅游',
-    '汽车',
-    '游戏',
-    '生活方式'
+  const CATEGORY_GROUPS = [
+    {
+      id: 'knowledge',
+      label: '知识',
+      theme: 'knowledge',
+      subgroups: [
+        {
+          id: 'knowledge-core',
+          label: '文史、自然、科技、教育',
+          categories: [
+            { key: 'knowledge-history', label: '文史', queryLabel: '文史' },
+            { key: 'knowledge-nature', label: '自然', queryLabel: '自然科学', exportLabel: '自然' },
+            { key: 'knowledge-technology', label: '科技', queryLabel: '科技' },
+            { key: 'knowledge-education', label: '教育', queryLabel: '教育' }
+          ]
+        },
+        {
+          id: 'knowledge-life',
+          label: '生活、健康、美食、青少',
+          categories: [
+            { key: 'knowledge-life-style', label: '生活', queryLabel: '生活方式', exportLabel: '生活' },
+            { key: 'knowledge-health', label: '健康', queryLabel: '健康' },
+            { key: 'knowledge-food', label: '美食', queryLabel: '美食' },
+            { key: 'knowledge-youth', label: '青少', queryLabel: '青少' }
+          ]
+        },
+        {
+          id: 'knowledge-animals',
+          label: '动物、法治、时尚',
+          categories: [
+            { key: 'knowledge-animal', label: '动物', queryLabel: '动物' },
+            { key: 'knowledge-law', label: '法治', queryLabel: '法治' },
+            { key: 'knowledge-fashion', label: '时尚', queryLabel: '时尚' }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'information',
+      label: '资讯',
+      theme: 'information',
+      subgroups: [
+        {
+          id: 'information-world',
+          label: '国际、军事、体育',
+          categories: [
+            { key: 'information-international', label: '国际', queryLabel: '国际/港澳台', exportLabel: '国际/港澳台' },
+            { key: 'information-military', label: '军事', queryLabel: '军事' },
+            { key: 'information-sports', label: '体育', queryLabel: '体育' }
+          ]
+        },
+        {
+          id: 'information-economy',
+          label: '财经、旅游、汽车',
+          categories: [
+            { key: 'information-finance', label: '财经', queryLabel: '财经' },
+            { key: 'information-travel', label: '旅游', queryLabel: '旅游' },
+            { key: 'information-auto', label: '汽车', queryLabel: '汽车' }
+          ]
+        },
+        {
+          id: 'information-public',
+          label: '民生、社会、三农',
+          categories: [
+            { key: 'information-livelihood', label: '民生', queryLabel: '民生' },
+            { key: 'information-society', label: '社会', queryLabel: '社会' },
+            { key: 'information-agriculture', label: '三农', queryLabel: '三农' }
+          ]
+        },
+      ]
+    },
+    {
+      id: 'culture',
+      label: '文艺',
+      theme: 'culture',
+      subgroups: [
+        {
+          id: 'culture-stage',
+          label: '综艺、曲艺、音乐、舞蹈、搞笑',
+          categories: [
+            { key: 'culture-variety', label: '综艺', queryLabel: '综艺' },
+            { key: 'culture-folk-art', label: '曲艺', queryLabel: '曲艺' },
+            { key: 'culture-music', label: '音乐', queryLabel: '音乐' },
+            { key: 'culture-dance', label: '舞蹈', queryLabel: '舞蹈' },
+            { key: 'culture-comedy', label: '搞笑', queryLabel: '搞笑' }
+          ]
+        },
+        {
+          id: 'culture-screen',
+          label: '电影、电视剧、动漫、游戏',
+          categories: [
+            { key: 'culture-film', label: '电影', queryLabel: '电影' },
+            { key: 'culture-drama', label: '电视剧', queryLabel: '电视剧' },
+            { key: 'culture-animation', label: '动漫', queryLabel: '动漫' },
+            { key: 'culture-game', label: '游戏', queryLabel: '游戏' }
+          ]
+        }
+      ]
+    }
   ];
+
+  const CATEGORY_ENTRIES = CATEGORY_GROUPS.flatMap((group, groupIndex) => {
+    return group.subgroups.flatMap((subgroup, subgroupIndex) => {
+      return subgroup.categories.map((category, categoryIndex) => {
+        return {
+          key: category.key,
+          label: category.label,
+          exportLabel: category.exportLabel || category.label,
+          queryLabel: category.queryLabel || category.label,
+          groupId: group.id,
+          groupLabel: group.label,
+          subgroupId: subgroup.id,
+          subgroupLabel: subgroup.label,
+          theme: group.theme,
+          orderToken: `${groupIndex}-${subgroupIndex}-${categoryIndex}`
+        };
+      });
+    });
+  });
+
+  const CATEGORY_ENTRY_MAP = new Map(CATEGORY_ENTRIES.map((entry) => [entry.key, entry]));
 
   const METRIC_HEADERS = [
     '入库量',
@@ -395,9 +770,63 @@
     return numerator / denominator;
   }
 
+  function getCategoryEntry(candidate) {
+    if (!candidate && candidate !== '') {
+      return null;
+    }
+    if (typeof candidate === 'object' && candidate.key && CATEGORY_ENTRY_MAP.has(candidate.key)) {
+      return CATEGORY_ENTRY_MAP.get(candidate.key);
+    }
+    const token = normalizeText(candidate);
+    if (!token) {
+      return null;
+    }
+    if (CATEGORY_ENTRY_MAP.has(token)) {
+      return CATEGORY_ENTRY_MAP.get(token);
+    }
+    return CATEGORY_ENTRIES.find((entry) => {
+      return [
+        entry.key,
+        entry.label,
+        entry.exportLabel,
+        entry.queryLabel,
+        entry.subgroupLabel
+      ].includes(token);
+    }) || null;
+  }
+
+  function normalizeSelectedKeys(rawValues) {
+    const rawList = Array.isArray(rawValues) ? rawValues : [];
+    const matchedKeys = new Set();
+    for (const value of rawList) {
+      const entry = getCategoryEntry(value);
+      if (entry) {
+        matchedKeys.add(entry.key);
+      }
+    }
+    return CATEGORY_ENTRIES
+      .filter((entry) => matchedKeys.has(entry.key))
+      .map((entry) => entry.key);
+  }
+
+  function getEntriesByKeys(keys) {
+    const selected = new Set(normalizeSelectedKeys(keys));
+    return CATEGORY_ENTRIES.filter((entry) => selected.has(entry.key));
+  }
+
+  function countSubgroupsFromEntries(entries) {
+    return new Set(entries.map((entry) => entry.subgroupId)).size;
+  }
+
   function createEmptyResult(category) {
+    const entry = getCategoryEntry(category);
     return {
-      category,
+      key: entry ? entry.key : normalizeText(category),
+      category: entry ? entry.exportLabel : normalizeText(category),
+      label: entry ? entry.exportLabel : normalizeText(category),
+      groupLabel: entry ? entry.groupLabel : '',
+      subgroupLabel: entry ? entry.subgroupLabel : '',
+      theme: entry ? entry.theme : 'information',
       inboundCount: 0,
       stdPassCount: 0,
       stdRejectCount: 0,
@@ -408,6 +837,99 @@
       qcTotalCount: 0,
       qcRejectRate: 0
     };
+  }
+
+  function normalizeStoredResultRow(rawRow) {
+    const entry = getCategoryEntry(rawRow && (rawRow.key || rawRow.category || rawRow.label));
+    const base = createEmptyResult(entry || (rawRow && (rawRow.category || rawRow.label || rawRow.key)) || '');
+    if (!rawRow || typeof rawRow !== 'object') {
+      return base;
+    }
+    return {
+      ...base,
+      inboundCount: Number(rawRow.inboundCount || 0),
+      stdPassCount: Number(rawRow.stdPassCount || 0),
+      stdRejectCount: Number(rawRow.stdRejectCount || 0),
+      stdTotalCount: Number(rawRow.stdTotalCount || 0),
+      stdRejectRate: Number(rawRow.stdRejectRate || 0),
+      qcPassCount: Number(rawRow.qcPassCount || 0),
+      qcRejectCount: Number(rawRow.qcRejectCount || 0),
+      qcTotalCount: Number(rawRow.qcTotalCount || 0),
+      qcRejectRate: Number(rawRow.qcRejectRate || 0)
+    };
+  }
+
+  function normalizeStoredReport(report) {
+    if (!report || typeof report !== 'object') {
+      return null;
+    }
+
+    const sourceKeys = normalizeSelectedKeys(
+      report.itemKeys || report.columns?.map((column) => column.key || column.label) || report.categories
+    );
+    const columns = buildReportColumns(getEntriesByKeys(sourceKeys));
+    const rawRows = Array.isArray(report.rows) ? report.rows : [];
+    const rowMap = new Map();
+    for (const row of rawRows) {
+      const normalized = normalizeStoredResultRow(row);
+      if (normalized.key) {
+        rowMap.set(normalized.key, normalized);
+      }
+    }
+    return {
+      date: report.date || '',
+      columns,
+      rows: columns.map((column) => rowMap.get(column.key) || createEmptyResult(column.key)),
+      generatedAt: report.generatedAt || new Date().toISOString()
+    };
+  }
+
+  function normalizeStoredCheckpoint(checkpoint) {
+    if (!checkpoint || typeof checkpoint !== 'object') {
+      return null;
+    }
+    const itemKeys = normalizeSelectedKeys(checkpoint.itemKeys || checkpoint.categories);
+    const normalizedResults = {};
+    if (checkpoint.results && typeof checkpoint.results === 'object') {
+      for (const [key, value] of Object.entries(checkpoint.results)) {
+        const entry = getCategoryEntry(key) || getCategoryEntry(value && (value.key || value.category || value.label));
+        if (!entry) {
+          continue;
+        }
+        normalizedResults[entry.key] = normalizeStoredResultRow({
+          ...value,
+          key: entry.key
+        });
+      }
+    }
+    return {
+      ...checkpoint,
+      version: 2,
+      itemKeys,
+      results: normalizedResults
+    };
+  }
+
+  function buildReportColumns(entries) {
+    const totalByLabel = new Map();
+    const usedByLabel = new Map();
+    for (const entry of entries) {
+      totalByLabel.set(entry.exportLabel, (totalByLabel.get(entry.exportLabel) || 0) + 1);
+    }
+    return entries.map((entry) => {
+      const total = totalByLabel.get(entry.exportLabel) || 0;
+      const used = (usedByLabel.get(entry.exportLabel) || 0) + 1;
+      usedByLabel.set(entry.exportLabel, used);
+      return {
+        key: entry.key,
+        label: total > 1 ? `${entry.exportLabel}·${used}` : entry.exportLabel,
+        exportLabel: entry.exportLabel,
+        groupLabel: entry.groupLabel,
+        subgroupLabel: entry.subgroupLabel,
+        queryLabel: entry.queryLabel,
+        theme: entry.theme
+      };
+    });
   }
 
   function isSupportedPage() {
@@ -708,11 +1230,16 @@
     }, PAGE_READY_TIMEOUT, '页面控件未准备完成');
   }
 
-  function buildOrderedResults(job) {
-    return job.categories.map((category) => {
-      const result = job.results[category] || createEmptyResult(category);
+  function buildOrderedResults(items, results) {
+    return items.map((item) => {
+      const result = results[item.key] || createEmptyResult(item);
       return {
-        category,
+        key: item.key,
+        category: item.exportLabel,
+        label: item.exportLabel,
+        groupLabel: item.groupLabel,
+        subgroupLabel: item.subgroupLabel,
+        theme: item.theme,
         inboundCount: result.inboundCount || 0,
         stdTotalCount: result.stdTotalCount || 0,
         stdPassCount: result.stdPassCount || 0,
@@ -745,40 +1272,51 @@
     return `<c r="${ref}" s="${styleId}"><v>${value}</v></c>`;
   }
 
-  function buildColumnsXml(categories) {
+  function buildColumnsXml(columns) {
     const parts = ['<cols>'];
-    const totalColumns = 1 + categories.length * METRIC_HEADERS.length;
+    const totalColumns = 1 + columns.length * METRIC_HEADERS.length;
     for (let index = 1; index <= totalColumns; index += 1) {
-      const width = index === 1 ? 12 : (index - 2) % METRIC_HEADERS.length >= 4 ? 12 : 11;
+      const width = index === 1 ? 12 : (index - 2) % METRIC_HEADERS.length >= 4 ? 13 : 11;
       parts.push(`<col min="${index}" max="${index}" width="${width}" customWidth="1"/>`);
     }
     parts.push('</cols>');
     return parts.join('');
   }
 
+  function getColumnStyleIds(theme) {
+    if (theme === 'knowledge') {
+      return { top: 2, sub: 3 };
+    }
+    if (theme === 'culture') {
+      return { top: 6, sub: 7 };
+    }
+    return { top: 4, sub: 5 };
+  }
+
   function buildWorksheetXml(report) {
-    const categories = report.categories;
+    const columns = Array.isArray(report.columns) ? report.columns : [];
     const rows = [];
     const merges = ['A1:A2'];
 
     const topRow = [inlineCell('A1', '时间', 1)];
     let column = 2;
-    for (const category of categories) {
-      topRow.push(inlineCell(makeCellRef(column, 1), category, 1));
+    for (const item of columns) {
+      const styleIds = getColumnStyleIds(item.theme);
+      topRow.push(inlineCell(makeCellRef(column, 1), item.label, styleIds.top));
       merges.push(`${makeCellRef(column, 1)}:${makeCellRef(column + METRIC_HEADERS.length - 1, 1)}`);
       column += METRIC_HEADERS.length;
     }
     rows.push(`<row r="1" ht="24" customHeight="1">${topRow.join('')}</row>`);
 
-    const secondRowLabels = [''];
-    for (let index = 0; index < categories.length; index += 1) {
-      secondRowLabels.push(...METRIC_HEADERS);
+    const secondRowCells = [inlineCell('A2', '', 1)];
+    for (const item of columns) {
+      const styleIds = getColumnStyleIds(item.theme);
+      for (let index = 0; index < METRIC_HEADERS.length; index += 1) {
+        const ref = makeCellRef(secondRowCells.length + 1, 2);
+        secondRowCells.push(inlineCell(ref, METRIC_HEADERS[index], styleIds.sub));
+      }
     }
-    rows.push(`<row r="2" ht="22" customHeight="1">${
-      secondRowLabels
-        .map((text, index) => inlineCell(makeCellRef(index + 1, 2), text, 2))
-        .join('')
-    }</row>`);
+    rows.push(`<row r="2" ht="22" customHeight="1">${secondRowCells.join('')}</row>`);
 
     const dataValues = [formatDisplayDate(report.date)];
     for (const row of report.rows) {
@@ -797,22 +1335,22 @@
     const dataCells = dataValues.map((value, index) => {
       const ref = makeCellRef(index + 1, 3);
       if (index === 0) {
-        return inlineCell(ref, value, 3);
+        return inlineCell(ref, value, 8);
       }
       const metricIndex = (index - 1) % METRIC_HEADERS.length;
       if (metricIndex === 4 || metricIndex === 8) {
-        return numberCell(ref, Number(value || 0), 5);
+        return numberCell(ref, Number(value || 0), 10);
       }
-      return numberCell(ref, Number(value || 0), 4);
+      return numberCell(ref, Number(value || 0), 9);
     });
     rows.push(`<row r="3" ht="22" customHeight="1">${dataCells.join('')}</row>`);
 
     return [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
-      '<sheetViews><sheetView workbookViewId="0"/></sheetViews>',
+      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="2" topLeftCell="A3" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
       '<sheetFormatPr defaultRowHeight="20"/>',
-      buildColumnsXml(categories),
+      buildColumnsXml(columns),
       `<sheetData>${rows.join('')}</sheetData>`,
       `<mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${ref}"/>`).join('')}</mergeCells>`,
       '</worksheet>'
@@ -868,21 +1406,30 @@
       '<font><sz val="11"/><color rgb="FF17212B"/><name val="Microsoft YaHei"/></font>',
       '<font><b/><sz val="11"/><color rgb="FF17212B"/><name val="Microsoft YaHei"/></font>',
       '</fonts>',
-      '<fills count="4">',
+      '<fills count="8">',
       '<fill><patternFill patternType="none"/></fill>',
       '<fill><patternFill patternType="gray125"/></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFF7E4"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFEAF3FB"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFF1E0"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFF8E9"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFDCEAF8"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFEEF5FC"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFF4DFD8"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFFBECE6"/><bgColor indexed="64"/></patternFill></fill>',
       '</fills>',
       '<borders count="2">',
       '<border><left/><right/><top/><bottom/><diagonal/></border>',
       '<border><left style="thin"><color rgb="FFD7E1EA"/></left><right style="thin"><color rgb="FFD7E1EA"/></right><top style="thin"><color rgb="FFD7E1EA"/></top><bottom style="thin"><color rgb="FFD7E1EA"/></bottom><diagonal/></border>',
       '</borders>',
       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
-      '<cellXfs count="6">',
+      '<cellXfs count="11">',
       '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>',
+      '<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
       '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
       '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+      '<xf numFmtId="0" fontId="1" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+      '<xf numFmtId="0" fontId="1" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="1" fillId="7" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
       '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
       '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
       '<xf numFmtId="10" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
@@ -1058,7 +1605,7 @@
   class DailyReporterApp {
     constructor() {
       this.panel = null;
-      this.savedSettings = { date: '', categories: [] };
+      this.savedSettings = { date: '', itemKeys: [] };
       this.runtime = {
         running: false,
         stopping: false,
@@ -1087,14 +1634,13 @@
         STORAGE_KEYS.report,
         this.runtime.activeSessionKey
       ]);
+      const rawSettings = state[STORAGE_KEYS.settings] || {};
       this.savedSettings = {
-        date: state[STORAGE_KEYS.settings] && state[STORAGE_KEYS.settings].date ? state[STORAGE_KEYS.settings].date : '',
-        categories: Array.isArray(state[STORAGE_KEYS.settings] && state[STORAGE_KEYS.settings].categories)
-          ? state[STORAGE_KEYS.settings].categories
-          : []
+        date: rawSettings.date || '',
+        itemKeys: normalizeSelectedKeys(rawSettings.itemKeys || rawSettings.categories)
       };
-      this.runtime.lastReport = state[STORAGE_KEYS.report] || null;
-      this.runtime.currentCheckpoint = state[this.runtime.activeSessionKey] || null;
+      this.runtime.lastReport = normalizeStoredReport(state[STORAGE_KEYS.report]);
+      this.runtime.currentCheckpoint = normalizeStoredCheckpoint(state[this.runtime.activeSessionKey]);
       this.runtime.logs = Array.isArray(this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.logs)
         ? this.runtime.currentCheckpoint.logs.slice(0, MAX_LOGS)
         : [];
@@ -1102,6 +1648,8 @@
       if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'running') {
         this.runtime.running = true;
         this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '正在继续上次任务';
+      } else if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'stopped') {
+        this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次任务已停止';
       } else if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'error') {
         this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次任务停在错误位置';
       } else if (this.runtime.lastReport) {
@@ -1120,40 +1668,60 @@
       root.innerHTML = `
         <div class="ysp-daily-panel">
           <div class="ysp-daily-panel__header">
-            <div>
-              <div class="ysp-daily-panel__title">YSP 日报采集</div>
-              <div class="ysp-daily-panel__subtitle">按单日和主品类顺序自动采集，完成后直接导出 Excel。</div>
+            <div class="ysp-daily-panel__header-top">
+              <div>
+                <div class="ysp-daily-panel__eyebrow">YSP Reporter</div>
+                <div class="ysp-daily-panel__title">YSP 日报采集</div>
+                <div class="ysp-daily-panel__subtitle">按大品类编组选择子品类，采集顺序和导出表头都会跟随编组展开。</div>
+              </div>
+              <div class="ysp-daily-panel__version">v${SCRIPT_VERSION}</div>
             </div>
-            <div class="ysp-daily-panel__version">v${SCRIPT_VERSION}</div>
+            <div class="ysp-daily-panel__headline">
+              <div class="ysp-daily-panel__headline-card">
+                <div class="ysp-daily-panel__headline-label">本次范围</div>
+                <div class="ysp-daily-panel__headline-value" data-role="headline-selection">0 个子品类</div>
+              </div>
+              <div class="ysp-daily-panel__headline-card">
+                <div class="ysp-daily-panel__headline-label">下载方式</div>
+                <div class="ysp-daily-panel__headline-value">采集完成后手动下载</div>
+              </div>
+            </div>
           </div>
           <div class="ysp-daily-panel__body">
-            <div class="ysp-daily-panel__section">
+            <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
               <label class="ysp-daily-panel__label" for="ysp-daily-date">日期</label>
               <input id="ysp-daily-date" class="ysp-daily-panel__date" type="date" />
               <div class="ysp-daily-panel__hint">系统会自动换成当天 00:00 到次日 00:00。</div>
+              <div class="ysp-daily-panel__selection-summary" data-role="selection-summary"></div>
             </div>
             <div class="ysp-daily-panel__section">
               <div class="ysp-daily-panel__toolbar">
-                <span class="ysp-daily-panel__label" style="margin-bottom:0;">主品类</span>
-                <button type="button" class="ysp-daily-panel__toolbar-button" data-role="toggle-all">全选</button>
+                <span class="ysp-daily-panel__label">品类编组</span>
+                <button type="button" class="ysp-daily-panel__toolbar-button" data-role="toggle-all">全选全部</button>
               </div>
-              <div class="ysp-daily-panel__categories" data-role="categories"></div>
+              <div class="ysp-daily-panel__hint">你可以直接勾选子品类，执行顺序会严格跟随编组。</div>
+              <div class="ysp-daily-panel__catalog" data-role="categories"></div>
             </div>
-            <div class="ysp-daily-panel__section">
+            <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
               <div class="ysp-daily-panel__actions">
-                <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start">开始采集并导出</button>
-                <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--secondary" data-role="export-last">导出最近结果</button>
+                <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start">开始采集</button>
                 <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--ghost" data-role="stop">停止任务</button>
                 <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--secondary" data-role="clear">清除进度</button>
               </div>
             </div>
-            <div class="ysp-daily-panel__section">
+            <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
+              <div class="ysp-daily-panel__toolbar">
+                <span class="ysp-daily-panel__label">下载中心</span>
+              </div>
+              <div class="ysp-daily-panel__report" data-role="report"></div>
+            </div>
+            <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
               <div class="ysp-daily-panel__label">当前状态</div>
               <div class="ysp-daily-panel__status" data-role="status"></div>
             </div>
-            <div class="ysp-daily-panel__section">
+            <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
               <div class="ysp-daily-panel__toolbar">
-                <span class="ysp-daily-panel__label" style="margin-bottom:0;">执行记录</span>
+                <span class="ysp-daily-panel__label">执行记录</span>
               </div>
               <div class="ysp-daily-panel__logs" data-role="logs"></div>
             </div>
@@ -1164,11 +1732,13 @@
       this.panel = root;
 
       this.refs.date = root.querySelector('#ysp-daily-date');
+      this.refs.headlineSelection = root.querySelector('[data-role="headline-selection"]');
+      this.refs.selectionSummary = root.querySelector('[data-role="selection-summary"]');
       this.refs.categories = root.querySelector('[data-role="categories"]');
+      this.refs.report = root.querySelector('[data-role="report"]');
       this.refs.status = root.querySelector('[data-role="status"]');
       this.refs.logs = root.querySelector('[data-role="logs"]');
       this.refs.start = root.querySelector('[data-role="start"]');
-      this.refs.exportLast = root.querySelector('[data-role="export-last"]');
       this.refs.stop = root.querySelector('[data-role="stop"]');
       this.refs.clear = root.querySelector('[data-role="clear"]');
       this.refs.toggleAll = root.querySelector('[data-role="toggle-all"]');
@@ -1188,14 +1758,34 @@
     }
 
     renderCategories() {
-      this.refs.categories.innerHTML = CATEGORY_ORDER.map((category) => {
-        const checked = this.savedSettings.categories.includes(category) ? 'checked' : '';
-        return `
-          <label class="ysp-daily-panel__category">
-            <input type="checkbox" value="${escapeXml(category)}" ${checked} />
-            <span>${escapeXml(category)}</span>
-          </label>
-        `;
+      const selected = new Set(this.savedSettings.itemKeys);
+      this.refs.categories.innerHTML = CATEGORY_GROUPS.flatMap((group) => {
+        return group.subgroups.map((subgroup) => {
+          return `
+            <section class="ysp-daily-panel__group" data-theme="${escapeXml(group.theme)}" data-group="${escapeXml(subgroup.id)}">
+              <div class="ysp-daily-panel__group-header">
+                <div>
+                  <h3 class="ysp-daily-panel__group-title">${escapeXml(subgroup.label)}</h3>
+                  <div class="ysp-daily-panel__group-meta">共 ${subgroup.categories.length} 个子品类，采集顺序按编组展开</div>
+                </div>
+                <button type="button" class="ysp-daily-panel__group-action" data-role="toggle-group" data-group="${escapeXml(subgroup.id)}">全选这组</button>
+              </div>
+              <div class="ysp-daily-panel__options">
+                ${subgroup.categories.map((category) => {
+                  const entry = CATEGORY_ENTRY_MAP.get(category.key);
+                  const checked = selected.has(entry.key) ? 'checked' : '';
+                  const checkedClass = selected.has(entry.key) ? ' is-checked' : '';
+                  return `
+                    <label class="ysp-daily-panel__chip${checkedClass}" data-key="${escapeXml(entry.key)}">
+                      <input type="checkbox" data-key="${escapeXml(entry.key)}" value="${escapeXml(entry.key)}" ${checked} />
+                      <span class="ysp-daily-panel__chip-text">${escapeXml(entry.exportLabel)}</span>
+                    </label>
+                  `;
+                }).join('')}
+              </div>
+            </section>
+          `;
+        });
       }).join('');
     }
 
@@ -1203,30 +1793,140 @@
       this.refs.start.addEventListener('click', () => {
         this.startNewJob().catch((error) => this.failJob(error));
       });
-      this.refs.exportLast.addEventListener('click', () => this.exportLastReport());
       this.refs.stop.addEventListener('click', () => this.stopCurrentJob());
       this.refs.clear.addEventListener('click', () => {
         this.clearProgress().catch((error) => this.pushLog(`清除进度失败：${error.message}`));
       });
       this.refs.toggleAll.addEventListener('click', () => {
-        const checkboxes = this.getCategoryCheckboxes();
-        const hasUnchecked = checkboxes.some((checkbox) => !checkbox.checked);
-        for (const checkbox of checkboxes) {
-          checkbox.checked = hasUnchecked;
+        if (this.runtime.running) {
+          return;
         }
-        this.refs.toggleAll.textContent = hasUnchecked ? '清空' : '全选';
+        const checkboxes = this.getCategoryCheckboxes();
+        const shouldCheck = checkboxes.some((checkbox) => !checkbox.checked);
+        for (const checkbox of checkboxes) {
+          checkbox.checked = shouldCheck;
+        }
+        this.persistDraft().catch(() => undefined);
+        this.render();
+      });
+      this.refs.date.addEventListener('change', () => {
+        this.persistDraft().catch(() => undefined);
+        this.render();
+      });
+      this.refs.categories.addEventListener('change', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement) || target.type !== 'checkbox') {
+          return;
+        }
+        const chip = target.closest('.ysp-daily-panel__chip');
+        if (chip) {
+          chip.classList.toggle('is-checked', target.checked);
+        }
+        this.persistDraft().catch(() => undefined);
+        this.render();
+      });
+      this.refs.categories.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+        const toggleButton = target.closest('[data-role="toggle-group"]');
+        if (!toggleButton || this.runtime.running) {
+          return;
+        }
+        const groupId = toggleButton.getAttribute('data-group');
+        if (!groupId) {
+          return;
+        }
+        const groupCheckboxes = this.getCategoryCheckboxes(groupId);
+        const shouldCheck = groupCheckboxes.some((checkbox) => !checkbox.checked);
+        for (const checkbox of groupCheckboxes) {
+          checkbox.checked = shouldCheck;
+        }
+        this.persistDraft().catch(() => undefined);
+        this.render();
+      });
+      this.refs.report.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+        const downloadButton = target.closest('[data-role="download"]');
+        if (downloadButton) {
+          this.exportLastReport();
+        }
       });
     }
 
-    getCategoryCheckboxes() {
-      return Array.from(this.refs.categories.querySelectorAll('input[type="checkbox"]'));
+    getCategoryCheckboxes(groupId) {
+      const checkboxes = Array.from(this.refs.categories.querySelectorAll('input[type="checkbox"][data-key]'));
+      if (!groupId) {
+        return checkboxes;
+      }
+      return checkboxes.filter((checkbox) => {
+        const group = checkbox.closest('[data-group]');
+        return group && group.getAttribute('data-group') === groupId;
+      });
     }
 
-    getSelectedCategories() {
+    getSelectedKeys() {
       const selected = this.getCategoryCheckboxes()
         .filter((checkbox) => checkbox.checked)
         .map((checkbox) => checkbox.value);
-      return CATEGORY_ORDER.filter((category) => selected.includes(category));
+      return CATEGORY_ENTRIES
+        .filter((entry) => selected.includes(entry.key))
+        .map((entry) => entry.key);
+    }
+
+    getSelectedEntries() {
+      return getEntriesByKeys(this.getSelectedKeys());
+    }
+
+    getCheckpointItems(checkpoint) {
+      return getEntriesByKeys(checkpoint && checkpoint.itemKeys);
+    }
+
+    async persistDraft() {
+      await this.persistSettings(this.refs.date.value, this.getSelectedKeys());
+    }
+
+    describeItem(item) {
+      return item.exportLabel;
+    }
+
+    renderSelectionSummary() {
+      const entries = this.getSelectedEntries();
+      const categoryCount = entries.length;
+      const subgroupCount = countSubgroupsFromEntries(entries);
+      if (this.refs.headlineSelection) {
+        this.refs.headlineSelection.textContent = categoryCount ? `${categoryCount} 个子品类` : '等待选择';
+      }
+      this.refs.selectionSummary.innerHTML = [
+        `<span class="ysp-daily-panel__badge">子品类 ${categoryCount}</span>`,
+        `<span class="ysp-daily-panel__badge">编组 ${subgroupCount}</span>`
+      ].join('');
+    }
+
+    renderReport() {
+      if (!this.runtime.lastReport) {
+        this.refs.report.innerHTML = '<div class="ysp-daily-panel__report-empty">采集完成后，这里会显示一个固定下载按钮，导出的 Excel 会保持编组顺序。</div>';
+        return;
+      }
+      const columns = Array.isArray(this.runtime.lastReport.columns) ? this.runtime.lastReport.columns : [];
+      const subgroupCount = new Set(columns.map((column) => column.subgroupLabel)).size;
+      this.refs.report.innerHTML = `
+        <div class="ysp-daily-panel__report-top">
+          <div>
+            <h3 class="ysp-daily-panel__report-title">日报结果已就绪</h3>
+            <div class="ysp-daily-panel__report-meta">${escapeXml(this.runtime.lastReport.date)} · ${columns.length} 个子品类 · ${subgroupCount} 个编组</div>
+          </div>
+          <button type="button" class="ysp-daily-panel__download" data-role="download">下载 Excel</button>
+        </div>
+        <div class="ysp-daily-panel__report-tags">
+          <span class="ysp-daily-panel__badge">表头按编组展开</span>
+          <span class="ysp-daily-panel__badge">文件名 YSP日报_${escapeXml(this.runtime.lastReport.date)}</span>
+        </div>
+      `;
     }
 
     pushLog(message) {
@@ -1240,13 +1940,33 @@
     }
 
     render() {
+      this.refs.date.disabled = this.runtime.running;
       this.refs.start.disabled = this.runtime.running;
       this.refs.stop.disabled = !this.runtime.running;
-      this.refs.exportLast.disabled = !this.runtime.lastReport;
+      this.refs.clear.disabled = this.runtime.running;
+      this.refs.toggleAll.disabled = this.runtime.running;
+      for (const checkbox of this.getCategoryCheckboxes()) {
+        checkbox.disabled = this.runtime.running;
+        const chip = checkbox.closest('.ysp-daily-panel__chip');
+        if (chip) {
+          chip.classList.toggle('is-checked', checkbox.checked);
+        }
+      }
+      for (const button of this.refs.categories.querySelectorAll('[data-role="toggle-group"]')) {
+        const groupId = button.getAttribute('data-group');
+        const groupCheckboxes = this.getCategoryCheckboxes(groupId);
+        const hasUnchecked = groupCheckboxes.some((checkbox) => !checkbox.checked);
+        button.textContent = hasUnchecked ? '全选这组' : '清空这组';
+        button.disabled = this.runtime.running;
+      }
+      const allCheckboxes = this.getCategoryCheckboxes();
+      this.refs.toggleAll.textContent = allCheckboxes.some((checkbox) => !checkbox.checked) ? '全选全部' : '清空全部';
+      this.renderSelectionSummary();
+      this.renderReport();
       const summary = this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'running'
         ? `<div class="ysp-daily-panel__summary"><strong>当前进度：</strong>${escapeXml(this.runtime.currentCheckpoint.summaryText || '')}</div>`
         : this.runtime.lastReport
-          ? `<div class="ysp-daily-panel__summary"><strong>最近结果：</strong>${escapeXml(this.runtime.lastReport.date)}，共 ${this.runtime.lastReport.categories.length} 个品类</div>`
+          ? `<div class="ysp-daily-panel__summary"><strong>最近结果：</strong>${escapeXml(this.runtime.lastReport.date)}，共 ${this.runtime.lastReport.columns.length} 个子品类</div>`
           : '';
       this.refs.status.innerHTML = `<strong>${escapeXml(this.runtime.statusText)}</strong>${summary}`;
       this.refs.logs.innerHTML = this.runtime.logs.length
@@ -1254,12 +1974,12 @@
         : '<div class="ysp-daily-panel__log">还没有执行记录</div>';
     }
 
-    async persistSettings(date, categories) {
-      this.savedSettings = { date, categories: categories.slice() };
+    async persistSettings(date, itemKeys) {
+      this.savedSettings = { date, itemKeys: itemKeys.slice() };
       await storageSet({
         [STORAGE_KEYS.settings]: {
           date,
-          categories
+          itemKeys
         }
       });
     }
@@ -1319,23 +2039,23 @@
         return;
       }
       const date = this.refs.date.value;
-      const categories = this.getSelectedCategories();
+      const items = this.getSelectedEntries();
       if (!date) {
         throw new Error('请先选择日期');
       }
-      if (!categories.length) {
-        throw new Error('请至少勾选一个主品类');
+      if (!items.length) {
+        throw new Error('请至少勾选一个子品类');
       }
 
-      await this.persistSettings(date, categories);
+      await this.persistSettings(date, items.map((item) => item.key));
       this.runtime.stopping = false;
       this.runtime.running = true;
       this.runtime.logs = [];
       this.runtime.currentCheckpoint = {
-        version: 1,
+        version: 2,
         status: 'running',
         date,
-        categories,
+        itemKeys: items.map((item) => item.key),
         currentIndex: 0,
         phase: 'std',
         results: {},
@@ -1345,7 +2065,7 @@
         summaryText: ''
       };
       await this.saveCheckpoint();
-      this.pushLog(`开始采集：${date}，共 ${categories.length} 个主品类`);
+      this.pushLog(`开始采集：${date}，共 ${items.length} 个子品类，覆盖 ${countSubgroupsFromEntries(items)} 个编组`);
       await this.runFromCheckpoint();
     }
 
@@ -1369,34 +2089,40 @@
         this.render();
         return;
       }
-
-      if (checkpoint.phase === 'resume-qc') {
-        const category = checkpoint.categories[checkpoint.currentIndex];
-        checkpoint.summaryText = `${category}：质检`;
-        this.updateCheckpointStatus(`正在继续 ${category} 的质检采集`, `${checkpoint.currentIndex + 1}/${checkpoint.categories.length} · 质检`);
-        await this.runQualityCheckForCategory(category);
-        checkpoint.currentIndex += 1;
-        checkpoint.phase = 'std';
-        await this.saveCheckpoint();
+      const items = this.getCheckpointItems(checkpoint);
+      if (!items.length) {
+        throw new Error('当前任务没有可采集的子品类');
       }
 
-      while (checkpoint.currentIndex < checkpoint.categories.length) {
+      if (checkpoint.phase === 'resume-qc') {
+        const item = items[checkpoint.currentIndex];
+        if (item) {
+          checkpoint.summaryText = `${this.describeItem(item)}：质检`;
+          this.updateCheckpointStatus(`正在继续 ${item.exportLabel}`, `${checkpoint.currentIndex + 1}/${items.length} · 质检`);
+          await this.runQualityCheckForItem(item);
+          checkpoint.currentIndex += 1;
+          checkpoint.phase = 'std';
+          await this.saveCheckpoint();
+        }
+      }
+
+      while (checkpoint.currentIndex < items.length) {
         this.ensureNotStopped();
-        const category = checkpoint.categories[checkpoint.currentIndex];
-        if (!checkpoint.results[category]) {
-          checkpoint.results[category] = createEmptyResult(category);
+        const item = items[checkpoint.currentIndex];
+        if (!checkpoint.results[item.key]) {
+          checkpoint.results[item.key] = createEmptyResult(item);
         }
         checkpoint.phase = 'std';
-        checkpoint.summaryText = `${category}：标准化`;
-        this.updateCheckpointStatus(`正在采集 ${category}`, `${checkpoint.currentIndex + 1}/${checkpoint.categories.length} · 标准化`);
+        checkpoint.summaryText = `${this.describeItem(item)}：标准化`;
+        this.updateCheckpointStatus(`正在采集 ${item.exportLabel}`, `${checkpoint.currentIndex + 1}/${items.length} · 标准化`);
         await this.saveCheckpoint();
-        await this.runStandardizationForCategory(category);
+        await this.runStandardizationForItem(item);
 
         checkpoint.phase = 'resume-qc';
-        checkpoint.summaryText = `${category}：等待刷新后采集质检`;
-        this.updateCheckpointStatus(`准备刷新页面继续 ${category} 的质检采集`, `${checkpoint.currentIndex + 1}/${checkpoint.categories.length} · 等待刷新`);
+        checkpoint.summaryText = `${this.describeItem(item)}：等待刷新后采集质检`;
+        this.updateCheckpointStatus(`准备刷新页面继续 ${item.exportLabel}`, `${checkpoint.currentIndex + 1}/${items.length} · 等待刷新`);
         await this.saveCheckpoint();
-        this.pushLog(`${category}：标准化已完成，刷新页面继续质检`);
+        this.pushLog(`${this.describeItem(item)}：标准化已完成，刷新页面继续质检`);
         window.location.reload();
         return;
       }
@@ -1404,65 +2130,81 @@
       await this.completeJob();
     }
 
-    async runStandardizationForCategory(category) {
+    async runStandardizationForItem(item) {
       this.ensureNotStopped();
       const checkpoint = this.runtime.currentCheckpoint;
-      const result = checkpoint.results[category] || createEmptyResult(category);
+      const result = checkpoint.results[item.key] || createEmptyResult(item);
       const range = buildDateRange(checkpoint.date);
 
       await clickResetButton();
-      await this.applyCategory(category);
+      await this.applyCategory(item);
       await setDateRange('创建时间', range.start, range.end);
 
-      this.pushLog(`${category}：读取入库量`);
+      this.pushLog(`${this.describeItem(item)}：读取入库量`);
       result.inboundCount = await clickQueryAndReadCount();
-      this.pushLog(`${category}：入库量 ${result.inboundCount}`);
+      this.pushLog(`${this.describeItem(item)}：入库量 ${result.inboundCount}`);
 
       await this.applySelectByLabel('标准化状态', '标准化通过');
       result.stdPassCount = await clickQueryAndReadCount();
-      this.pushLog(`${category}：标准化通过 ${result.stdPassCount}`);
+      this.pushLog(`${this.describeItem(item)}：标准化通过 ${result.stdPassCount}`);
 
       await this.applySelectByLabel('标准化状态', '标准化拒绝');
       result.stdRejectCount = await clickQueryAndReadCount();
       result.stdTotalCount = result.stdPassCount + result.stdRejectCount;
       result.stdRejectRate = calculateRatio(result.stdRejectCount, result.stdTotalCount);
-      this.pushLog(`${category}：标准化拒绝 ${result.stdRejectCount}`);
+      this.pushLog(`${this.describeItem(item)}：标准化拒绝 ${result.stdRejectCount}`);
 
-      checkpoint.results[category] = result;
+      checkpoint.results[item.key] = {
+        ...result,
+        key: item.key,
+        category: item.exportLabel,
+        label: item.exportLabel,
+        groupLabel: item.groupLabel,
+        subgroupLabel: item.subgroupLabel,
+        theme: item.theme
+      };
       await this.saveCheckpoint();
     }
 
-    async runQualityCheckForCategory(category) {
+    async runQualityCheckForItem(item) {
       this.ensureNotStopped();
       const checkpoint = this.runtime.currentCheckpoint;
-      const result = checkpoint.results[category] || createEmptyResult(category);
+      const result = checkpoint.results[item.key] || createEmptyResult(item);
       const range = buildDateRange(checkpoint.date);
 
       await clickResetButton();
-      await this.applyCategory(category);
+      await this.applyCategory(item);
       await setDateRange('修改时间', range.start, range.end);
 
       await this.applySelectByLabel('质检状态', '质检通过');
       result.qcPassCount = await clickQueryAndReadCount();
-      this.pushLog(`${category}：质检通过 ${result.qcPassCount}`);
+      this.pushLog(`${this.describeItem(item)}：质检通过 ${result.qcPassCount}`);
 
       await this.applySelectByLabel('质检状态', '质检拒绝');
       result.qcRejectCount = await clickQueryAndReadCount();
       result.qcTotalCount = result.qcPassCount + result.qcRejectCount;
       result.qcRejectRate = calculateRatio(result.qcRejectCount, result.qcTotalCount);
-      this.pushLog(`${category}：质检拒绝 ${result.qcRejectCount}`);
+      this.pushLog(`${this.describeItem(item)}：质检拒绝 ${result.qcRejectCount}`);
 
-      checkpoint.results[category] = result;
+      checkpoint.results[item.key] = {
+        ...result,
+        key: item.key,
+        category: item.exportLabel,
+        label: item.exportLabel,
+        groupLabel: item.groupLabel,
+        subgroupLabel: item.subgroupLabel,
+        theme: item.theme
+      };
       await this.saveCheckpoint();
     }
 
-    async applyCategory(category) {
+    async applyCategory(item) {
       const primary = getCategoryWrapper(0);
       if (!primary) {
         throw new Error('未找到主品类选择器');
       }
-      await selectOption(primary, category);
-      this.pushLog(`已选择主品类：${category}`);
+      await selectOption(primary, item.queryLabel);
+      this.pushLog(`已选择品类：${this.describeItem(item)}`);
     }
 
     async applySelectByLabel(label, value) {
@@ -1475,15 +2217,17 @@
 
     async completeJob() {
       const checkpoint = this.runtime.currentCheckpoint;
+      const items = this.getCheckpointItems(checkpoint);
       checkpoint.status = 'done';
-      checkpoint.statusText = '采集完成，正在导出 Excel';
-      checkpoint.summaryText = `共完成 ${checkpoint.categories.length} 个主品类`;
+      checkpoint.statusText = '采集完成，下载按钮已就绪';
+      checkpoint.summaryText = `共完成 ${items.length} 个子品类`;
       await this.saveCheckpoint();
 
       const report = {
         date: checkpoint.date,
-        categories: checkpoint.categories.slice(),
-        rows: buildOrderedResults(checkpoint),
+        itemKeys: items.map((item) => item.key),
+        columns: buildReportColumns(items),
+        rows: buildOrderedResults(items, checkpoint.results),
         generatedAt: new Date().toISOString()
       };
       this.runtime.lastReport = report;
@@ -1491,12 +2235,11 @@
         [STORAGE_KEYS.report]: report
       });
 
-      downloadReport(report);
-      this.pushLog('Excel 导出已触发');
+      this.pushLog('采集完成，下载按钮已就绪');
       await this.clearCheckpoint();
       this.runtime.running = false;
       this.runtime.stopping = false;
-      this.runtime.statusText = '采集完成';
+      this.runtime.statusText = '采集完成，点击下载 Excel';
       this.render();
     }
 
@@ -1504,13 +2247,14 @@
       const message = error && error.message ? error.message : String(error);
       this.runtime.running = false;
       this.runtime.stopping = false;
+      const stopped = message === '任务已停止';
       if (this.runtime.currentCheckpoint) {
-        this.runtime.currentCheckpoint.status = 'error';
-        this.runtime.currentCheckpoint.statusText = `任务中断：${message}`;
+        this.runtime.currentCheckpoint.status = stopped ? 'stopped' : 'error';
+        this.runtime.currentCheckpoint.statusText = stopped ? '任务已停止，可清除后重新开始' : `任务中断：${message}`;
         await this.saveCheckpoint();
       }
-      this.runtime.statusText = `任务中断：${message}`;
-      this.pushLog(`错误：${message}`);
+      this.runtime.statusText = stopped ? '任务已停止，可清除后重新开始' : `任务中断：${message}`;
+      this.pushLog(stopped ? '任务已停止' : `错误：${message}`);
       this.render();
     }
 
