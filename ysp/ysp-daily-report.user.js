@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.21
+// @version      1.2.23
 // @description  在标准化系统页面按日期区间和编组子品类采集日报，并静默缓存到本地
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -24,13 +24,13 @@
   }
   window.__YSP_DAILY_REPORTER__ = true;
 
-  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.21';
+  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.23';
 
   const PANEL_STYLE = `
 #ysp-daily-panel-root {
   position: fixed;
   inset: 0;
-  z-index: 2147483646;
+  z-index: 2147483647;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -112,6 +112,7 @@
 
 .ysp-daily-panel__header {
   position: relative;
+  z-index: 2;
   padding: 20px 22px 16px;
   color: #f9fbff;
   background:
@@ -160,6 +161,8 @@
 }
 
 .ysp-daily-panel__minimize {
+  position: relative;
+  z-index: 3;
   min-width: 56px;
   min-height: 32px;
   padding: 0 12px;
@@ -1902,6 +1905,7 @@
   class DailyReporterApp {
     constructor() {
       this.panel = null;
+      this.handleOutsideInteraction = null;
       this.savedSettings = { startDate: '', endDate: '', groupIds: [] };
       this.runtime = {
         running: false,
@@ -2092,6 +2096,12 @@
     }
 
     destroy() {
+      if (this.handleOutsideInteraction) {
+        document.removeEventListener('pointerdown', this.handleOutsideInteraction, true);
+        document.removeEventListener('mousedown', this.handleOutsideInteraction, true);
+        document.removeEventListener('touchstart', this.handleOutsideInteraction, true);
+        this.handleOutsideInteraction = null;
+      }
       if (this.panel && this.panel.isConnected) {
         this.panel.remove();
       }
@@ -2121,6 +2131,27 @@
     }
 
     bindPanelEvents() {
+      if (this.handleOutsideInteraction) {
+        document.removeEventListener('pointerdown', this.handleOutsideInteraction, true);
+        document.removeEventListener('mousedown', this.handleOutsideInteraction, true);
+        document.removeEventListener('touchstart', this.handleOutsideInteraction, true);
+      }
+      this.handleOutsideInteraction = (event) => {
+        if (this.runtime.minimized) {
+          return;
+        }
+        const target = event.target;
+        if (!(target instanceof Node)) {
+          return;
+        }
+        if (this.refs.surface && this.refs.surface.contains(target)) {
+          return;
+        }
+        this.setMinimized(true);
+      };
+      document.addEventListener('pointerdown', this.handleOutsideInteraction, true);
+      document.addEventListener('mousedown', this.handleOutsideInteraction, true);
+      document.addEventListener('touchstart', this.handleOutsideInteraction, true);
       this.refs.start.addEventListener('click', () => {
         this.startNewJob().catch((error) => this.failJob(error));
       });
