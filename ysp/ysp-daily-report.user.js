@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.6
-// @description  在标准化系统页面按单日和编组子品类采集日报，并在面板内下载 Excel
+// @version      1.2.16
+// @description  在标准化系统页面按日期区间和编组子品类采集日报，并静默缓存到本地
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
 // @match        https://std.video.cloud.cctv.com/*
@@ -24,7 +24,7 @@
   }
   window.__YSP_DAILY_REPORTER__ = true;
 
-  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.6';
+  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.16';
 
   const PANEL_STYLE = `
 #ysp-daily-panel-root {
@@ -56,7 +56,7 @@
   pointer-events: auto;
   display: flex;
   flex-direction: column;
-  width: min(456px, calc(100vw - 32px));
+  width: min(960px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);
   overflow: hidden;
   border: 1px solid rgba(21, 54, 85, 0.12);
@@ -140,14 +140,6 @@
   gap: 8px;
 }
 
-.ysp-daily-panel__eyebrow {
-  margin-bottom: 6px;
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.62);
-}
-
 .ysp-daily-panel__title {
   margin: 0;
   font-family: "STZhongsong", "Songti SC", "Noto Serif SC", serif;
@@ -183,9 +175,19 @@
 .ysp-daily-panel__body {
   position: relative;
   display: grid;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.78fr);
+  gap: 16px;
   padding: 18px 18px 20px;
-  overflow-y: auto;
+  overflow: hidden;
+  min-height: 540px;
+}
+
+.ysp-daily-panel__main,
+.ysp-daily-panel__side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
 }
 
 .ysp-daily-panel__section {
@@ -199,6 +201,12 @@
 
 .ysp-daily-panel__section--compact {
   padding: 14px 16px;
+}
+
+.ysp-daily-panel__section--fill {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .ysp-daily-panel__toolbar {
@@ -244,6 +252,25 @@
   font-size: 14px;
   color: #17212b;
   box-shadow: inset 0 1px 2px rgba(17, 41, 66, 0.04);
+  cursor: pointer;
+}
+
+.ysp-daily-panel__date-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ysp-daily-panel__date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ysp-daily-panel__date-caption {
+  font-size: 12px;
+  font-weight: 700;
+  color: #49657c;
 }
 
 .ysp-daily-panel__badge {
@@ -261,7 +288,8 @@
 .ysp-daily-panel__catalog {
   display: grid;
   gap: 12px;
-  max-height: min(46vh, 420px);
+  flex: 1 1 auto;
+  min-height: 0;
   padding-right: 4px;
   overflow-y: auto;
 }
@@ -271,7 +299,7 @@
   --accent-soft: rgba(50, 118, 170, 0.1);
   --accent-border: rgba(50, 118, 170, 0.16);
   --accent-ink: #214866;
-  padding: 14px;
+  padding: 16px 18px;
   border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 252, 255, 0.8)),
@@ -279,6 +307,12 @@
   border: 1px solid var(--accent-border);
   box-shadow: 0 10px 24px rgba(23, 56, 84, 0.06);
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  cursor: pointer;
+}
+
+.ysp-daily-panel__group:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(23, 56, 84, 0.08);
 }
 
 .ysp-daily-panel__group.is-selected {
@@ -312,72 +346,25 @@
 }
 
 .ysp-daily-panel__group-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  display: block;
 }
 
 .ysp-daily-panel__group-title {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
+  line-height: 1.45;
   color: var(--accent-ink);
-}
-
-.ysp-daily-panel__group-action {
-  flex-shrink: 0;
-  min-width: 88px;
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid var(--accent-border);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.ysp-daily-panel__group-action.is-selected {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #ffffff;
-}
-
-.ysp-daily-panel__options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.ysp-daily-panel__chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(24, 52, 76, 0.1);
-  background: #ffffff;
-  color: #28445f;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: default;
-}
-
-.ysp-daily-panel__chip-text {
-  position: relative;
 }
 
 .ysp-daily-panel__actions {
   display: grid;
-  grid-template-columns: 1.3fr 0.8fr 0.8fr;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
 .ysp-daily-panel__button {
-  min-height: 44px;
+  min-height: 48px;
   padding: 10px 12px;
   border: 0;
   border-radius: 14px;
@@ -402,16 +389,6 @@
   background: linear-gradient(135deg, #0f7d94, #1f5f86);
   color: #ffffff;
   box-shadow: 0 14px 28px rgba(31, 95, 134, 0.2);
-}
-
-.ysp-daily-panel__button--secondary {
-  background: #edf4fb;
-  color: #17344c;
-}
-
-.ysp-daily-panel__button--ghost {
-  background: #fff2e4;
-  color: #874d1a;
 }
 
 .ysp-daily-panel__report {
@@ -475,47 +452,6 @@
   gap: 8px;
 }
 
-.ysp-daily-panel__status {
-  padding: 14px;
-  border-radius: 16px;
-  background: rgba(24, 52, 76, 0.05);
-  font-size: 13px;
-  line-height: 1.6;
-  color: #28445f;
-}
-
-.ysp-daily-panel__status strong {
-  color: #17344c;
-}
-
-.ysp-daily-panel__summary {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed rgba(24, 52, 76, 0.12);
-  font-size: 12px;
-  color: #46617b;
-}
-
-.ysp-daily-panel__logs {
-  max-height: 220px;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.ysp-daily-panel__log {
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(24, 52, 76, 0.08);
-  font-size: 12px;
-  line-height: 1.6;
-  color: #39556f;
-}
-
-.ysp-daily-panel__log + .ysp-daily-panel__log {
-  margin-top: 8px;
-}
-
 .ysp-daily-panel__dock {
   position: absolute;
   top: 50%;
@@ -552,7 +488,23 @@
   }
 
   .ysp-daily-panel {
-    width: min(408px, calc(100vw - 24px));
+    width: min(900px, calc(100vw - 24px));
+  }
+}
+
+@media (max-width: 920px) {
+  .ysp-daily-panel {
+    width: min(480px, calc(100vw - 24px));
+  }
+
+  .ysp-daily-panel__body {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    overflow-y: auto;
+  }
+
+  .ysp-daily-panel__date-grid {
+    grid-template-columns: 1fr;
   }
 }
   `;
@@ -707,7 +659,8 @@
 
   const STORAGE_KEYS = {
     settings: 'yspDailySettingsV1',
-    report: 'yspDailyLastReportV1'
+    report: 'yspDailyLastReportV1',
+    resultCache: 'yspDailyResultCacheV1'
   };
 
   const FALLBACK_PREFIX = 'yspTmFallback:';
@@ -785,11 +738,60 @@
     return `${y}-${m}-${d}`;
   }
 
+  function createCacheEnvelope(data) {
+    return {
+      cachedAt: new Date().toISOString(),
+      data
+    };
+  }
+
+  function unwrapCacheEnvelope(value) {
+    if (
+      value
+      && typeof value === 'object'
+      && Object.prototype.hasOwnProperty.call(value, 'cachedAt')
+      && Object.prototype.hasOwnProperty.call(value, 'data')
+    ) {
+      return value.data;
+    }
+    return value;
+  }
+
+  function getQuarterCutoffDateString(referenceValue) {
+    const date = referenceValue instanceof Date ? new Date(referenceValue) : new Date(referenceValue || Date.now());
+    date.setHours(0, 0, 0, 0);
+    date.setMonth(date.getMonth() - 3);
+    return formatInputDate(date);
+  }
+
+  function isDateExpiredByQuarter(dateString, cutoffDateString) {
+    const normalizedDate = normalizeText(dateString);
+    return Boolean(normalizedDate && cutoffDateString && normalizedDate < cutoffDateString);
+  }
+
   function getYesterdayDateString() {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() - 1);
     return formatInputDate(date);
+  }
+
+  function buildDateList(startDateString, endDateString) {
+    const startDate = normalizeText(startDateString);
+    const endDate = normalizeText(endDateString) || startDate;
+    if (!startDate || !endDate || endDate < startDate) {
+      return [];
+    }
+    const [startYear, startMonth, startDay] = startDate.split('-').map((part) => Number(part));
+    const [endYear, endMonth, endDay] = endDate.split('-').map((part) => Number(part));
+    const cursor = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+    const last = new Date(endYear, endMonth - 1, endDay, 0, 0, 0, 0);
+    const dates = [];
+    while (cursor <= last) {
+      dates.push(formatInputDate(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return dates;
   }
 
   function buildDateRange(dateString) {
@@ -941,6 +943,22 @@
     };
   }
 
+  function isStoredMetricRow(rawRow) {
+    return Boolean(
+      rawRow
+      && typeof rawRow === 'object'
+      && [
+        'inboundCount',
+        'stdPassCount',
+        'stdRejectCount',
+        'stdTotalCount',
+        'qcPassCount',
+        'qcRejectCount',
+        'qcTotalCount'
+      ].some((key) => key in rawRow)
+    );
+  }
+
   function normalizeStoredReport(report) {
     if (!report || typeof report !== 'object') {
       return null;
@@ -951,17 +969,50 @@
     );
     const columns = buildReportColumns(getEntriesByKeys(sourceKeys));
     const rawRows = Array.isArray(report.rows) ? report.rows : [];
-    const rowMap = new Map();
-    for (const row of rawRows) {
-      const normalized = normalizeStoredResultRow(row);
-      if (normalized.key) {
-        rowMap.set(normalized.key, normalized);
+    const normalizedRows = [];
+
+    if (rawRows.length && rawRows.every((row) => row && typeof row === 'object' && Array.isArray(row.results))) {
+      for (const rawRow of rawRows) {
+        if (!rawRow.date) {
+          continue;
+        }
+        const rowMap = new Map();
+        for (const result of rawRow.results) {
+          const normalized = normalizeStoredResultRow(result);
+          if (normalized.key) {
+            rowMap.set(normalized.key, normalized);
+          }
+        }
+        normalizedRows.push({
+          date: rawRow.date,
+          results: columns.map((column) => rowMap.get(column.key) || createEmptyResult(column.key))
+        });
+      }
+    } else {
+      const rowMap = new Map();
+      for (const row of rawRows) {
+        const normalized = normalizeStoredResultRow(row);
+        if (normalized.key) {
+          rowMap.set(normalized.key, normalized);
+        }
+      }
+      const singleDate = report.date || report.startDate || '';
+      if (singleDate) {
+        normalizedRows.push({
+          date: singleDate,
+          results: columns.map((column) => rowMap.get(column.key) || createEmptyResult(column.key))
+        });
       }
     }
+
+    const startDate = report.startDate || (normalizedRows[0] && normalizedRows[0].date) || report.date || '';
+    const endDate = report.endDate || (normalizedRows.length ? normalizedRows[normalizedRows.length - 1].date : startDate) || startDate;
     return {
-      date: report.date || '',
+      date: startDate,
+      startDate,
+      endDate,
       columns,
-      rows: columns.map((column) => rowMap.get(column.key) || createEmptyResult(column.key)),
+      rows: normalizedRows,
       generatedAt: report.generatedAt || new Date().toISOString()
     };
   }
@@ -972,25 +1023,118 @@
     }
     const groupIds = normalizeSelectedGroupIds(checkpoint.groupIds || checkpoint.itemKeys || checkpoint.categories);
     const itemKeys = normalizeSelectedKeys(checkpoint.itemKeys || checkpoint.categories);
+    const startDate = checkpoint.startDate || checkpoint.date || '';
+    const endDate = checkpoint.endDate || checkpoint.date || '';
+    const dateList = Array.isArray(checkpoint.dateList) && checkpoint.dateList.length
+      ? checkpoint.dateList.filter(Boolean)
+      : buildDateList(startDate, endDate || startDate);
     const normalizedResults = {};
     if (checkpoint.results && typeof checkpoint.results === 'object') {
       for (const [key, value] of Object.entries(checkpoint.results)) {
-        const entry = getCategoryEntry(key) || getCategoryEntry(value && (value.key || value.category || value.label));
-        if (!entry) {
+        if (isStoredMetricRow(value)) {
+          const targetDate = dateList[0] || startDate;
+          const entry = getCategoryEntry(key) || getCategoryEntry(value && (value.key || value.category || value.label));
+          if (!targetDate || !entry) {
+            continue;
+          }
+          if (!normalizedResults[targetDate]) {
+            normalizedResults[targetDate] = {};
+          }
+          normalizedResults[targetDate][entry.key] = normalizeStoredResultRow({
+            ...value,
+            key: entry.key
+          });
           continue;
         }
-        normalizedResults[entry.key] = normalizeStoredResultRow({
-          ...value,
-          key: entry.key
-        });
+        if (!value || typeof value !== 'object') {
+          continue;
+        }
+        const dayResults = {};
+        for (const [rowKey, rowValue] of Object.entries(value)) {
+          const entry = getCategoryEntry(rowKey) || getCategoryEntry(rowValue && (rowValue.key || rowValue.category || rowValue.label));
+          if (!entry) {
+            continue;
+          }
+          dayResults[entry.key] = normalizeStoredResultRow({
+            ...rowValue,
+            key: entry.key
+          });
+        }
+        if (Object.keys(dayResults).length) {
+          normalizedResults[key] = dayResults;
+        }
       }
     }
     return {
       ...checkpoint,
-      version: 3,
+      version: 4,
+      startDate,
+      endDate: endDate || startDate,
+      dateList,
       groupIds,
       itemKeys,
+      currentDateIndex: Number.isFinite(Number(checkpoint.currentDateIndex)) ? Number(checkpoint.currentDateIndex) : 0,
+      currentItemIndex: Number.isFinite(Number(checkpoint.currentItemIndex)) ? Number(checkpoint.currentItemIndex) : Number(checkpoint.currentIndex || 0),
       results: normalizedResults
+    };
+  }
+
+  function normalizeStoredResultCache(cache) {
+    const source = cache && typeof cache === 'object' && cache.rows && typeof cache.rows === 'object'
+      ? cache.rows
+      : cache;
+    if (!source || typeof source !== 'object') {
+      return {};
+    }
+    const normalizedCache = {};
+    for (const [date, dayResults] of Object.entries(source)) {
+      if (!dayResults || typeof dayResults !== 'object') {
+        continue;
+      }
+      const normalizedDayResults = {};
+      for (const [rowKey, rowValue] of Object.entries(dayResults)) {
+        const entry = getCategoryEntry(rowKey) || getCategoryEntry(rowValue && (rowValue.key || rowValue.category || rowValue.label));
+        if (!entry) {
+          continue;
+        }
+        normalizedDayResults[entry.key] = normalizeStoredResultRow({
+          ...rowValue,
+          key: entry.key
+        });
+      }
+      if (Object.keys(normalizedDayResults).length) {
+        normalizedCache[date] = normalizedDayResults;
+      }
+    }
+    return normalizedCache;
+  }
+
+  function trimResultCacheByCutoff(cache, cutoffDateString) {
+    const trimmedCache = {};
+    for (const [date, dayResults] of Object.entries(cache || {})) {
+      if (isDateExpiredByQuarter(date, cutoffDateString)) {
+        continue;
+      }
+      trimmedCache[date] = dayResults;
+    }
+    return trimmedCache;
+  }
+
+  function trimReportByCutoff(report, cutoffDateString) {
+    const normalizedReport = normalizeStoredReport(report);
+    if (!normalizedReport) {
+      return null;
+    }
+    const rows = (normalizedReport.rows || []).filter((row) => !isDateExpiredByQuarter(row.date, cutoffDateString));
+    if (!rows.length) {
+      return null;
+    }
+    return {
+      ...normalizedReport,
+      date: rows[0].date,
+      startDate: rows[0].date,
+      endDate: rows[rows.length - 1].date,
+      rows
     };
   }
 
@@ -1099,6 +1243,14 @@
         writeFallbackValue(key, value);
       }
     }
+  }
+
+  async function storageSetCached(values) {
+    const wrappedValues = {};
+    for (const [key, value] of Object.entries(values)) {
+      wrappedValues[key] = createCacheEnvelope(value);
+    }
+    await storageSet(wrappedValues);
   }
 
   async function storageRemove(keys) {
@@ -1337,6 +1489,36 @@
     });
   }
 
+  function buildDailyReportRows(dateList, items, resultsByDate) {
+    return dateList.map((date) => {
+      return {
+        date,
+        results: buildOrderedResults(items, resultsByDate && resultsByDate[date] ? resultsByDate[date] : {})
+      };
+    });
+  }
+
+  function formatReportPeriod(report) {
+    if (!report) {
+      return '';
+    }
+    const startDate = report.startDate || report.date || '';
+    const endDate = report.endDate || startDate;
+    if (!startDate) {
+      return '';
+    }
+    return startDate === endDate ? startDate : `${startDate} 至 ${endDate}`;
+  }
+
+  function getReportFileToken(report) {
+    const startDate = report.startDate || report.date || '';
+    const endDate = report.endDate || startDate;
+    if (!startDate) {
+      return formatInputDate(new Date());
+    }
+    return startDate === endDate ? startDate : `${startDate}_至_${endDate}`;
+  }
+
   function makeCellRef(column, row) {
     let index = column;
     let label = '';
@@ -1379,6 +1561,7 @@
 
   function buildWorksheetXml(report) {
     const columns = Array.isArray(report.columns) ? report.columns : [];
+    const dateRows = Array.isArray(report.rows) ? report.rows : [];
     const rows = [];
     const merges = ['A1:A2'];
 
@@ -1402,32 +1585,35 @@
     }
     rows.push(`<row r="2" ht="22" customHeight="1">${secondRowCells.join('')}</row>`);
 
-    const dataValues = [formatDisplayDate(report.date)];
-    for (const row of report.rows) {
-      dataValues.push(
-        row.inboundCount || 0,
-        row.stdTotalCount || 0,
-        row.stdPassCount || 0,
-        row.stdRejectCount || 0,
-        row.stdRejectRate || 0,
-        row.qcTotalCount || 0,
-        row.qcPassCount || 0,
-        row.qcRejectCount || 0,
-        row.qcRejectRate || 0
-      );
-    }
-    const dataCells = dataValues.map((value, index) => {
-      const ref = makeCellRef(index + 1, 3);
-      if (index === 0) {
-        return inlineCell(ref, value, 8);
+    dateRows.forEach((reportRow, rowIndex) => {
+      const dataValues = [formatDisplayDate(reportRow.date)];
+      for (const result of reportRow.results) {
+        dataValues.push(
+          result.inboundCount || 0,
+          result.stdTotalCount || 0,
+          result.stdPassCount || 0,
+          result.stdRejectCount || 0,
+          result.stdRejectRate || 0,
+          result.qcTotalCount || 0,
+          result.qcPassCount || 0,
+          result.qcRejectCount || 0,
+          result.qcRejectRate || 0
+        );
       }
-      const metricIndex = (index - 1) % METRIC_HEADERS.length;
-      if (metricIndex === 4 || metricIndex === 8) {
-        return numberCell(ref, Number(value || 0), 10);
-      }
-      return numberCell(ref, Number(value || 0), 9);
+      const worksheetRowNumber = rowIndex + 3;
+      const dataCells = dataValues.map((value, cellIndex) => {
+        const ref = makeCellRef(cellIndex + 1, worksheetRowNumber);
+        if (cellIndex === 0) {
+          return inlineCell(ref, value, 8);
+        }
+        const metricIndex = (cellIndex - 1) % METRIC_HEADERS.length;
+        if (metricIndex === 4 || metricIndex === 8) {
+          return numberCell(ref, Number(value || 0), 10);
+        }
+        return numberCell(ref, Number(value || 0), 9);
+      });
+      rows.push(`<row r="${worksheetRowNumber}" ht="22" customHeight="1">${dataCells.join('')}</row>`);
     });
-    rows.push(`<row r="3" ht="22" customHeight="1">${dataCells.join('')}</row>`);
 
     return [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -1681,7 +1867,7 @@
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `YSP日报_${report.date}.xlsx`;
+    anchor.download = `YSP日报_${getReportFileToken(report)}.xlsx`;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -1689,13 +1875,14 @@
   class DailyReporterApp {
     constructor() {
       this.panel = null;
-      this.savedSettings = { date: '', groupIds: [] };
+      this.savedSettings = { startDate: '', endDate: '', groupIds: [] };
       this.runtime = {
         running: false,
-        minimized: false,
+        minimized: true,
         stopping: false,
         currentCheckpoint: null,
         lastReport: null,
+        resultCache: {},
         logs: [],
         statusText: '等待开始',
         activeSessionKey: getCheckpointStorageKey()
@@ -1708,24 +1895,75 @@
         return;
       }
       injectPanelStyle();
+      await this.clearExpiredCache();
       await this.loadState();
       this.mountPanel();
       await this.tryResume();
+    }
+
+    async clearExpiredCache() {
+      const state = await storageGet([
+        STORAGE_KEYS.report,
+        STORAGE_KEYS.resultCache,
+        this.runtime.activeSessionKey
+      ]);
+      const cutoffDate = getQuarterCutoffDateString(new Date());
+
+      const nextReport = trimReportByCutoff(unwrapCacheEnvelope(state[STORAGE_KEYS.report]), cutoffDate);
+      if (nextReport) {
+        await storageSetCached({
+          [STORAGE_KEYS.report]: nextReport
+        });
+      } else {
+        await storageRemove(STORAGE_KEYS.report);
+      }
+
+      const cachedResultData = normalizeStoredResultCache(unwrapCacheEnvelope(state[STORAGE_KEYS.resultCache]));
+      const nextResultCache = trimResultCacheByCutoff(cachedResultData, cutoffDate);
+      if (Object.keys(nextResultCache).length) {
+        await storageSetCached({
+          [STORAGE_KEYS.resultCache]: nextResultCache
+        });
+      } else {
+        await storageRemove(STORAGE_KEYS.resultCache);
+      }
+
+      const checkpoint = unwrapCacheEnvelope(state[this.runtime.activeSessionKey]);
+      const checkpointDate = checkpoint && (checkpoint.updatedAt || checkpoint.startedAt || '');
+      if (checkpointDate && isDateExpiredByQuarter(String(checkpointDate).slice(0, 10), cutoffDate)) {
+        await storageRemove(this.runtime.activeSessionKey);
+      }
     }
 
     async loadState() {
       const state = await storageGet([
         STORAGE_KEYS.settings,
         STORAGE_KEYS.report,
+        STORAGE_KEYS.resultCache,
         this.runtime.activeSessionKey
       ]);
-      const rawSettings = state[STORAGE_KEYS.settings] || {};
+      const rawSettings = unwrapCacheEnvelope(state[STORAGE_KEYS.settings]) || {};
+      const maxDate = getYesterdayDateString();
+      const startDate = rawSettings.startDate || rawSettings.date || '';
+      let endDate = rawSettings.endDate || '';
+      const normalizedStartDate = startDate && startDate <= maxDate ? startDate : '';
+      if (!normalizedStartDate) {
+        endDate = '';
+      }
+      if (endDate && endDate > maxDate) {
+        endDate = '';
+      }
+      if (normalizedStartDate && endDate && endDate < normalizedStartDate) {
+        endDate = '';
+      }
       this.savedSettings = {
-        date: rawSettings.date || '',
+        startDate: normalizedStartDate,
+        endDate,
         groupIds: normalizeSelectedGroupIds(rawSettings.groupIds || rawSettings.itemKeys || rawSettings.categories)
       };
-      this.runtime.lastReport = normalizeStoredReport(state[STORAGE_KEYS.report]);
-      this.runtime.currentCheckpoint = normalizeStoredCheckpoint(state[this.runtime.activeSessionKey]);
+      this.runtime.lastReport = null;
+      this.runtime.resultCache = normalizeStoredResultCache(unwrapCacheEnvelope(state[STORAGE_KEYS.resultCache]));
+      this.runtime.currentCheckpoint = normalizeStoredCheckpoint(unwrapCacheEnvelope(state[this.runtime.activeSessionKey]));
       this.runtime.logs = Array.isArray(this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.logs)
         ? this.runtime.currentCheckpoint.logs.slice(0, MAX_LOGS)
         : [];
@@ -1737,8 +1975,6 @@
         this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次任务已停止';
       } else if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'error') {
         this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次任务停在错误位置';
-      } else if (this.runtime.lastReport) {
-        this.runtime.statusText = `最近一次结果：${this.runtime.lastReport.date}`;
       }
     }
 
@@ -1756,7 +1992,6 @@
           <div class="ysp-daily-panel__header">
             <div class="ysp-daily-panel__header-top">
               <div>
-                <div class="ysp-daily-panel__eyebrow">YSP Reporter</div>
                 <div class="ysp-daily-panel__title">二次质检日报采集</div>
               </div>
               <div class="ysp-daily-panel__header-actions">
@@ -1766,38 +2001,39 @@
             </div>
           </div>
           <div class="ysp-daily-panel__body">
-            <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
-              <label class="ysp-daily-panel__label" for="ysp-daily-date">日期</label>
-              <input id="ysp-daily-date" class="ysp-daily-panel__date" type="date" />
-            </div>
-            <div class="ysp-daily-panel__section">
-              <div class="ysp-daily-panel__toolbar">
-                <span class="ysp-daily-panel__label">品类编组</span>
-              </div>
-              <div class="ysp-daily-panel__catalog" data-role="categories"></div>
-            </div>
-            <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
-              <div class="ysp-daily-panel__actions">
-                <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start">开始采集</button>
-                <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--ghost" data-role="stop">停止任务</button>
-                <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--secondary" data-role="clear">清除进度</button>
+            <div class="ysp-daily-panel__main">
+              <div class="ysp-daily-panel__section ysp-daily-panel__section--fill">
+                <div class="ysp-daily-panel__toolbar">
+                  <span class="ysp-daily-panel__label">品类编组</span>
+                </div>
+                <div class="ysp-daily-panel__catalog" data-role="categories"></div>
               </div>
             </div>
-            <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
-              <div class="ysp-daily-panel__toolbar">
-                <span class="ysp-daily-panel__label">下载中心</span>
+            <div class="ysp-daily-panel__side">
+              <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
+                <span class="ysp-daily-panel__label">日期</span>
+                <div class="ysp-daily-panel__date-grid">
+                  <label class="ysp-daily-panel__date-field" for="ysp-daily-start-date">
+                    <span class="ysp-daily-panel__date-caption">开始</span>
+                    <input id="ysp-daily-start-date" class="ysp-daily-panel__date" type="date" />
+                  </label>
+                  <label class="ysp-daily-panel__date-field" for="ysp-daily-end-date">
+                    <span class="ysp-daily-panel__date-caption">结束</span>
+                    <input id="ysp-daily-end-date" class="ysp-daily-panel__date" type="date" />
+                  </label>
+                </div>
               </div>
-              <div class="ysp-daily-panel__report" data-role="report"></div>
-            </div>
-            <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
-              <div class="ysp-daily-panel__label">当前状态</div>
-              <div class="ysp-daily-panel__status" data-role="status"></div>
-            </div>
-            <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
-              <div class="ysp-daily-panel__toolbar">
-                <span class="ysp-daily-panel__label">执行记录</span>
+              <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
+                <div class="ysp-daily-panel__actions">
+                  <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start">开始采集</button>
+                </div>
               </div>
-              <div class="ysp-daily-panel__logs" data-role="logs"></div>
+              <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
+                <div class="ysp-daily-panel__toolbar">
+                  <span class="ysp-daily-panel__label">下载中心</span>
+                </div>
+                <div class="ysp-daily-panel__report" data-role="report"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1806,25 +2042,23 @@
       document.body.appendChild(root);
       this.panel = root;
 
+      this.refs.backdrop = root.querySelector('.ysp-daily-panel__backdrop');
       this.refs.surface = root.querySelector('.ysp-daily-panel');
-      this.refs.date = root.querySelector('#ysp-daily-date');
+      this.refs.startDate = root.querySelector('#ysp-daily-start-date');
+      this.refs.endDate = root.querySelector('#ysp-daily-end-date');
       this.refs.categories = root.querySelector('[data-role="categories"]');
       this.refs.report = root.querySelector('[data-role="report"]');
-      this.refs.status = root.querySelector('[data-role="status"]');
-      this.refs.logs = root.querySelector('[data-role="logs"]');
       this.refs.start = root.querySelector('[data-role="start"]');
-      this.refs.stop = root.querySelector('[data-role="stop"]');
-      this.refs.clear = root.querySelector('[data-role="clear"]');
       this.refs.minimize = root.querySelector('[data-role="minimize"]');
       this.refs.dock = root.querySelector('[data-role="dock"]');
 
       this.renderCategories();
-      this.refs.date.max = getYesterdayDateString();
-      this.refs.date.value = this.savedSettings.date || '';
-      if (this.refs.date.value && this.refs.date.value > this.refs.date.max) {
-        this.refs.date.value = '';
-        this.savedSettings.date = '';
-      }
+      this.refs.startDate.setAttribute('inputmode', 'none');
+      this.refs.endDate.setAttribute('inputmode', 'none');
+      this.refs.startDate.value = this.savedSettings.startDate || '';
+      this.refs.endDate.value = this.savedSettings.endDate || '';
+      this.syncDateInputBounds();
+      this.normalizeDateInputs();
       this.bindPanelEvents();
       this.render();
     }
@@ -1840,23 +2074,18 @@
     renderCategories() {
       const selected = new Set(this.savedSettings.groupIds);
       this.refs.categories.innerHTML = SUBGROUP_ENTRIES.map((subgroup) => {
-        const items = getEntriesByKeys(subgroup.itemKeys);
         const selectedClass = selected.has(subgroup.id) ? ' is-selected' : '';
-        const buttonClass = selected.has(subgroup.id) ? ' is-selected' : '';
         return `
-          <section class="ysp-daily-panel__group${selectedClass}" data-theme="${escapeXml(subgroup.theme)}" data-group-card="${escapeXml(subgroup.id)}">
+          <section
+            class="ysp-daily-panel__group${selectedClass}"
+            data-theme="${escapeXml(subgroup.theme)}"
+            data-group-card="${escapeXml(subgroup.id)}"
+            role="button"
+            tabindex="${this.runtime.running ? '-1' : '0'}"
+            aria-pressed="${selected.has(subgroup.id) ? 'true' : 'false'}"
+          >
             <div class="ysp-daily-panel__group-header">
               <h3 class="ysp-daily-panel__group-title">${escapeXml(subgroup.label)}</h3>
-              <button type="button" class="ysp-daily-panel__group-action${buttonClass}" data-role="toggle-group" data-group="${escapeXml(subgroup.id)}">${selected.has(subgroup.id) ? '已选这组' : '选择这组'}</button>
-            </div>
-            <div class="ysp-daily-panel__options">
-              ${items.map((entry) => {
-                return `
-                  <span class="ysp-daily-panel__chip">
-                    <span class="ysp-daily-panel__chip-text">${escapeXml(entry.exportLabel)}</span>
-                  </span>
-                `;
-              }).join('')}
             </div>
           </section>
         `;
@@ -1867,29 +2096,45 @@
       this.refs.start.addEventListener('click', () => {
         this.startNewJob().catch((error) => this.failJob(error));
       });
-      this.refs.stop.addEventListener('click', () => this.stopCurrentJob());
-      this.refs.clear.addEventListener('click', () => {
-        this.clearProgress().catch((error) => this.pushLog(`清除进度失败：${error.message}`));
+      this.refs.backdrop.addEventListener('click', () => {
+        if (!this.runtime.minimized) {
+          this.setMinimized(true);
+        }
       });
       this.refs.minimize.addEventListener('click', () => this.setMinimized(true));
       this.refs.dock.addEventListener('click', () => this.setMinimized(false));
-      this.refs.date.addEventListener('change', () => {
-        if (this.refs.date.max && this.refs.date.value > this.refs.date.max) {
-          this.refs.date.value = this.refs.date.max;
-        }
-        this.persistDraft().catch(() => undefined);
-        this.render();
-      });
+      this.bindDateInput(this.refs.startDate);
+      this.bindDateInput(this.refs.endDate);
       this.refs.categories.addEventListener('click', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) {
           return;
         }
-        const toggleButton = target.closest('[data-role="toggle-group"]');
-        if (!toggleButton || this.runtime.running) {
+        const groupCard = target.closest('[data-group-card]');
+        if (!groupCard || this.runtime.running) {
           return;
         }
-        const groupId = toggleButton.getAttribute('data-group');
+        const groupId = groupCard.getAttribute('data-group-card');
+        if (!groupId) {
+          return;
+        }
+        this.setSelectedGroupIds(this.savedSettings.groupIds.includes(groupId) ? [] : [groupId]);
+        this.render();
+      });
+      this.refs.categories.addEventListener('keydown', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || this.runtime.running) {
+          return;
+        }
+        if (event.key !== 'Enter' && event.key !== ' ') {
+          return;
+        }
+        const groupCard = target.closest('[data-group-card]');
+        if (!groupCard) {
+          return;
+        }
+        event.preventDefault();
+        const groupId = groupCard.getAttribute('data-group-card');
         if (!groupId) {
           return;
         }
@@ -1932,6 +2177,79 @@
       this.render();
     }
 
+    bindDateInput(input) {
+      input.addEventListener('click', () => this.openDatePicker(input));
+      input.addEventListener('focus', () => {
+        window.setTimeout(() => this.openDatePicker(input), 0);
+      });
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Tab') {
+          return;
+        }
+        event.preventDefault();
+        if (event.key === 'Enter' || event.key === ' ') {
+          this.openDatePicker(input);
+        }
+      });
+      input.addEventListener('beforeinput', (event) => {
+        event.preventDefault();
+      });
+      input.addEventListener('paste', (event) => {
+        event.preventDefault();
+      });
+      input.addEventListener('drop', (event) => {
+        event.preventDefault();
+      });
+      input.addEventListener('wheel', (event) => {
+        event.preventDefault();
+      }, { passive: false });
+      input.addEventListener('change', () => {
+        this.normalizeDateInputs();
+        this.persistDraft().catch(() => undefined);
+        this.render();
+      });
+    }
+
+    syncDateInputBounds() {
+      const maxDate = getYesterdayDateString();
+      this.refs.startDate.max = maxDate;
+      this.refs.endDate.max = maxDate;
+      this.refs.endDate.min = this.refs.startDate.value || '';
+    }
+
+    normalizeDateInputs() {
+      this.syncDateInputBounds();
+      if (this.refs.startDate.value && this.refs.startDate.value > this.refs.startDate.max) {
+        this.refs.startDate.value = this.refs.startDate.max;
+      }
+      if (!this.refs.startDate.value) {
+        this.refs.endDate.value = '';
+      }
+      if (this.refs.endDate.value && this.refs.endDate.value > this.refs.endDate.max) {
+        this.refs.endDate.value = this.refs.endDate.max;
+      }
+      if (this.refs.endDate.value && this.refs.startDate.value && this.refs.endDate.value < this.refs.startDate.value) {
+        this.refs.endDate.value = '';
+      }
+      this.savedSettings.startDate = this.refs.startDate.value;
+      this.savedSettings.endDate = this.refs.endDate.value;
+    }
+
+    openDatePicker(input) {
+      if (!input || input.disabled) {
+        return;
+      }
+      if (typeof input.showPicker === 'function') {
+        try {
+          input.showPicker();
+          return;
+        } catch (error) {
+          // ignore and fall through to native focus behavior
+        }
+      }
+      input.focus();
+    }
+
     setSelectedGroupIds(groupIds) {
       this.savedSettings.groupIds = normalizeSelectedGroupIds(groupIds);
       this.persistDraft().catch(() => undefined);
@@ -1950,7 +2268,8 @@
     }
 
     async persistDraft() {
-      await this.persistSettings(this.refs.date.value, this.savedSettings.groupIds);
+      this.normalizeDateInputs();
+      await this.persistSettings(this.refs.startDate.value, this.refs.endDate.value, this.savedSettings.groupIds);
     }
 
     describeItem(item) {
@@ -1970,7 +2289,7 @@
         <div class="ysp-daily-panel__report-top">
           <div>
             <h3 class="ysp-daily-panel__report-title">日报结果已就绪</h3>
-            <div class="ysp-daily-panel__report-meta">${escapeXml(this.runtime.lastReport.date)}</div>
+            <div class="ysp-daily-panel__report-meta">${escapeXml(formatReportPeriod(this.runtime.lastReport))}</div>
           </div>
           <button type="button" class="ysp-daily-panel__download" data-role="download">下载 Excel</button>
         </div>
@@ -1989,40 +2308,33 @@
 
     render() {
       this.panel.classList.toggle('is-minimized', this.runtime.minimized);
-      this.refs.date.disabled = this.runtime.running;
+      this.syncDateInputBounds();
+      this.refs.startDate.disabled = this.runtime.running;
+      this.refs.endDate.disabled = this.runtime.running;
       this.refs.start.disabled = this.runtime.running;
-      this.refs.stop.disabled = !this.runtime.running;
-      this.refs.clear.disabled = this.runtime.running;
+      this.refs.start.textContent = this.runtime.running ? '采集中' : '开始采集';
       this.refs.minimize.disabled = false;
-      for (const button of this.refs.categories.querySelectorAll('[data-role="toggle-group"]')) {
-        const groupId = button.getAttribute('data-group');
+      for (const groupCard of this.refs.categories.querySelectorAll('[data-group-card]')) {
+        const groupId = groupCard.getAttribute('data-group-card');
         const selected = this.savedSettings.groupIds.includes(groupId);
-        button.textContent = selected ? '已选这组' : '选择这组';
-        button.classList.toggle('is-selected', selected);
-        button.disabled = this.runtime.running;
-        const groupCard = this.refs.categories.querySelector(`[data-group-card="${groupId}"]`);
-        if (groupCard) {
-          groupCard.classList.toggle('is-selected', selected);
-        }
+        groupCard.classList.toggle('is-selected', selected);
+        groupCard.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        groupCard.setAttribute('tabindex', this.runtime.running ? '-1' : '0');
       }
       this.renderSelectionSummary();
       this.renderReport();
-      const summary = this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'running'
-        ? `<div class="ysp-daily-panel__summary"><strong>当前进度：</strong>${escapeXml(this.runtime.currentCheckpoint.summaryText || '')}</div>`
-        : this.runtime.lastReport
-          ? `<div class="ysp-daily-panel__summary"><strong>最近结果：</strong>${escapeXml(this.runtime.lastReport.date)}</div>`
-          : '';
-      this.refs.status.innerHTML = `<strong>${escapeXml(this.runtime.statusText)}</strong>${summary}`;
-      this.refs.logs.innerHTML = this.runtime.logs.length
-        ? this.runtime.logs.map((log) => `<div class="ysp-daily-panel__log">${escapeXml(log)}</div>`).join('')
-        : '<div class="ysp-daily-panel__log">还没有执行记录</div>';
     }
 
-    async persistSettings(date, groupIds) {
-      this.savedSettings = { date, groupIds: normalizeSelectedGroupIds(groupIds) };
-      await storageSet({
+    async persistSettings(startDate, endDate, groupIds) {
+      this.savedSettings = {
+        startDate,
+        endDate,
+        groupIds: normalizeSelectedGroupIds(groupIds)
+      };
+      await storageSetCached({
         [STORAGE_KEYS.settings]: {
-          date,
+          startDate,
+          endDate,
           groupIds: this.savedSettings.groupIds.slice()
         }
       });
@@ -2033,7 +2345,7 @@
         return;
       }
       this.runtime.currentCheckpoint.updatedAt = new Date().toISOString();
-      await storageSet({
+      await storageSetCached({
         [this.runtime.activeSessionKey]: this.runtime.currentCheckpoint
       });
     }
@@ -2045,7 +2357,30 @@
 
     async clearLastCollectedData() {
       this.runtime.lastReport = null;
-      await storageRemove(STORAGE_KEYS.report);
+    }
+
+    getCachedResult(date, item) {
+      const cachedDayResults = this.runtime.resultCache && this.runtime.resultCache[date];
+      if (!cachedDayResults || !cachedDayResults[item.key]) {
+        return null;
+      }
+      return normalizeStoredResultRow({
+        ...cachedDayResults[item.key],
+        key: item.key
+      });
+    }
+
+    async cacheResult(date, item, result) {
+      if (!this.runtime.resultCache[date]) {
+        this.runtime.resultCache[date] = {};
+      }
+      this.runtime.resultCache[date][item.key] = normalizeStoredResultRow({
+        ...result,
+        key: item.key
+      });
+      await storageSetCached({
+        [STORAGE_KEYS.resultCache]: this.runtime.resultCache
+      });
     }
 
     ensureNotStopped() {
@@ -2087,33 +2422,46 @@
       if (this.runtime.running) {
         return;
       }
-      const date = this.refs.date.value;
+      this.normalizeDateInputs();
+      const startDate = this.refs.startDate.value;
+      const rawEndDate = this.refs.endDate.value;
+      const endDate = rawEndDate || startDate;
       const maxDate = getYesterdayDateString();
       const groupIds = this.savedSettings.groupIds.slice();
       const groups = this.getSelectedGroupEntries();
       const items = this.getSelectedEntries();
-      if (!date) {
-        throw new Error('请先选择日期');
+      if (!startDate) {
+        throw new Error('请先选择开始日期');
       }
-      if (date > maxDate) {
+      if (startDate > maxDate || (rawEndDate && rawEndDate > maxDate)) {
         throw new Error('日期只能选择昨天及以前');
+      }
+      if (rawEndDate && rawEndDate < startDate) {
+        throw new Error('结束日期需大于等于开始日期');
       }
       if (!groups.length) {
         throw new Error('请至少选择一个编组');
       }
+      const dateList = buildDateList(startDate, endDate);
+      if (!dateList.length) {
+        throw new Error('日期范围无效');
+      }
 
       await this.clearLastCollectedData();
-      await this.persistSettings(date, groupIds);
+      await this.persistSettings(startDate, rawEndDate, groupIds);
       this.runtime.stopping = false;
       this.runtime.running = true;
       this.runtime.logs = [];
       this.runtime.currentCheckpoint = {
-        version: 3,
+        version: 4,
         status: 'running',
-        date,
+        startDate,
+        endDate,
+        dateList,
         groupIds,
         itemKeys: items.map((item) => item.key),
-        currentIndex: 0,
+        currentDateIndex: 0,
+        currentItemIndex: 0,
         phase: 'std',
         results: {},
         logs: [],
@@ -2122,7 +2470,7 @@
         summaryText: ''
       };
       await this.saveCheckpoint();
-      this.pushLog(`开始采集：${date}，共 ${groups.length} 个编组，覆盖 ${items.length} 个子品类`);
+      this.pushLog(`开始采集：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，共 ${dateList.length} 天，覆盖 ${items.length} 个子品类`);
       await this.runFromCheckpoint();
     }
 
@@ -2146,40 +2494,88 @@
         this.render();
         return;
       }
+      const dateList = Array.isArray(checkpoint.dateList) && checkpoint.dateList.length
+        ? checkpoint.dateList
+        : buildDateList(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
+      checkpoint.dateList = dateList;
       const items = this.getCheckpointItems(checkpoint);
       if (!items.length) {
         throw new Error('当前任务没有可采集的子品类');
       }
+      if (!dateList.length) {
+        throw new Error('当前任务没有可采集的日期');
+      }
 
       if (checkpoint.phase === 'resume-qc') {
-        const item = items[checkpoint.currentIndex];
-        if (item) {
-          checkpoint.summaryText = `${this.describeItem(item)}：质检`;
-          this.updateCheckpointStatus(`正在继续 ${item.exportLabel}`, `${checkpoint.currentIndex + 1}/${items.length} · 质检`);
-          await this.runQualityCheckForItem(item);
-          checkpoint.currentIndex += 1;
+        const currentDate = dateList[checkpoint.currentDateIndex];
+        const item = items[checkpoint.currentItemIndex];
+        if (currentDate && item) {
+          const cachedResult = this.getCachedResult(currentDate, item);
+          if (cachedResult) {
+            checkpoint.results[currentDate] = checkpoint.results[currentDate] || {};
+            checkpoint.results[currentDate][item.key] = cachedResult;
+            this.pushLog(`${currentDate} ${this.describeItem(item)}：已复用本地缓存`);
+            checkpoint.currentItemIndex += 1;
+            if (checkpoint.currentItemIndex >= items.length) {
+              checkpoint.currentDateIndex += 1;
+              checkpoint.currentItemIndex = 0;
+            }
+            checkpoint.phase = 'std';
+            await this.saveCheckpoint();
+            return this.runFromCheckpoint();
+          }
+          checkpoint.summaryText = `${currentDate} ${this.describeItem(item)}：质检`;
+          this.updateCheckpointStatus(`正在继续 ${item.exportLabel}`, `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 质检`);
+          await this.runQualityCheckForItem(currentDate, item);
+          checkpoint.currentItemIndex += 1;
+          if (checkpoint.currentItemIndex >= items.length) {
+            checkpoint.currentDateIndex += 1;
+            checkpoint.currentItemIndex = 0;
+          }
           checkpoint.phase = 'std';
           await this.saveCheckpoint();
         }
       }
 
-      while (checkpoint.currentIndex < items.length) {
+      while (checkpoint.currentDateIndex < dateList.length) {
         this.ensureNotStopped();
-        const item = items[checkpoint.currentIndex];
-        if (!checkpoint.results[item.key]) {
-          checkpoint.results[item.key] = createEmptyResult(item);
+        if (checkpoint.currentItemIndex >= items.length) {
+          checkpoint.currentDateIndex += 1;
+          checkpoint.currentItemIndex = 0;
+          continue;
+        }
+        const currentDate = dateList[checkpoint.currentDateIndex];
+        const item = items[checkpoint.currentItemIndex];
+        if (!checkpoint.results[currentDate]) {
+          checkpoint.results[currentDate] = {};
+        }
+        if (!checkpoint.results[currentDate][item.key]) {
+          checkpoint.results[currentDate][item.key] = createEmptyResult(item);
+        }
+        const cachedResult = this.getCachedResult(currentDate, item);
+        if (cachedResult) {
+          checkpoint.results[currentDate][item.key] = cachedResult;
+          this.pushLog(`${currentDate} ${this.describeItem(item)}：已复用本地缓存`);
+          checkpoint.currentItemIndex += 1;
+          if (checkpoint.currentItemIndex >= items.length) {
+            checkpoint.currentDateIndex += 1;
+            checkpoint.currentItemIndex = 0;
+          }
+          checkpoint.phase = 'std';
+          await this.saveCheckpoint();
+          continue;
         }
         checkpoint.phase = 'std';
-        checkpoint.summaryText = `${this.describeItem(item)}：标准化`;
-        this.updateCheckpointStatus(`正在采集 ${item.exportLabel}`, `${checkpoint.currentIndex + 1}/${items.length} · 标准化`);
+        checkpoint.summaryText = `${currentDate} ${this.describeItem(item)}：标准化`;
+        this.updateCheckpointStatus(`正在采集 ${item.exportLabel}`, `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 标准化`);
         await this.saveCheckpoint();
-        await this.runStandardizationForItem(item);
+        await this.runStandardizationForItem(currentDate, item);
 
         checkpoint.phase = 'resume-qc';
-        checkpoint.summaryText = `${this.describeItem(item)}：等待刷新后采集质检`;
-        this.updateCheckpointStatus(`准备刷新页面继续 ${item.exportLabel}`, `${checkpoint.currentIndex + 1}/${items.length} · 等待刷新`);
+        checkpoint.summaryText = `${currentDate} ${this.describeItem(item)}：等待刷新后采集质检`;
+        this.updateCheckpointStatus(`准备刷新页面继续 ${item.exportLabel}`, `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 等待刷新`);
         await this.saveCheckpoint();
-        this.pushLog(`${this.describeItem(item)}：标准化已完成，刷新页面继续质检`);
+        this.pushLog(`${currentDate} ${this.describeItem(item)}：标准化已完成，刷新页面继续质检`);
         window.location.reload();
         return;
       }
@@ -2187,31 +2583,35 @@
       await this.completeJob();
     }
 
-    async runStandardizationForItem(item) {
+    async runStandardizationForItem(date, item) {
       this.ensureNotStopped();
       const checkpoint = this.runtime.currentCheckpoint;
-      const result = checkpoint.results[item.key] || createEmptyResult(item);
-      const range = buildDateRange(checkpoint.date);
+      if (!checkpoint.results[date]) {
+        checkpoint.results[date] = {};
+      }
+      const dayResults = checkpoint.results[date] || {};
+      const result = dayResults[item.key] || createEmptyResult(item);
+      const range = buildDateRange(date);
 
       await clickResetButton();
       await this.applyCategory(item);
       await setDateRange('创建时间', range.start, range.end);
 
-      this.pushLog(`${this.describeItem(item)}：读取入库量`);
+      this.pushLog(`${date} ${this.describeItem(item)}：读取入库量`);
       result.inboundCount = await clickQueryAndReadCount();
-      this.pushLog(`${this.describeItem(item)}：入库量 ${result.inboundCount}`);
+      this.pushLog(`${date} ${this.describeItem(item)}：入库量 ${result.inboundCount}`);
 
       await this.applySelectByLabel('标准化状态', '标准化通过');
       result.stdPassCount = await clickQueryAndReadCount();
-      this.pushLog(`${this.describeItem(item)}：标准化通过 ${result.stdPassCount}`);
+      this.pushLog(`${date} ${this.describeItem(item)}：标准化通过 ${result.stdPassCount}`);
 
       await this.applySelectByLabel('标准化状态', '标准化拒绝');
       result.stdRejectCount = await clickQueryAndReadCount();
       result.stdTotalCount = result.stdPassCount + result.stdRejectCount;
       result.stdRejectRate = calculateRatio(result.stdRejectCount, result.stdTotalCount);
-      this.pushLog(`${this.describeItem(item)}：标准化拒绝 ${result.stdRejectCount}`);
+      this.pushLog(`${date} ${this.describeItem(item)}：标准化拒绝 ${result.stdRejectCount}`);
 
-      checkpoint.results[item.key] = {
+      checkpoint.results[date][item.key] = {
         ...result,
         key: item.key,
         category: item.exportLabel,
@@ -2220,14 +2620,19 @@
         subgroupLabel: item.subgroupLabel,
         theme: item.theme
       };
+      await this.cacheResult(date, item, checkpoint.results[date][item.key]);
       await this.saveCheckpoint();
     }
 
-    async runQualityCheckForItem(item) {
+    async runQualityCheckForItem(date, item) {
       this.ensureNotStopped();
       const checkpoint = this.runtime.currentCheckpoint;
-      const result = checkpoint.results[item.key] || createEmptyResult(item);
-      const range = buildDateRange(checkpoint.date);
+      if (!checkpoint.results[date]) {
+        checkpoint.results[date] = {};
+      }
+      const dayResults = checkpoint.results[date] || {};
+      const result = dayResults[item.key] || createEmptyResult(item);
+      const range = buildDateRange(date);
 
       await clickResetButton();
       await this.applyCategory(item);
@@ -2235,15 +2640,15 @@
 
       await this.applySelectByLabel('质检状态', '质检通过');
       result.qcPassCount = await clickQueryAndReadCount();
-      this.pushLog(`${this.describeItem(item)}：质检通过 ${result.qcPassCount}`);
+      this.pushLog(`${date} ${this.describeItem(item)}：质检通过 ${result.qcPassCount}`);
 
       await this.applySelectByLabel('质检状态', '质检拒绝');
       result.qcRejectCount = await clickQueryAndReadCount();
       result.qcTotalCount = result.qcPassCount + result.qcRejectCount;
       result.qcRejectRate = calculateRatio(result.qcRejectCount, result.qcTotalCount);
-      this.pushLog(`${this.describeItem(item)}：质检拒绝 ${result.qcRejectCount}`);
+      this.pushLog(`${date} ${this.describeItem(item)}：质检拒绝 ${result.qcRejectCount}`);
 
-      checkpoint.results[item.key] = {
+      checkpoint.results[date][item.key] = {
         ...result,
         key: item.key,
         category: item.exportLabel,
@@ -2275,24 +2680,29 @@
     async completeJob() {
       const checkpoint = this.runtime.currentCheckpoint;
       const items = this.getCheckpointItems(checkpoint);
+      const dateList = Array.isArray(checkpoint.dateList) && checkpoint.dateList.length
+        ? checkpoint.dateList
+        : buildDateList(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
       checkpoint.status = 'done';
       checkpoint.statusText = '采集完成，下载按钮已就绪';
-      checkpoint.summaryText = `共完成 ${items.length} 个子品类`;
+      checkpoint.summaryText = `共完成 ${dateList.length} 天`;
       await this.saveCheckpoint();
 
       const report = {
-        date: checkpoint.date,
+        date: checkpoint.startDate,
+        startDate: checkpoint.startDate,
+        endDate: checkpoint.endDate || checkpoint.startDate,
         itemKeys: items.map((item) => item.key),
         columns: buildReportColumns(items),
-        rows: buildOrderedResults(items, checkpoint.results),
+        rows: buildDailyReportRows(dateList, items, checkpoint.results),
         generatedAt: new Date().toISOString()
       };
       this.runtime.lastReport = report;
-      await storageSet({
+      await storageSetCached({
         [STORAGE_KEYS.report]: report
       });
 
-      this.pushLog('采集完成，下载按钮已就绪');
+      this.pushLog(`采集完成，已生成 ${dateList.length} 天结果`);
       await this.clearCheckpoint();
       this.runtime.running = false;
       this.runtime.stopping = false;
@@ -2321,7 +2731,7 @@
         return;
       }
       downloadReport(this.runtime.lastReport);
-      this.pushLog(`已重新导出 ${this.runtime.lastReport.date} 的结果`);
+      this.pushLog(`已重新导出 ${formatReportPeriod(this.runtime.lastReport)} 的结果`);
     }
   }
 
