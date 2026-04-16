@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.16
+// @version      1.2.21
 // @description  在标准化系统页面按日期区间和编组子品类采集日报，并静默缓存到本地
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -24,7 +24,7 @@
   }
   window.__YSP_DAILY_REPORTER__ = true;
 
-  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.16';
+  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.21';
 
   const PANEL_STYLE = `
 #ysp-daily-panel-root {
@@ -919,7 +919,8 @@
       qcPassCount: 0,
       qcRejectCount: 0,
       qcTotalCount: 0,
-      qcRejectRate: 0
+      qcRejectRate: 0,
+      collectionCompleted: false
     };
   }
 
@@ -939,8 +940,13 @@
       qcPassCount: Number(rawRow.qcPassCount || 0),
       qcRejectCount: Number(rawRow.qcRejectCount || 0),
       qcTotalCount: Number(rawRow.qcTotalCount || 0),
-      qcRejectRate: Number(rawRow.qcRejectRate || 0)
+      qcRejectRate: Number(rawRow.qcRejectRate || 0),
+      collectionCompleted: rawRow.collectionCompleted === true
     };
+  }
+
+  function isReusableCachedResult(result) {
+    return Boolean(result && result.collectionCompleted === true);
   }
 
   function isStoredMetricRow(rawRow) {
@@ -1097,10 +1103,14 @@
         if (!entry) {
           continue;
         }
-        normalizedDayResults[entry.key] = normalizeStoredResultRow({
+        const normalizedRow = normalizeStoredResultRow({
           ...rowValue,
           key: entry.key
         });
+        if (!normalizedRow.collectionCompleted) {
+          continue;
+        }
+        normalizedDayResults[entry.key] = normalizedRow;
       }
       if (Object.keys(normalizedDayResults).length) {
         normalizedCache[date] = normalizedDayResults;
@@ -1510,13 +1520,30 @@
     return startDate === endDate ? startDate : `${startDate} 至 ${endDate}`;
   }
 
+  function formatShortDateToken(dateString) {
+    const [year, month, day] = String(dateString || '').split('-').map((part) => Number(part));
+    if (!year || !month || !day) {
+      return '';
+    }
+    return `${month}.${day}`;
+  }
+
+  function sanitizeFilenamePart(value) {
+    return normalizeText(value).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
   function getReportFileToken(report) {
     const startDate = report.startDate || report.date || '';
     const endDate = report.endDate || startDate;
-    if (!startDate) {
-      return formatInputDate(new Date());
-    }
-    return startDate === endDate ? startDate : `${startDate}_至_${endDate}`;
+    const entries = getEntriesByKeys(report && report.itemKeys);
+    const labels = entries.length
+      ? entries.map((entry) => entry.label)
+      : (Array.isArray(report && report.columns) ? report.columns.map((column) => sanitizeFilenamePart(column.label || column.exportLabel || '')) : []).filter(Boolean);
+    const categoryToken = sanitizeFilenamePart(labels.join('、')) || '日报';
+    const dateToken = startDate
+      ? (startDate === endDate ? formatShortDateToken(startDate) : `${formatShortDateToken(startDate)}-${formatShortDateToken(endDate)}`)
+      : formatShortDateToken(formatInputDate(new Date()));
+    return sanitizeFilenamePart(`${categoryToken} ${dateToken}`) || `日报 ${dateToken}`;
   }
 
   function makeCellRef(column, row) {
@@ -1867,7 +1894,7 @@
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `YSP日报_${getReportFileToken(report)}.xlsx`;
+    anchor.download = `${getReportFileToken(report)}.xlsx`;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -1970,6 +1997,7 @@
 
       if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'running') {
         this.runtime.running = true;
+        this.runtime.minimized = false;
         this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '正在继续上次任务';
       } else if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'stopped') {
         this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次任务已停止';
@@ -2364,10 +2392,11 @@
       if (!cachedDayResults || !cachedDayResults[item.key]) {
         return null;
       }
-      return normalizeStoredResultRow({
+      const normalized = normalizeStoredResultRow({
         ...cachedDayResults[item.key],
         key: item.key
       });
+      return isReusableCachedResult(normalized) ? normalized : null;
     }
 
     async cacheResult(date, item, result) {
@@ -2618,9 +2647,9 @@
         label: item.exportLabel,
         groupLabel: item.groupLabel,
         subgroupLabel: item.subgroupLabel,
-        theme: item.theme
+        theme: item.theme,
+        collectionCompleted: false
       };
-      await this.cacheResult(date, item, checkpoint.results[date][item.key]);
       await this.saveCheckpoint();
     }
 
@@ -2655,8 +2684,10 @@
         label: item.exportLabel,
         groupLabel: item.groupLabel,
         subgroupLabel: item.subgroupLabel,
-        theme: item.theme
+        theme: item.theme,
+        collectionCompleted: true
       };
+      await this.cacheResult(date, item, checkpoint.results[date][item.key]);
       await this.saveCheckpoint();
     }
 
