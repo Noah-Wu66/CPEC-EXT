@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         YSP 日报采集
+// @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.0
+// @version      1.2.6
 // @description  在标准化系统页面按单日和编组子品类采集日报，并在面板内下载 Excel
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -24,22 +24,40 @@
   }
   window.__YSP_DAILY_REPORTER__ = true;
 
-  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.0';
+  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.6';
 
   const PANEL_STYLE = `
 #ysp-daily-panel-root {
   position: fixed;
-  top: 16px;
-  right: 16px;
+  inset: 0;
   z-index: 2147483646;
-  width: 456px;
-  max-height: calc(100vh - 32px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  pointer-events: none;
   color: #17304b;
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
 }
 
+.ysp-daily-panel__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 24, 40, 0.16);
+  transition: background 0.22s ease;
+}
+
+#ysp-daily-panel-root.is-focused .ysp-daily-panel__backdrop {
+  background: rgba(8, 24, 40, 0.28);
+}
+
 .ysp-daily-panel {
   position: relative;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  width: min(456px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
   overflow: hidden;
   border: 1px solid rgba(21, 54, 85, 0.12);
   border-radius: 24px;
@@ -48,6 +66,23 @@
     #ffffff;
   box-shadow: 0 24px 60px rgba(19, 45, 71, 0.2);
   backdrop-filter: blur(18px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+}
+
+#ysp-daily-panel-root.is-minimized {
+  justify-content: flex-end;
+}
+
+#ysp-daily-panel-root.is-minimized .ysp-daily-panel__backdrop {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#ysp-daily-panel-root.is-minimized .ysp-daily-panel {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(32px) scale(0.98);
 }
 
 .ysp-daily-panel::before,
@@ -99,6 +134,12 @@
   gap: 14px;
 }
 
+.ysp-daily-panel__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .ysp-daily-panel__eyebrow {
   margin-bottom: 6px;
   font-size: 11px;
@@ -115,14 +156,6 @@
   line-height: 1.15;
 }
 
-.ysp-daily-panel__subtitle {
-  margin-top: 8px;
-  max-width: 320px;
-  font-size: 12px;
-  line-height: 1.65;
-  color: rgba(247, 250, 255, 0.78);
-}
-
 .ysp-daily-panel__version {
   flex-shrink: 0;
   padding: 6px 10px;
@@ -134,30 +167,17 @@
   white-space: nowrap;
 }
 
-.ysp-daily-panel__headline {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.ysp-daily-panel__headline-card {
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.ysp-daily-panel__headline-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.64);
-}
-
-.ysp-daily-panel__headline-value {
-  margin-top: 4px;
-  font-size: 13px;
-  font-weight: 700;
+.ysp-daily-panel__minimize {
+  min-width: 56px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .ysp-daily-panel__body {
@@ -165,6 +185,7 @@
   display: grid;
   gap: 14px;
   padding: 18px 18px 20px;
+  overflow-y: auto;
 }
 
 .ysp-daily-panel__section {
@@ -183,7 +204,6 @@
 .ysp-daily-panel__toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   margin-bottom: 10px;
 }
@@ -198,12 +218,6 @@
 
 .ysp-daily-panel__toolbar .ysp-daily-panel__label {
   margin-bottom: 0;
-}
-
-.ysp-daily-panel__hint {
-  font-size: 12px;
-  line-height: 1.55;
-  color: #5d7690;
 }
 
 .ysp-daily-panel__toolbar-button {
@@ -232,13 +246,6 @@
   box-shadow: inset 0 1px 2px rgba(17, 41, 66, 0.04);
 }
 
-.ysp-daily-panel__selection-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
 .ysp-daily-panel__badge {
   display: inline-flex;
   align-items: center;
@@ -254,7 +261,7 @@
 .ysp-daily-panel__catalog {
   display: grid;
   gap: 12px;
-  max-height: 360px;
+  max-height: min(46vh, 420px);
   padding-right: 4px;
   overflow-y: auto;
 }
@@ -271,6 +278,16 @@
     #ffffff;
   border: 1px solid var(--accent-border);
   box-shadow: 0 10px 24px rgba(23, 56, 84, 0.06);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.ysp-daily-panel__group.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 28%, white);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 82%, white), rgba(255, 255, 255, 0.94)),
+    #ffffff;
+  box-shadow: 0 16px 28px rgba(23, 56, 84, 0.1);
+  transform: translateY(-1px);
 }
 
 .ysp-daily-panel__group[data-theme="knowledge"] {
@@ -309,17 +326,11 @@
   color: var(--accent-ink);
 }
 
-.ysp-daily-panel__group-meta {
-  margin-top: 5px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #61788f;
-}
-
 .ysp-daily-panel__group-action {
   flex-shrink: 0;
-  min-height: 32px;
-  padding: 0 12px;
+  min-width: 88px;
+  min-height: 34px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 1px solid var(--accent-border);
   background: var(--accent-soft);
@@ -329,24 +340,10 @@
   cursor: pointer;
 }
 
-.ysp-daily-panel__subgroups {
-  display: grid;
-  gap: 10px;
-}
-
-.ysp-daily-panel__subgroup {
-  padding: 12px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(24, 52, 76, 0.08);
-}
-
-.ysp-daily-panel__subgroup-title {
-  margin-bottom: 10px;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.55;
-  color: #38536e;
+.ysp-daily-panel__group-action.is-selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
 }
 
 .ysp-daily-panel__options {
@@ -356,7 +353,6 @@
 }
 
 .ysp-daily-panel__chip {
-  position: relative;
   display: inline-flex;
   align-items: center;
   min-height: 34px;
@@ -367,33 +363,11 @@
   color: #28445f;
   font-size: 12px;
   font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
-}
-
-.ysp-daily-panel__chip:hover {
-  transform: translateY(-1px);
-  border-color: rgba(35, 89, 128, 0.22);
-  box-shadow: 0 8px 18px rgba(26, 65, 98, 0.08);
-}
-
-.ysp-daily-panel__chip.is-checked {
-  border-color: var(--accent-border);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  box-shadow: 0 10px 18px rgba(31, 77, 116, 0.1);
-}
-
-.ysp-daily-panel__chip input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
+  cursor: default;
 }
 
 .ysp-daily-panel__chip-text {
   position: relative;
-  z-index: 1;
 }
 
 .ysp-daily-panel__actions {
@@ -542,9 +516,43 @@
   margin-top: 8px;
 }
 
+.ysp-daily-panel__dock {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 76px;
+  border: 0;
+  border-radius: 18px 0 0 18px;
+  background: linear-gradient(180deg, rgba(15, 41, 66, 0.98), rgba(27, 82, 122, 0.94));
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: 0 16px 30px rgba(19, 45, 71, 0.22);
+  transform: translateY(-50%) translateX(12px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+}
+
+#ysp-daily-panel-root.is-minimized .ysp-daily-panel__dock {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(-50%) translateX(0);
+}
+
 @media (max-width: 1366px) {
   #ysp-daily-panel-root {
-    width: 408px;
+    padding: 16px;
+  }
+
+  .ysp-daily-panel {
+    width: min(408px, calc(100vw - 24px));
   }
 }
   `;
@@ -670,6 +678,20 @@
   });
 
   const CATEGORY_ENTRY_MAP = new Map(CATEGORY_ENTRIES.map((entry) => [entry.key, entry]));
+  const SUBGROUP_ENTRIES = CATEGORY_GROUPS.flatMap((group, groupIndex) => {
+    return group.subgroups.map((subgroup, subgroupIndex) => {
+      return {
+        id: subgroup.id,
+        label: subgroup.label,
+        groupId: group.id,
+        groupLabel: group.label,
+        theme: group.theme,
+        itemKeys: subgroup.categories.map((category) => category.key),
+        orderToken: `${groupIndex}-${subgroupIndex}`
+      };
+    });
+  });
+  const SUBGROUP_ENTRY_MAP = new Map(SUBGROUP_ENTRIES.map((entry) => [entry.id, entry]));
 
   const METRIC_HEADERS = [
     '入库量',
@@ -756,6 +778,20 @@
     return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
   }
 
+  function formatInputDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function getYesterdayDateString() {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - 1);
+    return formatInputDate(date);
+  }
+
   function buildDateRange(dateString) {
     const [year, month, day] = dateString.split('-').map((part) => Number(part));
     const start = new Date(year, month - 1, day, 0, 0, 0, 0);
@@ -795,6 +831,28 @@
     }) || null;
   }
 
+  function getSubgroupEntry(candidate) {
+    if (!candidate && candidate !== '') {
+      return null;
+    }
+    if (typeof candidate === 'object' && candidate.id && SUBGROUP_ENTRY_MAP.has(candidate.id)) {
+      return SUBGROUP_ENTRY_MAP.get(candidate.id);
+    }
+    const token = normalizeText(candidate);
+    if (!token) {
+      return null;
+    }
+    if (SUBGROUP_ENTRY_MAP.has(token)) {
+      return SUBGROUP_ENTRY_MAP.get(token);
+    }
+    return SUBGROUP_ENTRIES.find((entry) => {
+      return [
+        entry.id,
+        entry.label
+      ].includes(token);
+    }) || null;
+  }
+
   function normalizeSelectedKeys(rawValues) {
     const rawList = Array.isArray(rawValues) ? rawValues : [];
     const matchedKeys = new Set();
@@ -809,13 +867,37 @@
       .map((entry) => entry.key);
   }
 
+  function normalizeSelectedGroupIds(rawValues) {
+    const rawList = Array.isArray(rawValues) ? rawValues : [];
+    const matchedIds = [];
+    for (const value of rawList) {
+      const subgroupEntry = getSubgroupEntry(value);
+      if (subgroupEntry) {
+        matchedIds.push(subgroupEntry.id);
+        continue;
+      }
+      const categoryEntry = getCategoryEntry(value);
+      if (categoryEntry) {
+        matchedIds.push(categoryEntry.subgroupId);
+      }
+    }
+    const lastMatchedId = matchedIds.length ? matchedIds[matchedIds.length - 1] : '';
+    return lastMatchedId && SUBGROUP_ENTRY_MAP.has(lastMatchedId) ? [lastMatchedId] : [];
+  }
+
   function getEntriesByKeys(keys) {
     const selected = new Set(normalizeSelectedKeys(keys));
     return CATEGORY_ENTRIES.filter((entry) => selected.has(entry.key));
   }
 
-  function countSubgroupsFromEntries(entries) {
-    return new Set(entries.map((entry) => entry.subgroupId)).size;
+  function getSubgroupEntriesByIds(groupIds) {
+    const selected = new Set(normalizeSelectedGroupIds(groupIds));
+    return SUBGROUP_ENTRIES.filter((entry) => selected.has(entry.id));
+  }
+
+  function getEntriesByGroupIds(groupIds) {
+    const selected = new Set(normalizeSelectedGroupIds(groupIds));
+    return CATEGORY_ENTRIES.filter((entry) => selected.has(entry.subgroupId));
   }
 
   function createEmptyResult(category) {
@@ -888,6 +970,7 @@
     if (!checkpoint || typeof checkpoint !== 'object') {
       return null;
     }
+    const groupIds = normalizeSelectedGroupIds(checkpoint.groupIds || checkpoint.itemKeys || checkpoint.categories);
     const itemKeys = normalizeSelectedKeys(checkpoint.itemKeys || checkpoint.categories);
     const normalizedResults = {};
     if (checkpoint.results && typeof checkpoint.results === 'object') {
@@ -904,7 +987,8 @@
     }
     return {
       ...checkpoint,
-      version: 2,
+      version: 3,
+      groupIds,
       itemKeys,
       results: normalizedResults
     };
@@ -1605,9 +1689,10 @@
   class DailyReporterApp {
     constructor() {
       this.panel = null;
-      this.savedSettings = { date: '', itemKeys: [] };
+      this.savedSettings = { date: '', groupIds: [] };
       this.runtime = {
         running: false,
+        minimized: false,
         stopping: false,
         currentCheckpoint: null,
         lastReport: null,
@@ -1637,7 +1722,7 @@
       const rawSettings = state[STORAGE_KEYS.settings] || {};
       this.savedSettings = {
         date: rawSettings.date || '',
-        itemKeys: normalizeSelectedKeys(rawSettings.itemKeys || rawSettings.categories)
+        groupIds: normalizeSelectedGroupIds(rawSettings.groupIds || rawSettings.itemKeys || rawSettings.categories)
       };
       this.runtime.lastReport = normalizeStoredReport(state[STORAGE_KEYS.report]);
       this.runtime.currentCheckpoint = normalizeStoredCheckpoint(state[this.runtime.activeSessionKey]);
@@ -1666,24 +1751,17 @@
       root = document.createElement('div');
       root.id = 'ysp-daily-panel-root';
       root.innerHTML = `
+        <div class="ysp-daily-panel__backdrop"></div>
         <div class="ysp-daily-panel">
           <div class="ysp-daily-panel__header">
             <div class="ysp-daily-panel__header-top">
               <div>
                 <div class="ysp-daily-panel__eyebrow">YSP Reporter</div>
-                <div class="ysp-daily-panel__title">YSP 日报采集</div>
-                <div class="ysp-daily-panel__subtitle">按大品类编组选择子品类，采集顺序和导出表头都会跟随编组展开。</div>
+                <div class="ysp-daily-panel__title">二次质检日报采集</div>
               </div>
-              <div class="ysp-daily-panel__version">v${SCRIPT_VERSION}</div>
-            </div>
-            <div class="ysp-daily-panel__headline">
-              <div class="ysp-daily-panel__headline-card">
-                <div class="ysp-daily-panel__headline-label">本次范围</div>
-                <div class="ysp-daily-panel__headline-value" data-role="headline-selection">0 个子品类</div>
-              </div>
-              <div class="ysp-daily-panel__headline-card">
-                <div class="ysp-daily-panel__headline-label">下载方式</div>
-                <div class="ysp-daily-panel__headline-value">采集完成后手动下载</div>
+              <div class="ysp-daily-panel__header-actions">
+                <div class="ysp-daily-panel__version">v${SCRIPT_VERSION}</div>
+                <button type="button" class="ysp-daily-panel__minimize" data-role="minimize">收起</button>
               </div>
             </div>
           </div>
@@ -1691,15 +1769,11 @@
             <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
               <label class="ysp-daily-panel__label" for="ysp-daily-date">日期</label>
               <input id="ysp-daily-date" class="ysp-daily-panel__date" type="date" />
-              <div class="ysp-daily-panel__hint">系统会自动换成当天 00:00 到次日 00:00。</div>
-              <div class="ysp-daily-panel__selection-summary" data-role="selection-summary"></div>
             </div>
             <div class="ysp-daily-panel__section">
               <div class="ysp-daily-panel__toolbar">
                 <span class="ysp-daily-panel__label">品类编组</span>
-                <button type="button" class="ysp-daily-panel__toolbar-button" data-role="toggle-all">全选全部</button>
               </div>
-              <div class="ysp-daily-panel__hint">你可以直接勾选子品类，执行顺序会严格跟随编组。</div>
               <div class="ysp-daily-panel__catalog" data-role="categories"></div>
             </div>
             <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
@@ -1727,13 +1801,13 @@
             </div>
           </div>
         </div>
+        <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button>
       `;
       document.body.appendChild(root);
       this.panel = root;
 
+      this.refs.surface = root.querySelector('.ysp-daily-panel');
       this.refs.date = root.querySelector('#ysp-daily-date');
-      this.refs.headlineSelection = root.querySelector('[data-role="headline-selection"]');
-      this.refs.selectionSummary = root.querySelector('[data-role="selection-summary"]');
       this.refs.categories = root.querySelector('[data-role="categories"]');
       this.refs.report = root.querySelector('[data-role="report"]');
       this.refs.status = root.querySelector('[data-role="status"]');
@@ -1741,10 +1815,16 @@
       this.refs.start = root.querySelector('[data-role="start"]');
       this.refs.stop = root.querySelector('[data-role="stop"]');
       this.refs.clear = root.querySelector('[data-role="clear"]');
-      this.refs.toggleAll = root.querySelector('[data-role="toggle-all"]');
+      this.refs.minimize = root.querySelector('[data-role="minimize"]');
+      this.refs.dock = root.querySelector('[data-role="dock"]');
 
       this.renderCategories();
+      this.refs.date.max = getYesterdayDateString();
       this.refs.date.value = this.savedSettings.date || '';
+      if (this.refs.date.value && this.refs.date.value > this.refs.date.max) {
+        this.refs.date.value = '';
+        this.savedSettings.date = '';
+      }
       this.bindPanelEvents();
       this.render();
     }
@@ -1758,34 +1838,28 @@
     }
 
     renderCategories() {
-      const selected = new Set(this.savedSettings.itemKeys);
-      this.refs.categories.innerHTML = CATEGORY_GROUPS.flatMap((group) => {
-        return group.subgroups.map((subgroup) => {
-          return `
-            <section class="ysp-daily-panel__group" data-theme="${escapeXml(group.theme)}" data-group="${escapeXml(subgroup.id)}">
-              <div class="ysp-daily-panel__group-header">
-                <div>
-                  <h3 class="ysp-daily-panel__group-title">${escapeXml(subgroup.label)}</h3>
-                  <div class="ysp-daily-panel__group-meta">共 ${subgroup.categories.length} 个子品类，采集顺序按编组展开</div>
-                </div>
-                <button type="button" class="ysp-daily-panel__group-action" data-role="toggle-group" data-group="${escapeXml(subgroup.id)}">全选这组</button>
-              </div>
-              <div class="ysp-daily-panel__options">
-                ${subgroup.categories.map((category) => {
-                  const entry = CATEGORY_ENTRY_MAP.get(category.key);
-                  const checked = selected.has(entry.key) ? 'checked' : '';
-                  const checkedClass = selected.has(entry.key) ? ' is-checked' : '';
-                  return `
-                    <label class="ysp-daily-panel__chip${checkedClass}" data-key="${escapeXml(entry.key)}">
-                      <input type="checkbox" data-key="${escapeXml(entry.key)}" value="${escapeXml(entry.key)}" ${checked} />
-                      <span class="ysp-daily-panel__chip-text">${escapeXml(entry.exportLabel)}</span>
-                    </label>
-                  `;
-                }).join('')}
-              </div>
-            </section>
-          `;
-        });
+      const selected = new Set(this.savedSettings.groupIds);
+      this.refs.categories.innerHTML = SUBGROUP_ENTRIES.map((subgroup) => {
+        const items = getEntriesByKeys(subgroup.itemKeys);
+        const selectedClass = selected.has(subgroup.id) ? ' is-selected' : '';
+        const buttonClass = selected.has(subgroup.id) ? ' is-selected' : '';
+        return `
+          <section class="ysp-daily-panel__group${selectedClass}" data-theme="${escapeXml(subgroup.theme)}" data-group-card="${escapeXml(subgroup.id)}">
+            <div class="ysp-daily-panel__group-header">
+              <h3 class="ysp-daily-panel__group-title">${escapeXml(subgroup.label)}</h3>
+              <button type="button" class="ysp-daily-panel__group-action${buttonClass}" data-role="toggle-group" data-group="${escapeXml(subgroup.id)}">${selected.has(subgroup.id) ? '已选这组' : '选择这组'}</button>
+            </div>
+            <div class="ysp-daily-panel__options">
+              ${items.map((entry) => {
+                return `
+                  <span class="ysp-daily-panel__chip">
+                    <span class="ysp-daily-panel__chip-text">${escapeXml(entry.exportLabel)}</span>
+                  </span>
+                `;
+              }).join('')}
+            </div>
+          </section>
+        `;
       }).join('');
     }
 
@@ -1797,30 +1871,11 @@
       this.refs.clear.addEventListener('click', () => {
         this.clearProgress().catch((error) => this.pushLog(`清除进度失败：${error.message}`));
       });
-      this.refs.toggleAll.addEventListener('click', () => {
-        if (this.runtime.running) {
-          return;
-        }
-        const checkboxes = this.getCategoryCheckboxes();
-        const shouldCheck = checkboxes.some((checkbox) => !checkbox.checked);
-        for (const checkbox of checkboxes) {
-          checkbox.checked = shouldCheck;
-        }
-        this.persistDraft().catch(() => undefined);
-        this.render();
-      });
+      this.refs.minimize.addEventListener('click', () => this.setMinimized(true));
+      this.refs.dock.addEventListener('click', () => this.setMinimized(false));
       this.refs.date.addEventListener('change', () => {
-        this.persistDraft().catch(() => undefined);
-        this.render();
-      });
-      this.refs.categories.addEventListener('change', (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLInputElement) || target.type !== 'checkbox') {
-          return;
-        }
-        const chip = target.closest('.ysp-daily-panel__chip');
-        if (chip) {
-          chip.classList.toggle('is-checked', target.checked);
+        if (this.refs.date.max && this.refs.date.value > this.refs.date.max) {
+          this.refs.date.value = this.refs.date.max;
         }
         this.persistDraft().catch(() => undefined);
         this.render();
@@ -1838,12 +1893,7 @@
         if (!groupId) {
           return;
         }
-        const groupCheckboxes = this.getCategoryCheckboxes(groupId);
-        const shouldCheck = groupCheckboxes.some((checkbox) => !checkbox.checked);
-        for (const checkbox of groupCheckboxes) {
-          checkbox.checked = shouldCheck;
-        }
-        this.persistDraft().catch(() => undefined);
+        this.setSelectedGroupIds(this.savedSettings.groupIds.includes(groupId) ? [] : [groupId]);
         this.render();
       });
       this.refs.report.addEventListener('click', (event) => {
@@ -1856,30 +1906,43 @@
           this.exportLastReport();
         }
       });
+      const refreshFocus = () => {
+        if (this.runtime.minimized) {
+          this.panel.classList.remove('is-focused');
+          return;
+        }
+        const surface = this.refs.surface;
+        const keepActive = surface.matches(':hover') || surface.contains(document.activeElement);
+        this.panel.classList.toggle('is-focused', keepActive);
+      };
+      this.refs.surface.addEventListener('mouseenter', refreshFocus);
+      this.refs.surface.addEventListener('mouseleave', () => window.setTimeout(refreshFocus, 0));
+      this.refs.surface.addEventListener('focusin', refreshFocus);
+      this.refs.surface.addEventListener('focusout', () => window.setTimeout(refreshFocus, 0));
+      this.panel.classList.add('is-focused');
     }
 
-    getCategoryCheckboxes(groupId) {
-      const checkboxes = Array.from(this.refs.categories.querySelectorAll('input[type="checkbox"][data-key]'));
-      if (!groupId) {
-        return checkboxes;
+    setMinimized(nextValue) {
+      this.runtime.minimized = Boolean(nextValue);
+      if (this.runtime.minimized) {
+        this.panel.classList.remove('is-focused');
+      } else {
+        this.panel.classList.add('is-focused');
       }
-      return checkboxes.filter((checkbox) => {
-        const group = checkbox.closest('[data-group]');
-        return group && group.getAttribute('data-group') === groupId;
-      });
+      this.render();
     }
 
-    getSelectedKeys() {
-      const selected = this.getCategoryCheckboxes()
-        .filter((checkbox) => checkbox.checked)
-        .map((checkbox) => checkbox.value);
-      return CATEGORY_ENTRIES
-        .filter((entry) => selected.includes(entry.key))
-        .map((entry) => entry.key);
+    setSelectedGroupIds(groupIds) {
+      this.savedSettings.groupIds = normalizeSelectedGroupIds(groupIds);
+      this.persistDraft().catch(() => undefined);
+    }
+
+    getSelectedGroupEntries() {
+      return getSubgroupEntriesByIds(this.savedSettings.groupIds);
     }
 
     getSelectedEntries() {
-      return getEntriesByKeys(this.getSelectedKeys());
+      return getEntriesByGroupIds(this.savedSettings.groupIds);
     }
 
     getCheckpointItems(checkpoint) {
@@ -1887,7 +1950,7 @@
     }
 
     async persistDraft() {
-      await this.persistSettings(this.refs.date.value, this.getSelectedKeys());
+      await this.persistSettings(this.refs.date.value, this.savedSettings.groupIds);
     }
 
     describeItem(item) {
@@ -1895,36 +1958,21 @@
     }
 
     renderSelectionSummary() {
-      const entries = this.getSelectedEntries();
-      const categoryCount = entries.length;
-      const subgroupCount = countSubgroupsFromEntries(entries);
-      if (this.refs.headlineSelection) {
-        this.refs.headlineSelection.textContent = categoryCount ? `${categoryCount} 个子品类` : '等待选择';
-      }
-      this.refs.selectionSummary.innerHTML = [
-        `<span class="ysp-daily-panel__badge">子品类 ${categoryCount}</span>`,
-        `<span class="ysp-daily-panel__badge">编组 ${subgroupCount}</span>`
-      ].join('');
+      return;
     }
 
     renderReport() {
       if (!this.runtime.lastReport) {
-        this.refs.report.innerHTML = '<div class="ysp-daily-panel__report-empty">采集完成后，这里会显示一个固定下载按钮，导出的 Excel 会保持编组顺序。</div>';
+        this.refs.report.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无结果</div>';
         return;
       }
-      const columns = Array.isArray(this.runtime.lastReport.columns) ? this.runtime.lastReport.columns : [];
-      const subgroupCount = new Set(columns.map((column) => column.subgroupLabel)).size;
       this.refs.report.innerHTML = `
         <div class="ysp-daily-panel__report-top">
           <div>
             <h3 class="ysp-daily-panel__report-title">日报结果已就绪</h3>
-            <div class="ysp-daily-panel__report-meta">${escapeXml(this.runtime.lastReport.date)} · ${columns.length} 个子品类 · ${subgroupCount} 个编组</div>
+            <div class="ysp-daily-panel__report-meta">${escapeXml(this.runtime.lastReport.date)}</div>
           </div>
           <button type="button" class="ysp-daily-panel__download" data-role="download">下载 Excel</button>
-        </div>
-        <div class="ysp-daily-panel__report-tags">
-          <span class="ysp-daily-panel__badge">表头按编组展开</span>
-          <span class="ysp-daily-panel__badge">文件名 YSP日报_${escapeXml(this.runtime.lastReport.date)}</span>
         </div>
       `;
     }
@@ -1940,33 +1988,29 @@
     }
 
     render() {
+      this.panel.classList.toggle('is-minimized', this.runtime.minimized);
       this.refs.date.disabled = this.runtime.running;
       this.refs.start.disabled = this.runtime.running;
       this.refs.stop.disabled = !this.runtime.running;
       this.refs.clear.disabled = this.runtime.running;
-      this.refs.toggleAll.disabled = this.runtime.running;
-      for (const checkbox of this.getCategoryCheckboxes()) {
-        checkbox.disabled = this.runtime.running;
-        const chip = checkbox.closest('.ysp-daily-panel__chip');
-        if (chip) {
-          chip.classList.toggle('is-checked', checkbox.checked);
-        }
-      }
+      this.refs.minimize.disabled = false;
       for (const button of this.refs.categories.querySelectorAll('[data-role="toggle-group"]')) {
         const groupId = button.getAttribute('data-group');
-        const groupCheckboxes = this.getCategoryCheckboxes(groupId);
-        const hasUnchecked = groupCheckboxes.some((checkbox) => !checkbox.checked);
-        button.textContent = hasUnchecked ? '全选这组' : '清空这组';
+        const selected = this.savedSettings.groupIds.includes(groupId);
+        button.textContent = selected ? '已选这组' : '选择这组';
+        button.classList.toggle('is-selected', selected);
         button.disabled = this.runtime.running;
+        const groupCard = this.refs.categories.querySelector(`[data-group-card="${groupId}"]`);
+        if (groupCard) {
+          groupCard.classList.toggle('is-selected', selected);
+        }
       }
-      const allCheckboxes = this.getCategoryCheckboxes();
-      this.refs.toggleAll.textContent = allCheckboxes.some((checkbox) => !checkbox.checked) ? '全选全部' : '清空全部';
       this.renderSelectionSummary();
       this.renderReport();
       const summary = this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'running'
         ? `<div class="ysp-daily-panel__summary"><strong>当前进度：</strong>${escapeXml(this.runtime.currentCheckpoint.summaryText || '')}</div>`
         : this.runtime.lastReport
-          ? `<div class="ysp-daily-panel__summary"><strong>最近结果：</strong>${escapeXml(this.runtime.lastReport.date)}，共 ${this.runtime.lastReport.columns.length} 个子品类</div>`
+          ? `<div class="ysp-daily-panel__summary"><strong>最近结果：</strong>${escapeXml(this.runtime.lastReport.date)}</div>`
           : '';
       this.refs.status.innerHTML = `<strong>${escapeXml(this.runtime.statusText)}</strong>${summary}`;
       this.refs.logs.innerHTML = this.runtime.logs.length
@@ -1974,12 +2018,12 @@
         : '<div class="ysp-daily-panel__log">还没有执行记录</div>';
     }
 
-    async persistSettings(date, itemKeys) {
-      this.savedSettings = { date, itemKeys: itemKeys.slice() };
+    async persistSettings(date, groupIds) {
+      this.savedSettings = { date, groupIds: normalizeSelectedGroupIds(groupIds) };
       await storageSet({
         [STORAGE_KEYS.settings]: {
           date,
-          itemKeys
+          groupIds: this.savedSettings.groupIds.slice()
         }
       });
     }
@@ -1997,6 +2041,11 @@
     async clearCheckpoint() {
       await storageRemove(this.runtime.activeSessionKey);
       this.runtime.currentCheckpoint = null;
+    }
+
+    async clearLastCollectedData() {
+      this.runtime.lastReport = null;
+      await storageRemove(STORAGE_KEYS.report);
     }
 
     ensureNotStopped() {
@@ -2039,22 +2088,30 @@
         return;
       }
       const date = this.refs.date.value;
+      const maxDate = getYesterdayDateString();
+      const groupIds = this.savedSettings.groupIds.slice();
+      const groups = this.getSelectedGroupEntries();
       const items = this.getSelectedEntries();
       if (!date) {
         throw new Error('请先选择日期');
       }
-      if (!items.length) {
-        throw new Error('请至少勾选一个子品类');
+      if (date > maxDate) {
+        throw new Error('日期只能选择昨天及以前');
+      }
+      if (!groups.length) {
+        throw new Error('请至少选择一个编组');
       }
 
-      await this.persistSettings(date, items.map((item) => item.key));
+      await this.clearLastCollectedData();
+      await this.persistSettings(date, groupIds);
       this.runtime.stopping = false;
       this.runtime.running = true;
       this.runtime.logs = [];
       this.runtime.currentCheckpoint = {
-        version: 2,
+        version: 3,
         status: 'running',
         date,
+        groupIds,
         itemKeys: items.map((item) => item.key),
         currentIndex: 0,
         phase: 'std',
@@ -2065,7 +2122,7 @@
         summaryText: ''
       };
       await this.saveCheckpoint();
-      this.pushLog(`开始采集：${date}，共 ${items.length} 个子品类，覆盖 ${countSubgroupsFromEntries(items)} 个编组`);
+      this.pushLog(`开始采集：${date}，共 ${groups.length} 个编组，覆盖 ${items.length} 个子品类`);
       await this.runFromCheckpoint();
     }
 
@@ -2302,7 +2359,7 @@
     try {
       await ensureAppMounted();
     } catch (error) {
-      console.error('[YSP 日报采集]', error);
+      console.error('[二次质检日报采集]', error);
     } finally {
       booting = false;
     }
