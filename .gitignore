@@ -1,0 +1,6 @@
+*
+!.gitignore
+!ysjs/
+!ysjs/ysjs.js
+!ysp/
+!ysp/ysp-daily-report.user.js
