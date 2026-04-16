@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YSP 日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.1
+// @version      1.1.2
 // @description  在标准化系统页面按单日和主品类采集日报并导出 Excel
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -24,7 +24,7 @@
   }
   window.__YSP_DAILY_REPORTER__ = true;
 
-  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.1.1';
+  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.1.2';
 
   const PANEL_STYLE = `
 #ysp-daily-panel-root {
@@ -448,6 +448,30 @@
     localStorage.setItem(`${FALLBACK_PREFIX}${key}`, JSON.stringify(value));
   }
 
+  function getEventWindow(target) {
+    return (target && target.ownerDocument && target.ownerDocument.defaultView) || window;
+  }
+
+  function createMouseEvent(target, type, init) {
+    const eventWindow = getEventWindow(target);
+    const MouseEventCtor = eventWindow.MouseEvent || MouseEvent;
+    return new MouseEventCtor(type, {
+      bubbles: true,
+      cancelable: true,
+      view: eventWindow,
+      ...(init || {})
+    });
+  }
+
+  function createKeyboardEvent(target, type, init) {
+    const eventWindow = getEventWindow(target);
+    const KeyboardEventCtor = eventWindow.KeyboardEvent || KeyboardEvent;
+    return new KeyboardEventCtor(type, {
+      bubbles: true,
+      ...(init || {})
+    });
+  }
+
   async function storageGet(keys) {
     const keyList = Array.isArray(keys) ? keys : [keys];
     const result = {};
@@ -486,7 +510,7 @@
     element.scrollIntoView({ block: 'center', inline: 'center' });
     const events = ['mouseover', 'mousedown', 'mouseup', 'click'];
     for (const type of events) {
-      element.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+      element.dispatchEvent(createMouseEvent(element, type));
     }
   }
 
@@ -611,10 +635,10 @@
     await sleep(120);
     inputs[1].focus();
     setNativeInputValue(inputs[1], endValue);
-    inputs[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    inputs[1].dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+    inputs[1].dispatchEvent(createKeyboardEvent(inputs[1], 'keydown', { key: 'Enter' }));
+    inputs[1].dispatchEvent(createKeyboardEvent(inputs[1], 'keyup', { key: 'Enter' }));
     inputs[1].blur();
-    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    document.body.dispatchEvent(createMouseEvent(document.body, 'click'));
     await waitFor(() => inputs[0].value === startValue && inputs[1].value === endValue, 4000, `${labelText} 未写入成功`);
   }
 
