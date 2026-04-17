@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.9
+// @version      2.1.10
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -5831,13 +5831,12 @@
 
       await clickResetButton();
       await this.applyCategory(item);
-      await setDateRange('修改时间', range.start, range.end);
+      await setDateRange('创建时间', range.start, range.end);
       await this.applySelectByLabel('标准化状态', '标准化通过');
-      await this.applySelectByLabel('质检状态', '待质检');
 
       const queryCount = await clickQueryAndReadCount();
       if (!queryCount) {
-        this.pushLog(`${this.describeItem(item)}：当前筛选下没有待质检数据`);
+        this.pushLog(`${this.describeItem(item)}：当前筛选下没有数据`);
         return;
       }
 
@@ -5881,9 +5880,6 @@
             continue;
           }
           localSeen.add(row.taskId);
-          if (normalizeText(row.qcStatus) !== '待质检') {
-            continue;
-          }
           checkpoint.processedTaskIds.push(row.taskId);
           await this.saveCheckpoint('secondaryQc');
           await this.handleSecondaryQcRow(item, itemIndex, row, pageNumber, totalPages);
