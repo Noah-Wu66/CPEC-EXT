@@ -2961,12 +2961,173 @@
   }
 
   function normalizeTagDisplayName(rawValue) {
+    if (rawValue && typeof rawValue === 'object') {
+      return normalizeText(
+        rawValue.name
+        || rawValue.keyword
+        || rawValue.label
+        || rawValue.rawText
+        || rawValue.text
+      );
+    }
     const text = normalizeText(rawValue);
     if (!text) {
       return '';
     }
     const parts = text.split('|');
     return normalizeText(parts[parts.length - 1] || text);
+  }
+
+  function splitTagDetailTokens(rawValue) {
+    return String(rawValue || '')
+      .split(/[\n|]/)
+      .map((item) => normalizeText(item))
+      .filter(Boolean);
+  }
+
+  function normalizeTagDetail(value) {
+    if (!value) {
+      return null;
+    }
+    let rawText = '';
+    let name = '';
+    let type = '';
+    let id = '';
+    let remark = '';
+
+    if (typeof value === 'string') {
+      rawText = value;
+    } else if (typeof value === 'object') {
+      rawText = value.rawText || value.raw_text || value.text || value.label || value.displayText || '';
+      name = normalizeText(value.name || value.tagName || value.tag_name || value.keyword);
+      type = normalizeText(value.type || value.tagType || value.tag_type);
+      id = normalizeText(value.id || value.tagId || value.tag_id || value.optionId || value.option_id);
+      remark = normalizeText(value.remark || value.note || value.memo || value.description || value.tagRemark || value.tag_remark);
+    } else {
+      rawText = String(value);
+    }
+
+    const unresolvedTokens = [];
+    splitTagDetailTokens(rawText).forEach((token) => {
+      const nameMatch = token.match(/^(?:标签名|名称|名字)[:：]\s*(.+)$/i);
+      if (nameMatch && nameMatch[1]) {
+        name = name || normalizeText(nameMatch[1]);
+        return;
+      }
+      const typeMatch = token.match(/^(?:类型|标签类型|分类)[:：]\s*(.+)$/i);
+      if (typeMatch && typeMatch[1]) {
+        type = type || normalizeText(typeMatch[1]);
+        return;
+      }
+      const idMatch = token.match(/^(?:标签ID|tag[-_\s]*id|ID|id)[:：#\s]*(.+)$/i);
+      if (idMatch && idMatch[1]) {
+        id = id || normalizeText(idMatch[1]);
+        return;
+      }
+      const remarkMatch = token.match(/^(?:备注|说明|描述|别名)[:：]\s*(.+)$/i);
+      if (remarkMatch && remarkMatch[1]) {
+        remark = remark || normalizeText(remarkMatch[1]);
+        return;
+      }
+      unresolvedTokens.push(token);
+    });
+
+    if (!name && unresolvedTokens.length) {
+      name = normalizeTagDisplayName(unresolvedTokens[unresolvedTokens.length - 1]);
+    }
+    const remainingTokens = unresolvedTokens.filter((token) => token !== name);
+    if (!id) {
+      const idIndex = remainingTokens.findIndex((token) => {
+        return /^[A-Za-z0-9_-]{4,}$/.test(token) || /^\d{4,}$/.test(token);
+      });
+      if (idIndex >= 0) {
+        id = normalizeText(remainingTokens.splice(idIndex, 1)[0]);
+      }
+    }
+    if (!type && remainingTokens.length) {
+      type = normalizeText(remainingTokens.shift());
+    }
+    if (!remark && remainingTokens.length) {
+      remark = normalizeText(remainingTokens.join(' | '));
+    }
+
+    const normalizedRawText = normalizeText(rawText) || normalizeText([name, type, id, remark].filter(Boolean).join(' | '));
+    if (!name && normalizedRawText) {
+      name = normalizeTagDisplayName(normalizedRawText);
+    }
+    if (!name && !type && !id && !remark && !normalizedRawText) {
+      return null;
+    }
+    return {
+      name,
+      type,
+      id,
+      remark,
+      rawText: normalizedRawText
+    };
+  }
+
+  function normalizeTagDetailArray(value) {
+    const source = Array.isArray(value)
+      ? value
+      : (value ? [value] : []);
+    const result = [];
+    const seen = new Set();
+    source.forEach((item) => {
+      const detail = normalizeTagDetail(item);
+      if (!detail) {
+        return;
+      }
+      const key = [
+        detail.name,
+        detail.type,
+        detail.id,
+        detail.remark,
+        detail.rawText
+      ].map((part) => normalizeText(part)).join('|');
+      if (!key || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      result.push(detail);
+    });
+    return result;
+  }
+
+  function formatTagDetailForDisplay(value) {
+    const detail = normalizeTagDetail(value);
+    if (!detail) {
+      return '';
+    }
+    const label = detail.name || detail.rawText || '未命名标签';
+    const meta = [];
+    if (detail.type) {
+      meta.push(`类型：${detail.type}`);
+    }
+    if (detail.id) {
+      meta.push(`ID：${detail.id}`);
+    }
+    if (detail.remark) {
+      meta.push(`备注：${detail.remark}`);
+    }
+    return meta.length ? `${label}（${meta.join('，')}）` : label;
+  }
+
+  function normalizeBooleanFlag(value) {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    const normalized = normalizeText(value).toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+    if (['true', '1', 'yes', 'y', '是', '需要', '需要记录'].includes(normalized)) {
+      return true;
+    }
+    if (['false', '0', 'no', 'n', '否', '不需要', '无需', '不需要记录'].includes(normalized)) {
+      return false;
+    }
+    return Boolean(value);
   }
 
   function uniqueTextList(values) {
@@ -3551,19 +3712,111 @@
     return item ? item.querySelector('.video-label-select, .moveTag, .el-select') : null;
   }
 
+  function extractTagDetailFromElement(element) {
+    if (!(element instanceof Element)) {
+      return null;
+    }
+    const fieldValues = {
+      name: '',
+      type: '',
+      id: '',
+      remark: ''
+    };
+    const textCandidates = [];
+    const seenText = new Set();
+    const pushText = (value) => {
+      const raw = String(value || '');
+      const normalized = normalizeText(raw);
+      if (!normalized || seenText.has(normalized)) {
+        return;
+      }
+      seenText.add(normalized);
+      textCandidates.push(raw);
+    };
+    const assignField = (key, value) => {
+      const normalized = normalizeText(value);
+      if (!normalized || fieldValues[key]) {
+        return;
+      }
+      fieldValues[key] = normalized;
+    };
+    const collectNode = (node) => {
+      if (!(node instanceof Element)) {
+        return;
+      }
+      Array.from(node.attributes || []).forEach((attribute) => {
+        const attrName = String(attribute.name || '').toLowerCase();
+        const attrValue = attribute.value;
+        if (!normalizeText(attrValue)) {
+          return;
+        }
+        if (attrName === 'title' || attrName === 'aria-label' || attrName === 'data-content' || attrName === 'data-original-title') {
+          pushText(attrValue);
+        }
+        if (attrName === 'data-name' || attrName === 'data-label' || attrName === 'data-tag-name' || attrName === 'data-label-name') {
+          assignField('name', attrValue);
+        }
+        if (attrName === 'data-type' || attrName === 'data-tag-type' || attrName === 'data-label-type') {
+          assignField('type', attrValue);
+        }
+        if (attrName === 'data-id' || attrName === 'data-tag-id' || attrName === 'data-label-id') {
+          assignField('id', attrValue);
+        }
+        if (attrName === 'data-remark' || attrName === 'data-note' || attrName === 'data-memo' || attrName === 'data-description') {
+          assignField('remark', attrValue);
+        }
+      });
+      if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
+        pushText(node.value);
+      } else {
+        pushText(node.textContent);
+      }
+    };
+
+    collectNode(element);
+    Array.from(element.querySelectorAll('*')).forEach(collectNode);
+    const detail = normalizeTagDetail({
+      ...fieldValues,
+      rawText: textCandidates.join(' | ')
+    });
+    return detail;
+  }
+
+  function getDetailSelectedTagElements() {
+    const field = getDetailFinishedTagsField();
+    if (!field) {
+      return [];
+    }
+    const selectors = [
+      '.el-select__tags .el-tag',
+      '.moveTag .el-tag',
+      '.moveTag [class*="tag-item"]',
+      '.moveTag > span',
+      '.el-select__tags > span'
+    ];
+    const candidates = Array.from(field.querySelectorAll(selectors.join(', ')))
+      .filter((element) => {
+        return isVisible(element)
+          && !(element instanceof HTMLInputElement)
+          && !(element instanceof HTMLTextAreaElement);
+      });
+    if (candidates.length) {
+      return candidates;
+    }
+    return Array.from(field.querySelectorAll('.el-select__tags-text'))
+      .map((element) => element.parentElement)
+      .filter(Boolean);
+  }
+
   async function waitForDetailAnalysisReady(fallbackVid, cancelCheck) {
     await waitFor(() => {
       return getDetailFinishedTagsField() && getDetailVideoVid(fallbackVid);
     }, DETAIL_PAGE_TIMEOUT, '详情页视频信息未准备完成', { cancelCheck });
   }
 
-  function getDetailSelectedTags() {
-    const field = getDetailFinishedTagsField();
-    if (!field) {
-      return [];
-    }
-    return uniqueTextList(
-      Array.from(field.querySelectorAll('.el-select__tags-text')).map((element) => normalizeText(element.textContent))
+  function getDetailSelectedTagDetails() {
+    return normalizeTagDetailArray(
+      getDetailSelectedTagElements().map((element) => extractTagDetailFromElement(element))
     );
   }
 
@@ -3588,14 +3841,15 @@
     setNativeInputValue(input, keyword);
     await sleep(250);
     const dropdown = await waitFor(() => getVisibleTagDropdown(), 3000, `未收到标签检索结果：${keyword}`, { cancelCheck });
-    const options = Array.from(dropdown.querySelectorAll('.el-select-dropdown__item'))
-      .filter(isVisible)
-      .map((item) => normalizeText(item.textContent))
-      .filter(Boolean);
+    const options = normalizeTagDetailArray(
+      Array.from(dropdown.querySelectorAll('.el-select-dropdown__item'))
+        .filter(isVisible)
+        .map((item) => extractTagDetailFromElement(item))
+    );
     setNativeInputValue(input, '');
     input.blur();
     document.body.dispatchEvent(createMouseEvent('click'));
-    return uniqueTextList(options);
+    return options;
   }
 
   async function clickDetailExitButton() {
@@ -3688,12 +3942,14 @@
     return `
       <div class="ysp-daily-worker-badge__list">
         ${items.map((item) => {
-          const options = normalizeTextArray(item && item.options);
+          const options = normalizeTagDetailArray(item && item.options).map((option) => formatTagDetailForDisplay(option));
           const accepted = item && item.accepted === true;
           const rejected = item && item.accepted === false;
           const badgeClass = accepted ? 'is-accepted' : rejected ? 'is-rejected' : '';
           const badgeText = accepted ? '采纳' : rejected ? '放弃' : '待判定';
           const reason = normalizeText(item && item.reason);
+          const searchReason = normalizeText(item && item.searchReason);
+          const matchedOption = formatTagDetailForDisplay(item && item.matchedOption);
           return `
             <div class="ysp-daily-worker-badge__item">
               <div class="ysp-daily-worker-badge__item-title">
@@ -3701,7 +3957,9 @@
                 <span class="ysp-daily-worker-badge__item-badge ${badgeClass}">${badgeText}</span>
               </div>
               <div>${escapeXml(reason || '暂无说明')}</div>
-              <div class="ysp-daily-worker-badge__item-subtext">搜索结果：${escapeXml(options.join('、') || '页面无结果')}</div>
+              ${searchReason ? `<div class="ysp-daily-worker-badge__item-subtext">发起搜索：${escapeXml(searchReason)}</div>` : ''}
+              <div class="ysp-daily-worker-badge__item-subtext">搜索结果：${escapeXml(options.join('；') || '页面无结果')}</div>
+              ${matchedOption ? `<div class="ysp-daily-worker-badge__item-subtext">采纳结果：${escapeXml(matchedOption)}</div>` : ''}
             </div>
           `;
         }).join('')}
@@ -4992,13 +5250,57 @@
     }
     return {
       keyword,
-      accepted: Boolean(entry.accepted),
-      reason: normalizeText(entry.reason)
+      accepted: normalizeBooleanFlag(entry.accepted),
+      reason: normalizeText(entry.reason),
+      matchedOption: normalizeTagDetail({
+        ...(entry.matched_option && typeof entry.matched_option === 'object' ? entry.matched_option : {}),
+        name: entry.matched_option_name || (entry.matched_option && entry.matched_option.name),
+        type: entry.matched_option_type || (entry.matched_option && entry.matched_option.type),
+        id: entry.matched_option_id || (entry.matched_option && entry.matched_option.id),
+        remark: entry.matched_option_remark || (entry.matched_option && entry.matched_option.remark)
+      })
     };
   }
 
   function normalizeCandidateDecisionArray(value) {
     return Array.isArray(value) ? value.map(normalizeCandidateDecision).filter(Boolean) : [];
+  }
+
+  function normalizeTagSearchCandidate(entry) {
+    if (!entry) {
+      return null;
+    }
+    if (typeof entry === 'string') {
+      const keyword = normalizeTagDisplayName(entry);
+      return keyword ? { keyword, reason: '' } : null;
+    }
+    if (typeof entry !== 'object') {
+      return null;
+    }
+    const keyword = normalizeTagDisplayName(entry.keyword || entry.name || entry.label);
+    if (!keyword) {
+      return null;
+    }
+    return {
+      keyword,
+      reason: normalizeText(entry.reason)
+    };
+  }
+
+  function normalizeTagSearchCandidateArray(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    const result = [];
+    const seen = new Set();
+    value.map(normalizeTagSearchCandidate).filter(Boolean).forEach((item) => {
+      if (seen.has(item.keyword)) {
+        return;
+      }
+      seen.add(item.keyword);
+      result.push(item);
+    });
+    return result;
   }
 
   function buildValidatedCandidates(searchResults, candidateDecisions) {
@@ -5010,9 +5312,11 @@
       const decision = decisionMap.get(keyword) || null;
       return {
         keyword,
-        options: normalizeTextArray(item && item.options),
-        accepted: decision ? Boolean(decision.accepted) : false,
-        reason: decision ? normalizeText(decision.reason) : ''
+        searchReason: normalizeText(item && item.reason),
+        options: normalizeTagDetailArray(item && item.options),
+        accepted: decision ? decision.accepted : null,
+        reason: decision ? normalizeText(decision.reason) : '',
+        matchedOption: decision ? normalizeTagDetail(decision.matchedOption) : null
       };
     }).filter((item) => item.keyword);
   }
@@ -5268,22 +5572,22 @@
     return [
       '你是央视频标准化系统的二次质检助手。',
       '这是一条已经过多次校对后的最终查缺补漏任务，你的主要目标是补打真正重要且缺失的标签，不要为了凑结果而补。',
-      '请根据“标题”“视频理解结果”和“当前已选成品标签”，判断现有成品标签是否明显错打，以及是否存在值得去系统里检索验证的缺失标签。',
+      '请根据“标题”“视频理解结果”和“当前已选成品标签完整信息”，判断现有成品标签是否明显错打，以及哪些标签值得真的去系统搜索框里输入验证。',
       '规则：',
       '1. wrong_tags 默认从严，只有现有标签和视频核心事实明显冲突时才允许输出；大多数情况下应为空。',
-      '2. missing_tags_candidate 只保留非常重要的标签，并且至少满足其一：标题直接提到；视频主题明确围绕它展开；视频中多次提及或反复出现；画面与口播共同支持。',
-      '3. 单次擦边出现、弱相关、泛泛概念、可有可无的标签，一律不要给。',
-      '4. 不要推荐已经在当前已选成品标签里的标签。',
-      '5. need_record 只要 wrong_tags 或 missing_tags_candidate 任一非空，就返回 true，否则 false。',
+      '2. search_candidates 只保留真正值得去系统搜索框输入验证的关键词，每个候选都要给 keyword 和 reason。',
+      '3. search_candidates 里的 keyword 必须简短、可直接搜索，不要写成长句。',
+      '4. 单次擦边出现、弱相关、泛泛概念、可有可无的标签，一律不要给。',
+      '5. 不要推荐已经在当前已选成品标签里的同名标签。',
       '6. summary 用一句中文总结判断原因。',
       '7. 只能返回 JSON，不要返回其他文字。',
       '',
       `标题：${normalizeText(titleText) || '无'}`,
-      `当前已选成品标签：${JSON.stringify(selectedTags || [])}`,
+      `当前已选成品标签完整信息：${JSON.stringify(normalizeTagDetailArray(selectedTags || []))}`,
       `视频理解结果：${videoSummary}`,
       '',
       '输出格式：',
-      '{"wrong_tags":[],"missing_tags_candidate":[],"need_record":false,"summary":""}'
+      '{"wrong_tags":[],"search_candidates":[{"keyword":"","reason":""}],"summary":""}'
     ].join('\n');
   }
 
@@ -5291,25 +5595,27 @@
     return [
       '你是央视频标准化系统的最终二次质检裁定助手。',
       '这一步是最后落表结论，请严格执行“补打优先、错打极严”的标准。',
-      '你现在拿到了标题、视频理解结果、当前已选成品标签、第一轮判断结果，以及候选标签在系统中的真实搜索结果。',
+      '你现在拿到了标题、视频理解结果、当前已选成品标签完整信息、第一轮搜索计划，以及候选标签在系统中的真实搜索结果。',
       '规则：',
-      '1. missing_tags_actionable 只保留“页面真实搜得到”且“确实应该补打”的重要标签。',
-      '2. wrong_tags 只保留证据非常强、与视频核心事实明显冲突的错打标签；大多数情况应为空。',
-      '3. candidate_decisions 必须覆盖每一个候选标签，每个候选只出现一次，accepted 表示最终是否采纳，reason 必须说明原因。',
-      '4. evidence_summary 要概括真正支持结论的强证据，重点看标题、主题、反复出现的信息、画面与口播共同支持的点。',
-      '5. final_reason 用一句中文说明为什么最终落到这个结论。',
-      '6. problem_text 默认只输出“补打XX、YY”；只有 wrong_tags 非空时才追加“错打AA、BB”；如果都没有，返回空字符串。',
-      '7. 单次擦边出现、弱相关、没有反复支撑、不是主题核心的标签，一律不要补。',
-      '8. 只能返回 JSON，不要返回其他文字。',
+      '1. need_record 必须由你独立判断。只有真正需要落到二次质检表里时才返回 true，否则 false。',
+      '2. missing_tags_actionable 只保留“页面真实搜得到”且“确实应该补打”的重要标签。',
+      '3. wrong_tags 只保留证据非常强、与视频核心事实明显冲突的错打标签；大多数情况应为空。',
+      '4. candidate_decisions 必须覆盖每一个已搜索的候选标签，每个候选只出现一次，accepted 表示最终是否采纳，reason 必须说明原因。',
+      '5. 如果 accepted 为 true，请尽量在 candidate_decisions 里补充 matched_option_id、matched_option_name、matched_option_type、matched_option_remark，指出你最终采纳的是哪一个搜索结果。',
+      '6. evidence_summary 要概括真正支持结论的强证据，重点看标题、主题、反复出现的信息、画面与口播共同支持的点。',
+      '7. final_reason 用一句中文说明为什么最终落到这个结论。',
+      '8. problem_text 只有在 need_record 为 true 时才输出；默认只输出“补打XX、YY”，只有 wrong_tags 非空时才追加“错打AA、BB”；如果不需要记录，返回空字符串。',
+      '9. 单次擦边出现、弱相关、没有反复支撑、不是主题核心的标签，一律不要补。',
+      '10. 只能返回 JSON，不要返回其他文字。',
       '',
       `标题：${normalizeText(titleText) || '无'}`,
       `视频理解结果：${videoSummary}`,
-      `当前已选成品标签：${JSON.stringify(selectedTags || [])}`,
+      `当前已选成品标签完整信息：${JSON.stringify(normalizeTagDetailArray(selectedTags || []))}`,
       `第一轮判断：${JSON.stringify(firstJudge || {})}`,
       `候选标签真实搜索结果：${JSON.stringify(searchResults || [])}`,
       '',
       '输出格式：',
-      '{"missing_tags_actionable":[],"wrong_tags":[],"candidate_decisions":[{"keyword":"","accepted":false,"reason":""}],"evidence_summary":"","final_reason":"","problem_text":""}'
+      '{"need_record":false,"missing_tags_actionable":[],"wrong_tags":[],"candidate_decisions":[{"keyword":"","accepted":false,"reason":"","matched_option_id":"","matched_option_name":"","matched_option_type":"","matched_option_remark":""}],"evidence_summary":"","final_reason":"","problem_text":""}'
     ].join('\n');
   }
 
@@ -5437,7 +5743,7 @@
       const titleText = getDetailTitleText();
       const durationSeconds = await waitForDetailDurationSeconds(cancelCheck);
       const videoVid = getDetailVideoVid(listVid);
-      const selectedTags = getDetailSelectedTags();
+      const selectedTags = getDetailSelectedTagDetails();
       applyBadgeState({
         taskId: listVid,
         videoVid,
@@ -5528,7 +5834,8 @@
       const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags), cancelCheck);
       const firstJudge = JSON.parse(extractFirstJsonObject(firstJudgeRaw));
       const wrongTags = normalizeTagArray(firstJudge.wrong_tags);
-      const missingCandidates = normalizeTagArray(firstJudge.missing_tags_candidate);
+      const searchCandidates = normalizeTagSearchCandidateArray(firstJudge.search_candidates);
+      const missingCandidates = searchCandidates.map((item) => item.keyword);
       const firstSummary = normalizeText(firstJudge.summary);
       applyBadgeState({
         missingCandidates,
@@ -5538,39 +5845,44 @@
       await ensureSecondaryQcWorkerNotStopped(requestId);
 
       await reportProgress(
-        missingCandidates.length
-          ? `正在验证候选标签（1/${missingCandidates.length}）`
+        searchCandidates.length
+          ? `正在验证候选标签（1/${searchCandidates.length}）`
           : '当前没有候选标签需要验证',
         {
           stageLabel: '搜索验证',
-          validatedCandidates: missingCandidates.map((keyword) => ({
-            keyword,
+          validatedCandidates: searchCandidates.map((item) => ({
+            keyword: item.keyword,
+            searchReason: item.reason,
             options: [],
             accepted: null,
-            reason: ''
+            reason: '',
+            matchedOption: null
           }))
         }
       );
       const searchResults = [];
-      for (let candidateIndex = 0; candidateIndex < missingCandidates.length; candidateIndex += 1) {
-        const candidate = missingCandidates[candidateIndex];
-        if (!candidate) {
+      for (let candidateIndex = 0; candidateIndex < searchCandidates.length; candidateIndex += 1) {
+        const candidate = searchCandidates[candidateIndex];
+        if (!candidate || !candidate.keyword) {
           continue;
         }
-        await reportProgress(`正在验证候选标签（${candidateIndex + 1}/${missingCandidates.length}）`);
+        await reportProgress(`正在验证候选标签（${candidateIndex + 1}/${searchCandidates.length}）`);
         await ensureSecondaryQcWorkerNotStopped(requestId);
-        const options = await searchAvailableTagOptions(candidate, cancelCheck);
+        const options = await searchAvailableTagOptions(candidate.keyword, cancelCheck);
         searchResults.push({
-          keyword: candidate,
+          keyword: candidate.keyword,
+          reason: candidate.reason,
           options
         });
         applyBadgeState({
           stageLabel: '搜索验证',
           validatedCandidates: searchResults.map((item) => ({
             keyword: item.keyword,
+            searchReason: item.reason,
             options: item.options,
             accepted: null,
-            reason: ''
+            reason: '',
+            matchedOption: null
           }))
         });
       }
@@ -5584,8 +5896,7 @@
           selectedTags,
           {
             wrong_tags: wrongTags,
-            missing_tags_candidate: missingCandidates,
-            need_record: Boolean(firstJudge.need_record),
+            search_candidates: searchCandidates,
             summary: firstSummary
           },
           searchResults
@@ -5593,6 +5904,7 @@
         cancelCheck
       );
       const finalJudge = JSON.parse(extractFirstJsonObject(finalJudgeRaw));
+      const needRecord = normalizeBooleanFlag(finalJudge.need_record);
       const missingTagsActionable = normalizeTagArray(finalJudge.missing_tags_actionable);
       const finalWrongTags = normalizeTagArray(finalJudge.wrong_tags);
       const candidateDecisions = normalizeCandidateDecisionArray(finalJudge.candidate_decisions);
@@ -5605,7 +5917,7 @@
         }));
       const evidenceSummary = normalizeText(finalJudge.evidence_summary) || [firstSummary, baseEvidenceSummary].filter(Boolean).join('\n');
       const finalReason = normalizeText(finalJudge.final_reason) || firstSummary;
-      const problemText = normalizeText(finalJudge.problem_text) || formatProblemText(missingTagsActionable, finalWrongTags);
+      const problemText = normalizeText(finalJudge.problem_text);
       applyBadgeState({
         validatedCandidates,
         rejectedCandidates,
@@ -5622,7 +5934,7 @@
         taskId: listVid,
         videoVid,
         videoUrl,
-        needRecord: Boolean(problemText),
+        needRecord,
         problemText,
         missingTagsActionable,
         wrongTags: finalWrongTags,
@@ -7197,10 +7509,14 @@
         return;
       }
 
+      const needRecord = normalizeBooleanFlag(response.needRecord);
       const problemText = normalizeText(response.problemText);
-      if (!problemText) {
+      if (!needRecord) {
         this.pushLog(`${row.taskId}：未发现问题`);
         return;
+      }
+      if (!problemText) {
+        throw new Error(prefixTaskError(row.taskId, '模型判定需要记录，但未返回问题文本'));
       }
 
       checkpoint.rows.push({
