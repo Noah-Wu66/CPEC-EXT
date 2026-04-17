@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.4
+// @version      2.1.6
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -409,21 +409,43 @@
 }
 
 .ysp-daily-panel__status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: fit-content;
-  max-width: 100%;
-  margin: 4px auto 6px;
-  padding: 7px 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 250, 244, 0.92), rgba(241, 247, 255, 0.92));
   border: 1px solid rgba(22, 51, 78, 0.1);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.5;
   color: #35516a;
-  text-align: center;
   box-shadow: 0 8px 18px rgba(22, 51, 78, 0.08);
+}
+
+.ysp-daily-panel__status-head {
+  display: flex;
+  align-items: center;
+}
+
+.ysp-daily-panel__status-head .ysp-daily-panel__label {
+  margin-bottom: 0;
+}
+
+.ysp-daily-panel__status-value {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: #17324f;
+  word-break: break-word;
+}
+
+.ysp-daily-panel__status-subtext {
+  padding-top: 8px;
+  border-top: 1px solid rgba(22, 51, 78, 0.08);
+  font-size: 12px;
+  color: #6b7a90;
 }
 
 .ysp-daily-panel__report {
@@ -2835,6 +2857,97 @@
     return matched ? Number(matched[1]) : null;
   }
 
+  function getPagerSizeWrapper() {
+    const pager = getVisiblePager();
+    return pager ? pager.querySelector('.vxe-pager--sizes') : null;
+  }
+
+  function getVisibleVxeSelectPanels() {
+    return Array.from(document.querySelectorAll('.vxe-select--panel, .vxe-pulldown--panel'))
+      .filter((element) => isVisible(element));
+  }
+
+  function getVxeSelectPanelOptions(panel) {
+    if (!panel) {
+      return [];
+    }
+    const options = Array.from(panel.querySelectorAll('.vxe-select-option--item, .vxe-select-option, [role="option"], li'))
+      .filter((element) => isVisible(element));
+    if (options.length) {
+      return options;
+    }
+    return Array.from(panel.querySelectorAll('*')).filter((element) => {
+      if (!isVisible(element)) {
+        return false;
+      }
+      const text = normalizeText(element.textContent);
+      if (!text || element.children.length) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  function findVxeSelectOption(panel, optionText) {
+    const normalizedOptionText = normalizeText(optionText);
+    const option = getVxeSelectPanelOptions(panel).find((element) => {
+      return normalizeText(element.textContent) === normalizedOptionText
+        && !element.classList.contains('is--disabled')
+        && !element.classList.contains('is-disabled');
+    });
+    if (option) {
+      return option;
+    }
+    const fallback = Array.from(panel.querySelectorAll('*')).find((element) => {
+      return isVisible(element) && normalizeText(element.textContent) === normalizedOptionText;
+    });
+    if (!fallback) {
+      return null;
+    }
+    const clickable = fallback.closest('.vxe-select-option--item, .vxe-select-option, [role="option"], li');
+    if (!clickable) {
+      return fallback;
+    }
+    if (clickable.classList.contains('is--disabled') || clickable.classList.contains('is-disabled')) {
+      return null;
+    }
+    return clickable;
+  }
+
+  async function openPagerSizeDropdown(optionText) {
+    const wrapper = await waitFor(() => getPagerSizeWrapper(), 5000, '未找到每页条数设置');
+    const trigger = wrapper.querySelector('.vxe-input--wrapper, input, .vxe-input') || wrapper;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      triggerMouseClick(trigger);
+      const panel = await waitFor(() => {
+        return getVisibleVxeSelectPanels().find((candidate) => {
+          return !!findVxeSelectOption(candidate, optionText);
+        });
+      }, 4000, `未找到每页条数选项：${optionText}`);
+      if (panel) {
+        return panel;
+      }
+    }
+    throw new Error(`无法展开每页条数选项：${optionText}`);
+  }
+
+  async function setPagerPageSize(pageSize) {
+    const normalizedPageSize = Math.max(1, Math.trunc(Number(pageSize) || 0));
+    const optionText = `${normalizedPageSize}条/页`;
+    if (getPagerPageSize() === normalizedPageSize) {
+      await waitForListTableSettled();
+      return;
+    }
+    const panel = await openPagerSizeDropdown(optionText);
+    const option = findVxeSelectOption(panel, optionText);
+    if (!option) {
+      throw new Error(`未找到每页条数选项：${optionText}`);
+    }
+    triggerMouseClick(option);
+    await waitFor(() => getPagerPageSize() === normalizedPageSize, 10000, `切换每页条数失败：${optionText}`);
+    await waitForListTableSettled();
+  }
+
   function getPagerTotalRecords() {
     const pager = getVisiblePager();
     if (!pager) {
@@ -3955,6 +4068,7 @@
     const problem = normalizeText(row.problem);
     const standardOperator = normalizeText(row.standardOperator);
     const qcOperator = normalizeText(row.qcOperator);
+    const itemKey = normalizeText(row.itemKey);
     if (!vid) {
       return null;
     }
@@ -3962,8 +4076,71 @@
       vid,
       problem,
       standardOperator,
-      qcOperator
+      qcOperator,
+      itemKey
     };
+  }
+
+  function buildSecondaryQcItemTargetCounts(itemCount, targetCount) {
+    const normalizedItemCount = Math.max(0, Math.trunc(Number(itemCount) || 0));
+    const normalizedTargetCount = Math.max(0, Math.trunc(Number(targetCount) || 0));
+    if (!normalizedItemCount) {
+      return [];
+    }
+    const baseCount = Math.floor(normalizedTargetCount / normalizedItemCount);
+    const remainder = normalizedTargetCount % normalizedItemCount;
+    return Array.from({ length: normalizedItemCount }, (_, index) => {
+      return baseCount + (index < remainder ? 1 : 0);
+    });
+  }
+
+  function normalizeSecondaryQcItemTargetCounts(value, itemCount, targetCount) {
+    const fallback = buildSecondaryQcItemTargetCounts(itemCount, targetCount);
+    if (!Array.isArray(value) || value.length !== itemCount) {
+      return fallback;
+    }
+    const counts = value.map((count) => Math.max(0, Math.trunc(Number(count) || 0)));
+    const total = counts.reduce((sum, count) => sum + count, 0);
+    return total === targetCount ? counts : fallback;
+  }
+
+  function buildSecondaryQcItemRecordedCountsFromRows(itemKeys, itemTargetCounts, rows) {
+    const counts = new Array(itemKeys.length).fill(0);
+    const keyIndexMap = new Map(itemKeys.map((key, index) => [key, index]));
+    let resolvedCount = 0;
+    for (const row of rows) {
+      const itemKey = normalizeText(row && row.itemKey);
+      const itemIndex = keyIndexMap.get(itemKey);
+      if (typeof itemIndex !== 'number') {
+        continue;
+      }
+      counts[itemIndex] += 1;
+      resolvedCount += 1;
+    }
+    let remaining = Math.max(0, rows.length - resolvedCount);
+    for (let index = 0; index < counts.length && remaining > 0; index += 1) {
+      const maxFill = Math.max(0, (itemTargetCounts[index] || 0) - counts[index]);
+      if (!maxFill) {
+        continue;
+      }
+      const fillCount = Math.min(maxFill, remaining);
+      counts[index] += fillCount;
+      remaining -= fillCount;
+    }
+    if (remaining > 0 && counts.length) {
+      counts[counts.length - 1] += remaining;
+    }
+    return counts;
+  }
+
+  function normalizeSecondaryQcItemRecordedCounts(value, itemKeys, itemTargetCounts, rows) {
+    const fallback = buildSecondaryQcItemRecordedCountsFromRows(itemKeys, itemTargetCounts, rows);
+    if (!Array.isArray(value) || value.length !== itemKeys.length) {
+      return fallback;
+    }
+    const counts = value.map((count) => Math.max(0, Math.trunc(Number(count) || 0)));
+    const total = counts.reduce((sum, count) => sum + count, 0);
+    return total === rows.length ? counts : fallback;
   }
 
   function normalizeSecondaryQcReport(report) {
@@ -4015,12 +4192,17 @@
     const endDate = normalizeText(checkpoint.endDate) || startDate;
     const groupIds = normalizeSelectedGroupIds(checkpoint.groupIds);
     const itemKeys = normalizeSelectedKeys(checkpoint.itemKeys);
+    const targetCount = normalizePositiveInteger(checkpoint.targetCount, 10, 1, 999);
     if (!startDate || !groupIds.length || !itemKeys.length) {
       return null;
     }
+    const rows = Array.isArray(checkpoint.rows)
+      ? checkpoint.rows.map(normalizeSecondaryQcDraftRow).filter(Boolean)
+      : [];
+    const itemTargetCounts = normalizeSecondaryQcItemTargetCounts(checkpoint.itemTargetCounts, itemKeys.length, targetCount);
     return {
       ...checkpoint,
-      version: 1,
+      version: 2,
       startDate,
       endDate,
       groupIds,
@@ -4028,11 +4210,11 @@
       currentItemIndex: Number.isFinite(Number(checkpoint.currentItemIndex))
         ? Number(checkpoint.currentItemIndex)
         : 0,
-      targetCount: normalizePositiveInteger(checkpoint.targetCount, 10, 1, 999),
+      targetCount,
+      itemTargetCounts,
+      itemRecordedCounts: normalizeSecondaryQcItemRecordedCounts(checkpoint.itemRecordedCounts, itemKeys, itemTargetCounts, rows),
       processedTaskIds: uniqueTextList(checkpoint.processedTaskIds),
-      rows: Array.isArray(checkpoint.rows)
-        ? checkpoint.rows.map(normalizeSecondaryQcDraftRow).filter(Boolean)
-        : [],
+      rows,
       qcOperator: normalizeText(checkpoint.qcOperator),
       status: normalizeText(checkpoint.status) || 'running',
       statusText: normalizeText(checkpoint.statusText),
@@ -4976,11 +5158,11 @@
           ? '日报'
           : '空闲';
       this.refs.status.innerHTML = `
-        <div class="ysp-daily-panel__toolbar">
+        <div class="ysp-daily-panel__status-head">
           <span class="ysp-daily-panel__label">当前状态</span>
         </div>
-        <div>${escapeXml(this.runtime.statusText || '等待开始')}</div>
-        <div style="margin-top: 6px; color: #6b7a90;">任务类型：${escapeXml(jobLabel)}</div>
+        <div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div>
+        <div class="ysp-daily-panel__status-subtext">任务类型：${escapeXml(jobLabel)}</div>
       `;
     }
 
@@ -5546,13 +5728,15 @@
       this.runtime.secondaryQc.report = null;
       this.runtime.statusText = '正在准备二次质检';
       this.runtime.secondaryQc.checkpoint = {
-        version: 1,
+        version: 2,
         status: 'running',
         startDate,
         endDate,
         groupIds,
         itemKeys: items.map((item) => item.key),
         targetCount,
+        itemTargetCounts: buildSecondaryQcItemTargetCounts(items.length, targetCount),
+        itemRecordedCounts: new Array(items.length).fill(0),
         currentItemIndex: 0,
         processedTaskIds: [],
         rows: [],
@@ -5564,7 +5748,9 @@
       };
       this.render();
       await this.saveCheckpoint('secondaryQc');
-      this.pushLog(`开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，目标 ${targetCount} 条`);
+      this.pushLog(
+        `开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，目标 ${targetCount} 条，${items.length} 个品类按顺序分配 ${this.runtime.secondaryQc.checkpoint.itemTargetCounts.join(' / ')} 条`
+      );
       await this.runSecondaryQcFromCheckpoint();
     }
 
@@ -5581,16 +5767,32 @@
       if (!items.length) {
         throw new Error('当前二次质检任务没有可处理的品类');
       }
+      checkpoint.itemTargetCounts = normalizeSecondaryQcItemTargetCounts(checkpoint.itemTargetCounts, items.length, checkpoint.targetCount);
+      checkpoint.itemRecordedCounts = normalizeSecondaryQcItemRecordedCounts(checkpoint.itemRecordedCounts, checkpoint.itemKeys, checkpoint.itemTargetCounts, checkpoint.rows);
 
-      while (checkpoint.currentItemIndex < items.length && checkpoint.rows.length < checkpoint.targetCount) {
+      while (checkpoint.currentItemIndex < items.length) {
         this.ensureNotStopped();
-        const item = items[checkpoint.currentItemIndex];
+        const itemIndex = checkpoint.currentItemIndex;
+        const item = items[itemIndex];
+        const itemTargetCount = checkpoint.itemTargetCounts[itemIndex] || 0;
+        const itemRecordedCount = checkpoint.itemRecordedCounts[itemIndex] || 0;
+        if (!itemTargetCount) {
+          this.pushLog(`${this.describeItem(item)}：分配 0 条，跳过`);
+          checkpoint.currentItemIndex += 1;
+          await this.saveCheckpoint('secondaryQc');
+          continue;
+        }
+        if (itemRecordedCount >= itemTargetCount) {
+          checkpoint.currentItemIndex += 1;
+          await this.saveCheckpoint('secondaryQc');
+          continue;
+        }
         this.updateCheckpointStatus(
           `正在质检 ${item.exportLabel}`,
-          `${checkpoint.currentItemIndex + 1}/${items.length} · 已记录 ${checkpoint.rows.length}/${checkpoint.targetCount}`
+          `${itemIndex + 1}/${items.length} · 本品类 ${itemRecordedCount}/${itemTargetCount} · 总计 ${checkpoint.rows.length}/${checkpoint.targetCount}`
         );
         await this.saveCheckpoint('secondaryQc');
-        await this.processSecondaryQcItem(item);
+        await this.processSecondaryQcItem(item, itemIndex);
         checkpoint.currentItemIndex += 1;
         await this.saveCheckpoint('secondaryQc');
       }
@@ -5598,9 +5800,14 @@
       await this.completeSecondaryQcJob();
     }
 
-    async processSecondaryQcItem(item) {
+    async processSecondaryQcItem(item, itemIndex) {
       const checkpoint = this.runtime.secondaryQc.checkpoint;
       const range = buildDatePeriodRange(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
+      const itemTargetCount = checkpoint.itemTargetCounts[itemIndex] || 0;
+      const itemRecordedCount = checkpoint.itemRecordedCounts[itemIndex] || 0;
+      if (!itemTargetCount || itemRecordedCount >= itemTargetCount) {
+        return;
+      }
 
       await clickResetButton();
       await this.applyCategory(item);
@@ -5614,26 +5821,28 @@
         return;
       }
 
+      await setPagerPageSize(500);
       const totalRecords = getPagerTotalRecords() || queryCount;
-      const pageSize = getPagerPageSize() || 50;
+      const pageSize = getPagerPageSize() || 500;
       const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
-      this.pushLog(`${this.describeItem(item)}：命中 ${totalRecords} 条，开始从最后一页倒序扫描`);
+      this.pushLog(`${this.describeItem(item)}：命中 ${totalRecords} 条，本品类目标 ${itemTargetCount} 条，已切换 ${pageSize} 条/页，开始从最后一页倒序扫描`);
 
       await gotoListPageNumber(totalPages);
 
       for (let pageNumber = totalPages; pageNumber >= 1; pageNumber -= 1) {
-        if (checkpoint.rows.length >= checkpoint.targetCount) {
+        if ((checkpoint.itemRecordedCounts[itemIndex] || 0) >= itemTargetCount || checkpoint.rows.length >= checkpoint.targetCount) {
           return;
         }
         if (getPagerCurrentPage() !== pageNumber) {
           await gotoListPageNumber(pageNumber);
         }
-        await this.scanCurrentSecondaryQcPage(item, pageNumber, totalPages);
+        await this.scanCurrentSecondaryQcPage(item, itemIndex, pageNumber, totalPages);
       }
     }
 
-    async scanCurrentSecondaryQcPage(item, pageNumber, totalPages) {
+    async scanCurrentSecondaryQcPage(item, itemIndex, pageNumber, totalPages) {
       const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const itemTargetCount = checkpoint.itemTargetCounts[itemIndex] || 0;
       const localSeen = new Set();
       const body = getListBodyScrollElement();
       if (body) {
@@ -5641,10 +5850,10 @@
       }
 
       let reachedTop = false;
-      while (!reachedTop && checkpoint.rows.length < checkpoint.targetCount) {
+      while (!reachedTop && checkpoint.rows.length < checkpoint.targetCount && (checkpoint.itemRecordedCounts[itemIndex] || 0) < itemTargetCount) {
         const rows = parseCurrentListRows().filter((row) => row && row.taskId);
         for (let index = rows.length - 1; index >= 0; index -= 1) {
-          if (checkpoint.rows.length >= checkpoint.targetCount) {
+          if (checkpoint.rows.length >= checkpoint.targetCount || (checkpoint.itemRecordedCounts[itemIndex] || 0) >= itemTargetCount) {
             return;
           }
           const row = rows[index];
@@ -5657,7 +5866,7 @@
           }
           checkpoint.processedTaskIds.push(row.taskId);
           await this.saveCheckpoint('secondaryQc');
-          await this.handleSecondaryQcRow(item, row, pageNumber, totalPages);
+          await this.handleSecondaryQcRow(item, itemIndex, row, pageNumber, totalPages);
         }
 
         if (!body) {
@@ -5673,7 +5882,7 @@
       }
     }
 
-    async handleSecondaryQcRow(item, row, pageNumber, totalPages) {
+    async handleSecondaryQcRow(item, itemIndex, row, pageNumber, totalPages) {
       const checkpoint = this.runtime.secondaryQc.checkpoint;
       const apiKey = normalizeText(this.settings.secrets.dashscopeApiKey);
       const requestId = createRuntimeToken('qc');
@@ -5730,10 +5939,14 @@
         vid: row.taskId,
         problem: problemText,
         standardOperator: row.standardOperator,
-        qcOperator: checkpoint.qcOperator
+        qcOperator: checkpoint.qcOperator,
+        itemKey: item.key
       });
+      checkpoint.itemRecordedCounts[itemIndex] = (checkpoint.itemRecordedCounts[itemIndex] || 0) + 1;
       await this.saveCheckpoint('secondaryQc');
-      this.pushLog(`${row.taskId}：已记录问题 ${problemText}`);
+      this.pushLog(
+        `${row.taskId}：已记录问题 ${problemText}（${checkpoint.itemRecordedCounts[itemIndex]}/${checkpoint.itemTargetCounts[itemIndex] || 0}）`
+      );
     }
 
     async completeSecondaryQcJob() {
