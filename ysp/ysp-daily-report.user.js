@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.28
+// @version      1.2.30
 // @description  在标准化系统页面按日期区间和编组子品类采集日报，并静默缓存到本地
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -399,6 +399,16 @@
   color: #b3472f;
   border: 1px solid rgba(194, 92, 64, 0.18);
   box-shadow: 0 10px 20px rgba(194, 92, 64, 0.12);
+}
+
+.ysp-daily-panel__status {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(22, 51, 78, 0.08);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #35516a;
 }
 
 .ysp-daily-panel__report {
@@ -1861,10 +1871,7 @@
       const maxDate = getYesterdayDateString();
       const startDate = rawSettings.startDate || '';
       let endDate = rawSettings.endDate || '';
-      const normalizedStartDate = startDate && startDate <= maxDate ? startDate : '';
-      if (!normalizedStartDate) {
-        endDate = '';
-      }
+      const normalizedStartDate = startDate && startDate <= maxDate ? startDate : maxDate;
       if (endDate && endDate > maxDate) {
         endDate = '';
       }
@@ -1944,6 +1951,7 @@
                   <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start">开始采集</button>
                   <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清除数据</button>
                 </div>
+                <div class="ysp-daily-panel__status" data-role="status"></div>
               </div>
               <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
                 <div class="ysp-daily-panel__toolbar">
@@ -1967,6 +1975,7 @@
       this.refs.report = root.querySelector('[data-role="report"]');
       this.refs.start = root.querySelector('[data-role="start"]');
       this.refs.clearData = root.querySelector('[data-role="clear-data"]');
+      this.refs.status = root.querySelector('[data-role="status"]');
       this.refs.minimize = root.querySelector('[data-role="minimize"]');
       this.refs.dock = root.querySelector('[data-role="dock"]');
 
@@ -2271,6 +2280,7 @@
       this.refs.start.disabled = this.runtime.running;
       this.refs.clearData.disabled = this.runtime.running;
       this.refs.start.textContent = this.runtime.running ? '采集中' : '开始采集';
+      this.refs.status.textContent = this.runtime.statusText || '等待开始';
       this.refs.minimize.disabled = false;
       for (const groupCard of this.refs.categories.querySelectorAll('[data-group-card]')) {
         const groupId = groupCard.getAttribute('data-group-card');
@@ -2321,7 +2331,7 @@
       if (this.runtime.running) {
         return;
       }
-      const confirmed = window.confirm('清除数据后，日期设置、采集结果、断点进度和已保存数据都会被移除。确认清除吗？');
+      const confirmed = window.confirm('这会清除本地保存的数据，当前界面保持不变。确认清除吗？');
       if (!confirmed) {
         return;
       }
@@ -2333,17 +2343,12 @@
       ]);
       window.sessionStorage.removeItem(SESSION_KEY);
       this.runtime.activeSessionKey = getCheckpointStorageKey();
-      this.savedSettings = { startDate: '', endDate: '', groupIds: [] };
       this.runtime.running = false;
       this.runtime.stopping = false;
       this.runtime.currentCheckpoint = null;
-      this.runtime.lastReport = null;
       this.runtime.resultCache = {};
-      this.runtime.logs = [];
-      this.runtime.statusText = '缓存已清除';
-      this.refs.startDate.value = '';
-      this.refs.endDate.value = '';
-      this.pushLog('已清除所有缓存数据');
+      this.runtime.statusText = '本地数据已清除，当前界面保持不变';
+      this.pushLog('已清除本地保存的数据');
       this.render();
     }
 
@@ -2441,6 +2446,7 @@
       this.runtime.stopping = false;
       this.runtime.running = true;
       this.runtime.logs = [];
+      this.runtime.statusText = '正在准备页面控件';
       this.runtime.currentCheckpoint = {
         version: 4,
         status: 'running',
@@ -2458,6 +2464,7 @@
         statusText: '正在准备页面控件',
         summaryText: ''
       };
+      this.render();
       await this.saveCheckpoint();
       this.pushLog(`开始采集：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，共 ${dateList.length} 天，覆盖 ${items.length} 个子品类`);
       await this.runFromCheckpoint();
