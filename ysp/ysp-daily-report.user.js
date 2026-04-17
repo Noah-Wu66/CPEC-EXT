@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.30
-// @description  在标准化系统页面按日期区间和编组子品类采集日报，并静默缓存到本地
+// @version      1.2.32
+// @description  在标准化系统页面按日期区间和编组子品类采集日报，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
 // @match        https://std.video.cloud.cctv.com/*
@@ -1129,7 +1129,6 @@
     return new MouseEvent(type, {
       bubbles: true,
       cancelable: true,
-      view: window,
       ...(init || {})
     });
   }
@@ -1253,12 +1252,12 @@
         return candidates.find((candidate) => {
           return getDropdownOptions(candidate).some((option) => normalizeText(option.textContent) === optionText);
         });
-      }, 4000, `未找到选项面板：${optionText}`);
+      }, 4000, `未找到可选内容：${optionText}`);
       if (dropdown) {
         return dropdown;
       }
     }
-    throw new Error(`无法打开下拉框：${optionText}`);
+    throw new Error(`无法展开选项：${optionText}`);
   }
 
   async function selectOption(wrapper, optionText) {
@@ -1286,11 +1285,11 @@
   async function setDateRange(labelText, startDate, endDate) {
     const item = getFormItemByLabel(labelText);
     if (!item) {
-      throw new Error(`未找到时间字段：${labelText}`);
+      throw new Error(`未找到日期设置：${labelText}`);
     }
     const inputs = Array.from(item.querySelectorAll('input.el-range-input')).filter(isVisible);
     if (inputs.length < 2) {
-      throw new Error(`时间字段不可用：${labelText}`);
+      throw new Error(`日期设置暂时不可用：${labelText}`);
     }
     const startValue = formatDateTime(startDate);
     const endValue = formatDateTime(endDate);
@@ -1326,7 +1325,7 @@
   async function clickQueryAndReadCount() {
     const queryButton = findButtonByText('查询');
     if (!queryButton) {
-      throw new Error('未找到查询按钮');
+      throw new Error('页面还在加载，请稍后再试');
     }
     triggerMouseClick(queryButton);
     const startedAt = Date.now();
@@ -1357,7 +1356,7 @@
   async function clickResetButton() {
     const resetButton = findButtonByText('重置');
     if (!resetButton) {
-      throw new Error('未找到重置按钮');
+      throw new Error('页面还在加载，请稍后再试');
     }
     triggerMouseClick(resetButton);
     await sleep(600);
@@ -1370,7 +1369,7 @@
         && getCategoryWrapper(0)
         && getFormItemByLabel('创建时间')
         && getFormItemByLabel('修改时间');
-    }, PAGE_READY_TIMEOUT, '页面控件未准备完成');
+    }, PAGE_READY_TIMEOUT, '页面还在加载，请稍后再试');
   }
 
   function buildOrderedResults(items, results) {
@@ -1893,11 +1892,11 @@
       if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'running') {
         this.runtime.running = true;
         this.runtime.minimized = false;
-        this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '正在继续上次任务';
+        this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '正在继续上次采集';
       } else if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'stopped') {
-        this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次任务已停止';
+        this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次采集已结束';
       } else if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'error') {
-        this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次任务停在错误位置';
+        this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次采集未完成';
       }
     }
 
@@ -2254,10 +2253,10 @@
       this.refs.report.innerHTML = `
         <div class="ysp-daily-panel__report-top">
           <div>
-            <h3 class="ysp-daily-panel__report-title">日报结果已就绪</h3>
+            <h3 class="ysp-daily-panel__report-title">日报结果已生成</h3>
             <div class="ysp-daily-panel__report-meta">${escapeXml(formatReportPeriod(this.runtime.lastReport))}</div>
           </div>
-          <button type="button" class="ysp-daily-panel__download" data-role="download">下载 Excel</button>
+          <button type="button" class="ysp-daily-panel__download" data-role="download">下载结果</button>
         </div>
       `;
     }
@@ -2331,7 +2330,7 @@
       if (this.runtime.running) {
         return;
       }
-      const confirmed = window.confirm('这会清除本地保存的数据，当前界面保持不变。确认清除吗？');
+      const confirmed = window.confirm('这会清除已保存内容，当前界面保持不变。确认清除吗？');
       if (!confirmed) {
         return;
       }
@@ -2347,8 +2346,8 @@
       this.runtime.stopping = false;
       this.runtime.currentCheckpoint = null;
       this.runtime.resultCache = {};
-      this.runtime.statusText = '本地数据已清除，当前界面保持不变';
-      this.pushLog('已清除本地保存的数据');
+      this.runtime.statusText = '已清除已保存内容，当前界面保持不变';
+      this.pushLog('已清除已保存内容');
       this.render();
     }
 
@@ -2379,7 +2378,7 @@
 
     ensureNotStopped() {
       if (this.runtime.stopping) {
-        throw new Error('任务已停止');
+        throw new Error('采集已结束');
       }
     }
 
@@ -2397,8 +2396,8 @@
       this.runtime.stopping = true;
       this.runtime.running = false;
       await this.clearCheckpoint();
-      this.runtime.statusText = '进度已清除';
-      this.pushLog('已清除当前页签的执行进度');
+      this.runtime.statusText = '已清除当前进度';
+      this.pushLog('已清除当前进度');
       this.render();
     }
 
@@ -2407,8 +2406,8 @@
         return;
       }
       this.runtime.stopping = true;
-      this.runtime.statusText = '正在停止，当前步骤结束后会退出';
-      this.pushLog('收到停止指令');
+      this.runtime.statusText = '正在结束本次采集';
+      this.pushLog('正在结束本次采集');
       this.render();
     }
 
@@ -2446,7 +2445,7 @@
       this.runtime.stopping = false;
       this.runtime.running = true;
       this.runtime.logs = [];
-      this.runtime.statusText = '正在准备页面控件';
+      this.runtime.statusText = '正在准备采集';
       this.runtime.currentCheckpoint = {
         version: 4,
         status: 'running',
@@ -2461,7 +2460,7 @@
         results: {},
         logs: [],
         startedAt: new Date().toISOString(),
-        statusText: '正在准备页面控件',
+        statusText: '正在准备采集',
         summaryText: ''
       };
       this.render();
@@ -2477,7 +2476,7 @@
       }
       this.runtime.running = true;
       this.runtime.stopping = false;
-      this.pushLog('检测到未完成任务，继续执行');
+      this.pushLog('检测到未完成内容，正在继续');
       await this.runFromCheckpoint();
     }
 
@@ -2496,10 +2495,10 @@
       checkpoint.dateList = dateList;
       const items = this.getCheckpointItems(checkpoint);
       if (!items.length) {
-        throw new Error('当前任务没有可采集的子品类');
+        throw new Error('当前选择下没有可采集内容');
       }
       if (!dateList.length) {
-        throw new Error('当前任务没有可采集的日期');
+        throw new Error('当前日期范围没有可采集内容');
       }
 
       if (checkpoint.phase === 'resume-qc') {
@@ -2510,7 +2509,7 @@
           if (cachedResult) {
             checkpoint.results[currentDate] = checkpoint.results[currentDate] || {};
             checkpoint.results[currentDate][item.key] = cachedResult;
-            this.pushLog(`${currentDate} ${this.describeItem(item)}：已复用本地缓存`);
+            this.pushLog(`${currentDate} ${this.describeItem(item)}：已使用已保存结果`);
             checkpoint.currentItemIndex += 1;
             if (checkpoint.currentItemIndex >= items.length) {
               checkpoint.currentDateIndex += 1;
@@ -2551,7 +2550,7 @@
         const cachedResult = this.getCachedResult(currentDate, item);
         if (cachedResult) {
           checkpoint.results[currentDate][item.key] = cachedResult;
-          this.pushLog(`${currentDate} ${this.describeItem(item)}：已复用本地缓存`);
+          this.pushLog(`${currentDate} ${this.describeItem(item)}：已使用已保存结果`);
           checkpoint.currentItemIndex += 1;
           if (checkpoint.currentItemIndex >= items.length) {
             checkpoint.currentDateIndex += 1;
@@ -2568,10 +2567,10 @@
         await this.runStandardizationForItem(currentDate, item);
 
         checkpoint.phase = 'resume-qc';
-        checkpoint.summaryText = `${currentDate} ${this.describeItem(item)}：等待刷新后采集质检`;
-        this.updateCheckpointStatus(`准备刷新页面继续 ${item.exportLabel}`, `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 等待刷新`);
+        checkpoint.summaryText = `${currentDate} ${this.describeItem(item)}：准备继续质检`;
+        this.updateCheckpointStatus(`正在继续 ${item.exportLabel}`, `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 下一步`);
         await this.saveCheckpoint();
-        this.pushLog(`${currentDate} ${this.describeItem(item)}：标准化已完成，刷新页面继续质检`);
+        this.pushLog(`${currentDate} ${this.describeItem(item)}：标准化已完成，正在继续质检`);
         window.location.reload();
         return;
       }
@@ -2661,7 +2660,7 @@
     async applyCategory(item) {
       const primary = getCategoryWrapper(0);
       if (!primary) {
-        throw new Error('未找到主品类选择器');
+        throw new Error('未找到品类选项');
       }
       await selectOption(primary, item.queryLabel);
       this.pushLog(`已选择品类：${this.describeItem(item)}`);
@@ -2670,7 +2669,7 @@
     async applySelectByLabel(label, value) {
       const wrapper = getSelectWrapperByLabel(label, 0);
       if (!wrapper) {
-        throw new Error(`未找到筛选项：${label}`);
+        throw new Error(`未找到筛选条件：${label}`);
       }
       await selectOption(wrapper, value);
     }
@@ -2682,7 +2681,7 @@
         ? checkpoint.dateList
         : buildDateList(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
       checkpoint.status = 'done';
-      checkpoint.statusText = '采集完成，下载按钮已就绪';
+      checkpoint.statusText = '采集完成，可以下载结果了';
       checkpoint.summaryText = `共完成 ${dateList.length} 天`;
       await this.saveCheckpoint();
 
@@ -2704,7 +2703,7 @@
       await this.clearCheckpoint();
       this.runtime.running = false;
       this.runtime.stopping = false;
-      this.runtime.statusText = '采集完成，点击下载 Excel';
+      this.runtime.statusText = '采集完成，可以下载结果了';
       this.render();
     }
 
@@ -2712,14 +2711,14 @@
       const message = error && error.message ? error.message : String(error);
       this.runtime.running = false;
       this.runtime.stopping = false;
-      const stopped = message === '任务已停止';
+      const stopped = message === '采集已结束';
       if (this.runtime.currentCheckpoint) {
         this.runtime.currentCheckpoint.status = stopped ? 'stopped' : 'error';
-        this.runtime.currentCheckpoint.statusText = stopped ? '任务已停止，可清除后重新开始' : `任务中断：${message}`;
+        this.runtime.currentCheckpoint.statusText = stopped ? '采集已结束，可以重新开始' : `采集遇到问题：${message}`;
         await this.saveCheckpoint();
       }
-      this.runtime.statusText = stopped ? '任务已停止，可清除后重新开始' : `任务中断：${message}`;
-      this.pushLog(stopped ? '任务已停止' : `错误：${message}`);
+      this.runtime.statusText = stopped ? '采集已结束，可以重新开始' : `采集遇到问题：${message}`;
+      this.pushLog(stopped ? '采集已结束' : `采集遇到问题：${message}`);
       this.render();
     }
 
