@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.26
+// @version      1.2.28
 // @description  在标准化系统页面按日期区间和编组子品类采集日报，并静默缓存到本地
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -24,7 +24,7 @@
   }
   window.__YSP_DAILY_REPORTER__ = true;
 
-  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.26';
+  const SCRIPT_VERSION = GM_info.script.version;
 
   const PANEL_STYLE = `
 #ysp-daily-panel-root {
@@ -394,6 +394,13 @@
   box-shadow: 0 14px 28px rgba(31, 95, 134, 0.2);
 }
 
+.ysp-daily-panel__button--danger {
+  background: linear-gradient(135deg, rgba(255, 245, 241, 0.96), rgba(255, 236, 231, 0.96));
+  color: #b3472f;
+  border: 1px solid rgba(194, 92, 64, 0.18);
+  box-shadow: 0 10px 20px rgba(194, 92, 64, 0.12);
+}
+
 .ysp-daily-panel__report {
   display: grid;
   gap: 12px;
@@ -666,7 +673,6 @@
     resultCache: 'yspDailyResultCacheV1'
   };
 
-  const FALLBACK_PREFIX = 'yspTmFallback:';
   const SESSION_KEY = 'yspDailySessionKey';
   const CHECKPOINT_PREFIX = 'yspDailyCheckpoint:';
   const MAX_LOGS = 50;
@@ -674,13 +680,7 @@
   const PAGE_READY_TIMEOUT = 60000;
 
   function injectPanelStyle() {
-    if (typeof GM_addStyle === 'function') {
-      GM_addStyle(PANEL_STYLE);
-      return;
-    }
-    const style = document.createElement('style');
-    style.textContent = PANEL_STYLE;
-    document.head.appendChild(style);
+    GM_addStyle(PANEL_STYLE);
   }
 
   function sleep(ms) {
@@ -822,18 +822,7 @@
     if (!token) {
       return null;
     }
-    if (CATEGORY_ENTRY_MAP.has(token)) {
-      return CATEGORY_ENTRY_MAP.get(token);
-    }
-    return CATEGORY_ENTRIES.find((entry) => {
-      return [
-        entry.key,
-        entry.label,
-        entry.exportLabel,
-        entry.queryLabel,
-        entry.subgroupLabel
-      ].includes(token);
-    }) || null;
+    return CATEGORY_ENTRY_MAP.get(token) || null;
   }
 
   function getSubgroupEntry(candidate) {
@@ -847,15 +836,7 @@
     if (!token) {
       return null;
     }
-    if (SUBGROUP_ENTRY_MAP.has(token)) {
-      return SUBGROUP_ENTRY_MAP.get(token);
-    }
-    return SUBGROUP_ENTRIES.find((entry) => {
-      return [
-        entry.id,
-        entry.label
-      ].includes(token);
-    }) || null;
+    return SUBGROUP_ENTRY_MAP.get(token) || null;
   }
 
   function normalizeSelectedKeys(rawValues) {
@@ -879,11 +860,6 @@
       const subgroupEntry = getSubgroupEntry(value);
       if (subgroupEntry) {
         matchedIds.push(subgroupEntry.id);
-        continue;
-      }
-      const categoryEntry = getCategoryEntry(value);
-      if (categoryEntry) {
-        matchedIds.push(categoryEntry.subgroupId);
       }
     }
     const lastMatchedId = matchedIds.length ? matchedIds[matchedIds.length - 1] : '';
@@ -928,8 +904,8 @@
   }
 
   function normalizeStoredResultRow(rawRow) {
-    const entry = getCategoryEntry(rawRow && (rawRow.key || rawRow.category || rawRow.label));
-    const base = createEmptyResult(entry || (rawRow && (rawRow.category || rawRow.label || rawRow.key)) || '');
+    const entry = getCategoryEntry(rawRow && rawRow.key);
+    const base = createEmptyResult(entry || '');
     if (!rawRow || typeof rawRow !== 'object') {
       return base;
     }
@@ -952,74 +928,40 @@
     return Boolean(result && result.collectionCompleted === true);
   }
 
-  function isStoredMetricRow(rawRow) {
-    return Boolean(
-      rawRow
-      && typeof rawRow === 'object'
-      && [
-        'inboundCount',
-        'stdPassCount',
-        'stdRejectCount',
-        'stdTotalCount',
-        'qcPassCount',
-        'qcRejectCount',
-        'qcTotalCount'
-      ].some((key) => key in rawRow)
-    );
-  }
-
   function normalizeStoredReport(report) {
-    if (!report || typeof report !== 'object') {
+    if (!report || typeof report !== 'object' || !Array.isArray(report.itemKeys) || !Array.isArray(report.rows)) {
       return null;
     }
 
-    const sourceKeys = normalizeSelectedKeys(
-      report.itemKeys || report.columns?.map((column) => column.key || column.label) || report.categories
-    );
+    const sourceKeys = normalizeSelectedKeys(report.itemKeys);
     const columns = buildReportColumns(getEntriesByKeys(sourceKeys));
-    const rawRows = Array.isArray(report.rows) ? report.rows : [];
     const normalizedRows = [];
 
-    if (rawRows.length && rawRows.every((row) => row && typeof row === 'object' && Array.isArray(row.results))) {
-      for (const rawRow of rawRows) {
-        if (!rawRow.date) {
-          continue;
-        }
-        const rowMap = new Map();
-        for (const result of rawRow.results) {
-          const normalized = normalizeStoredResultRow(result);
-          if (normalized.key) {
-            rowMap.set(normalized.key, normalized);
-          }
-        }
-        normalizedRows.push({
-          date: rawRow.date,
-          results: columns.map((column) => rowMap.get(column.key) || createEmptyResult(column.key))
-        });
+    for (const rawRow of report.rows) {
+      if (!rawRow || typeof rawRow !== 'object' || !rawRow.date || !Array.isArray(rawRow.results)) {
+        continue;
       }
-    } else {
       const rowMap = new Map();
-      for (const row of rawRows) {
-        const normalized = normalizeStoredResultRow(row);
+      for (const result of rawRow.results) {
+        const normalized = normalizeStoredResultRow(result);
         if (normalized.key) {
           rowMap.set(normalized.key, normalized);
         }
       }
-      const singleDate = report.date || report.startDate || '';
-      if (singleDate) {
-        normalizedRows.push({
-          date: singleDate,
-          results: columns.map((column) => rowMap.get(column.key) || createEmptyResult(column.key))
-        });
-      }
+      normalizedRows.push({
+        date: rawRow.date,
+        results: columns.map((column) => rowMap.get(column.key) || createEmptyResult(column.key))
+      });
     }
 
-    const startDate = report.startDate || (normalizedRows[0] && normalizedRows[0].date) || report.date || '';
-    const endDate = report.endDate || (normalizedRows.length ? normalizedRows[normalizedRows.length - 1].date : startDate) || startDate;
+    if (!report.startDate || !report.endDate || !normalizedRows.length) {
+      return null;
+    }
+
     return {
-      date: startDate,
-      startDate,
-      endDate,
+      startDate: report.startDate,
+      endDate: report.endDate,
+      itemKeys: sourceKeys,
       columns,
       rows: normalizedRows,
       generatedAt: report.generatedAt || new Date().toISOString()
@@ -1030,47 +972,33 @@
     if (!checkpoint || typeof checkpoint !== 'object') {
       return null;
     }
-    const groupIds = normalizeSelectedGroupIds(checkpoint.groupIds || checkpoint.itemKeys || checkpoint.categories);
-    const itemKeys = normalizeSelectedKeys(checkpoint.itemKeys || checkpoint.categories);
-    const startDate = checkpoint.startDate || checkpoint.date || '';
-    const endDate = checkpoint.endDate || checkpoint.date || '';
-    const dateList = Array.isArray(checkpoint.dateList) && checkpoint.dateList.length
-      ? checkpoint.dateList.filter(Boolean)
-      : buildDateList(startDate, endDate || startDate);
+    const groupIds = normalizeSelectedGroupIds(checkpoint.groupIds);
+    const itemKeys = normalizeSelectedKeys(checkpoint.itemKeys);
+    const startDate = checkpoint.startDate || '';
+    const endDate = checkpoint.endDate || '';
+    const dateList = Array.isArray(checkpoint.dateList) ? checkpoint.dateList.filter(Boolean) : [];
+    if (!startDate || !endDate || !groupIds.length || !itemKeys.length || !dateList.length) {
+      return null;
+    }
     const normalizedResults = {};
     if (checkpoint.results && typeof checkpoint.results === 'object') {
-      for (const [key, value] of Object.entries(checkpoint.results)) {
-        if (isStoredMetricRow(value)) {
-          const targetDate = dateList[0] || startDate;
-          const entry = getCategoryEntry(key) || getCategoryEntry(value && (value.key || value.category || value.label));
-          if (!targetDate || !entry) {
-            continue;
-          }
-          if (!normalizedResults[targetDate]) {
-            normalizedResults[targetDate] = {};
-          }
-          normalizedResults[targetDate][entry.key] = normalizeStoredResultRow({
-            ...value,
-            key: entry.key
-          });
+      for (const [date, dayResults] of Object.entries(checkpoint.results)) {
+        if (!dayResults || typeof dayResults !== 'object') {
           continue;
         }
-        if (!value || typeof value !== 'object') {
-          continue;
-        }
-        const dayResults = {};
-        for (const [rowKey, rowValue] of Object.entries(value)) {
-          const entry = getCategoryEntry(rowKey) || getCategoryEntry(rowValue && (rowValue.key || rowValue.category || rowValue.label));
-          if (!entry) {
-            continue;
-          }
-          dayResults[entry.key] = normalizeStoredResultRow({
+        const normalizedDayResults = {};
+        for (const [rowKey, rowValue] of Object.entries(dayResults)) {
+          const normalizedRow = normalizeStoredResultRow({
             ...rowValue,
-            key: entry.key
+            key: rowKey
           });
+          if (!normalizedRow.key) {
+            continue;
+          }
+          normalizedDayResults[normalizedRow.key] = normalizedRow;
         }
-        if (Object.keys(dayResults).length) {
-          normalizedResults[key] = dayResults;
+        if (Object.keys(normalizedDayResults).length) {
+          normalizedResults[date] = normalizedDayResults;
         }
       }
     }
@@ -1078,42 +1006,35 @@
       ...checkpoint,
       version: 4,
       startDate,
-      endDate: endDate || startDate,
+      endDate,
       dateList,
       groupIds,
       itemKeys,
       currentDateIndex: Number.isFinite(Number(checkpoint.currentDateIndex)) ? Number(checkpoint.currentDateIndex) : 0,
-      currentItemIndex: Number.isFinite(Number(checkpoint.currentItemIndex)) ? Number(checkpoint.currentItemIndex) : Number(checkpoint.currentIndex || 0),
+      currentItemIndex: Number.isFinite(Number(checkpoint.currentItemIndex)) ? Number(checkpoint.currentItemIndex) : 0,
       results: normalizedResults
     };
   }
 
   function normalizeStoredResultCache(cache) {
-    const source = cache && typeof cache === 'object' && cache.rows && typeof cache.rows === 'object'
-      ? cache.rows
-      : cache;
-    if (!source || typeof source !== 'object') {
+    if (!cache || typeof cache !== 'object') {
       return {};
     }
     const normalizedCache = {};
-    for (const [date, dayResults] of Object.entries(source)) {
+    for (const [date, dayResults] of Object.entries(cache)) {
       if (!dayResults || typeof dayResults !== 'object') {
         continue;
       }
       const normalizedDayResults = {};
       for (const [rowKey, rowValue] of Object.entries(dayResults)) {
-        const entry = getCategoryEntry(rowKey) || getCategoryEntry(rowValue && (rowValue.key || rowValue.category || rowValue.label));
-        if (!entry) {
-          continue;
-        }
         const normalizedRow = normalizeStoredResultRow({
           ...rowValue,
-          key: entry.key
+          key: rowKey
         });
-        if (!normalizedRow.collectionCompleted) {
+        if (!normalizedRow.key || !normalizedRow.collectionCompleted) {
           continue;
         }
-        normalizedDayResults[entry.key] = normalizedRow;
+        normalizedDayResults[normalizedRow.key] = normalizedRow;
       }
       if (Object.keys(normalizedDayResults).length) {
         normalizedCache[date] = normalizedDayResults;
@@ -1138,13 +1059,12 @@
     if (!normalizedReport) {
       return null;
     }
-    const rows = (normalizedReport.rows || []).filter((row) => !isDateExpiredByQuarter(row.date, cutoffDateString));
+    const rows = normalizedReport.rows.filter((row) => !isDateExpiredByQuarter(row.date, cutoffDateString));
     if (!rows.length) {
       return null;
     }
     return {
       ...normalizedReport,
-      date: rows[0].date,
       startDate: rows[0].date,
       endDate: rows[rows.length - 1].date,
       rows
@@ -1195,41 +1115,17 @@
     return `${CHECKPOINT_PREFIX}${getSessionToken()}`;
   }
 
-  function readFallbackValue(key, fallback) {
-    const raw = localStorage.getItem(`${FALLBACK_PREFIX}${key}`);
-    if (raw === null) {
-      return fallback;
-    }
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      return fallback;
-    }
-  }
-
-  function writeFallbackValue(key, value) {
-    localStorage.setItem(`${FALLBACK_PREFIX}${key}`, JSON.stringify(value));
-  }
-
-  function getEventWindow(target) {
-    return (target && target.ownerDocument && target.ownerDocument.defaultView) || window;
-  }
-
-  function createMouseEvent(target, type, init) {
-    const eventWindow = getEventWindow(target);
-    const MouseEventCtor = eventWindow.MouseEvent || MouseEvent;
-    return new MouseEventCtor(type, {
+  function createMouseEvent(type, init) {
+    return new MouseEvent(type, {
       bubbles: true,
       cancelable: true,
-      view: eventWindow,
+      view: window,
       ...(init || {})
     });
   }
 
-  function createKeyboardEvent(target, type, init) {
-    const eventWindow = getEventWindow(target);
-    const KeyboardEventCtor = eventWindow.KeyboardEvent || KeyboardEvent;
-    return new KeyboardEventCtor(type, {
+  function createKeyboardEvent(type, init) {
+    return new KeyboardEvent(type, {
       bubbles: true,
       ...(init || {})
     });
@@ -1239,22 +1135,14 @@
     const keyList = Array.isArray(keys) ? keys : [keys];
     const result = {};
     for (const key of keyList) {
-      if (typeof GM_getValue === 'function') {
-        result[key] = GM_getValue(key);
-      } else {
-        result[key] = readFallbackValue(key, undefined);
-      }
+      result[key] = GM_getValue(key);
     }
     return result;
   }
 
   async function storageSet(values) {
     for (const [key, value] of Object.entries(values)) {
-      if (typeof GM_setValue === 'function') {
-        GM_setValue(key, value);
-      } else {
-        writeFallbackValue(key, value);
-      }
+      GM_setValue(key, value);
     }
   }
 
@@ -1269,11 +1157,7 @@
   async function storageRemove(keys) {
     const keyList = Array.isArray(keys) ? keys : [keys];
     for (const key of keyList) {
-      if (typeof GM_deleteValue === 'function') {
-        GM_deleteValue(key);
-      } else {
-        localStorage.removeItem(`${FALLBACK_PREFIX}${key}`);
-      }
+      GM_deleteValue(key);
     }
   }
 
@@ -1281,7 +1165,7 @@
     element.scrollIntoView({ block: 'center', inline: 'center' });
     const events = ['mouseover', 'mousedown', 'mouseup', 'click'];
     for (const type of events) {
-      element.dispatchEvent(createMouseEvent(element, type));
+      element.dispatchEvent(createMouseEvent(type));
     }
   }
 
@@ -1406,10 +1290,10 @@
     await sleep(120);
     inputs[1].focus();
     setNativeInputValue(inputs[1], endValue);
-    inputs[1].dispatchEvent(createKeyboardEvent(inputs[1], 'keydown', { key: 'Enter' }));
-    inputs[1].dispatchEvent(createKeyboardEvent(inputs[1], 'keyup', { key: 'Enter' }));
+    inputs[1].dispatchEvent(createKeyboardEvent('keydown', { key: 'Enter' }));
+    inputs[1].dispatchEvent(createKeyboardEvent('keyup', { key: 'Enter' }));
     inputs[1].blur();
-    document.body.dispatchEvent(createMouseEvent(document.body, 'click'));
+    document.body.dispatchEvent(createMouseEvent('click'));
     await waitFor(() => inputs[0].value === startValue && inputs[1].value === endValue, 4000, `${labelText} 未写入成功`);
   }
 
@@ -1515,7 +1399,7 @@
     if (!report) {
       return '';
     }
-    const startDate = report.startDate || report.date || '';
+    const startDate = report.startDate || '';
     const endDate = report.endDate || startDate;
     if (!startDate) {
       return '';
@@ -1536,9 +1420,9 @@
   }
 
   function getReportFileToken(report) {
-    const startDate = report.startDate || report.date || '';
+    const startDate = report.startDate || '';
     const endDate = report.endDate || startDate;
-    const entries = getEntriesByKeys(report && report.itemKeys);
+    const entries = getEntriesByKeys(report.itemKeys);
     const labels = entries.length
       ? entries.map((entry) => entry.label)
       : (Array.isArray(report && report.columns) ? report.columns.map((column) => sanitizeFilenamePart(column.label || column.exportLabel || '')) : []).filter(Boolean);
@@ -1975,7 +1859,7 @@
       ]);
       const rawSettings = unwrapCacheEnvelope(state[STORAGE_KEYS.settings]) || {};
       const maxDate = getYesterdayDateString();
-      const startDate = rawSettings.startDate || rawSettings.date || '';
+      const startDate = rawSettings.startDate || '';
       let endDate = rawSettings.endDate || '';
       const normalizedStartDate = startDate && startDate <= maxDate ? startDate : '';
       if (!normalizedStartDate) {
@@ -1990,7 +1874,7 @@
       this.savedSettings = {
         startDate: normalizedStartDate,
         endDate,
-        groupIds: normalizeSelectedGroupIds(rawSettings.groupIds || rawSettings.itemKeys || rawSettings.categories)
+        groupIds: normalizeSelectedGroupIds(rawSettings.groupIds)
       };
       this.runtime.lastReport = null;
       this.runtime.resultCache = normalizeStoredResultCache(unwrapCacheEnvelope(state[STORAGE_KEYS.resultCache]));
@@ -2058,6 +1942,7 @@
               <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
                 <div class="ysp-daily-panel__actions">
                   <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start">开始采集</button>
+                  <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清除数据</button>
                 </div>
               </div>
               <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
@@ -2081,6 +1966,7 @@
       this.refs.categories = root.querySelector('[data-role="categories"]');
       this.refs.report = root.querySelector('[data-role="report"]');
       this.refs.start = root.querySelector('[data-role="start"]');
+      this.refs.clearData = root.querySelector('[data-role="clear-data"]');
       this.refs.minimize = root.querySelector('[data-role="minimize"]');
       this.refs.dock = root.querySelector('[data-role="dock"]');
 
@@ -2158,6 +2044,14 @@
       document.addEventListener('touchstart', this.handleOutsideInteraction, true);
       this.refs.start.addEventListener('click', () => {
         this.startNewJob().catch((error) => this.failJob(error));
+      });
+      this.refs.clearData.addEventListener('click', () => {
+        this.clearAllCachedData().catch((error) => {
+          const message = error && error.message ? error.message : String(error);
+          this.runtime.statusText = `清除失败：${message}`;
+          this.pushLog(`清除失败：${message}`);
+          this.render();
+        });
       });
       this.refs.backdrop.addEventListener('click', () => {
         if (!this.runtime.minimized) {
@@ -2375,6 +2269,7 @@
       this.refs.startDate.disabled = this.runtime.running;
       this.refs.endDate.disabled = this.runtime.running;
       this.refs.start.disabled = this.runtime.running;
+      this.refs.clearData.disabled = this.runtime.running;
       this.refs.start.textContent = this.runtime.running ? '采集中' : '开始采集';
       this.refs.minimize.disabled = false;
       for (const groupCard of this.refs.categories.querySelectorAll('[data-group-card]')) {
@@ -2420,6 +2315,36 @@
 
     async clearLastCollectedData() {
       this.runtime.lastReport = null;
+    }
+
+    async clearAllCachedData() {
+      if (this.runtime.running) {
+        return;
+      }
+      const confirmed = window.confirm('清除数据后，日期设置、采集结果、断点进度和已保存数据都会被移除。确认清除吗？');
+      if (!confirmed) {
+        return;
+      }
+      await storageRemove([
+        STORAGE_KEYS.settings,
+        STORAGE_KEYS.report,
+        STORAGE_KEYS.resultCache,
+        this.runtime.activeSessionKey
+      ]);
+      window.sessionStorage.removeItem(SESSION_KEY);
+      this.runtime.activeSessionKey = getCheckpointStorageKey();
+      this.savedSettings = { startDate: '', endDate: '', groupIds: [] };
+      this.runtime.running = false;
+      this.runtime.stopping = false;
+      this.runtime.currentCheckpoint = null;
+      this.runtime.lastReport = null;
+      this.runtime.resultCache = {};
+      this.runtime.logs = [];
+      this.runtime.statusText = '缓存已清除';
+      this.refs.startDate.value = '';
+      this.refs.endDate.value = '';
+      this.pushLog('已清除所有缓存数据');
+      this.render();
     }
 
     getCachedResult(date, item) {
@@ -2851,9 +2776,6 @@
     const methods = ['pushState', 'replaceState'];
     for (const method of methods) {
       const original = history[method];
-      if (typeof original !== 'function') {
-        continue;
-      }
       history[method] = function wrappedHistoryMethod(...args) {
         const result = original.apply(this, args);
         window.dispatchEvent(new Event('ysp:location-change'));
@@ -2881,7 +2803,7 @@
         queueBootstrap();
       }
     });
-    observer.observe(document.documentElement || document, { childList: true, subtree: true });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
   installRouteHooks();
