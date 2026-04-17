@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.20
+// @version      2.1.21
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
 // @match        https://std.video.cloud.cctv.com/*
+// @match        https://m.yangshipin.cn/*
+// @match        https://w.yangshipin.cn/*
 // @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp-dev/ysp-daily-report.user.js
 // @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp-dev/ysp-daily-report.user.js
 // @grant        GM_getValue
@@ -15,6 +17,7 @@
 // @grant        GM_info
 // @grant        GM_xmlhttpRequest
 // @connect      yangshipin.cn
+// @connect      playvv.yangshipin.cn
 // @connect      dashscope.aliyuncs.com
 // @run-at       document-idle
 // ==/UserScript==
@@ -1113,7 +1116,9 @@
     secondaryQcWorkerRequestPrefix: 'yspWorkbenchSecondaryQcWorkerRequest:',
     secondaryQcWorkerResponsePrefix: 'yspWorkbenchSecondaryQcWorkerResponse:',
     secondaryQcWorkerProgressPrefix: 'yspWorkbenchSecondaryQcWorkerProgress:',
-    secondaryQcWorkerStopPrefix: 'yspWorkbenchSecondaryQcWorkerStop:'
+    secondaryQcWorkerStopPrefix: 'yspWorkbenchSecondaryQcWorkerStop:',
+    secondaryQcMediaWorkerRequestPrefix: 'yspWorkbenchSecondaryQcMediaWorkerRequest:',
+    secondaryQcMediaWorkerResponsePrefix: 'yspWorkbenchSecondaryQcMediaWorkerResponse:'
   };
 
   const SESSION_KEY = 'yspWorkbenchSessionKey';
@@ -1126,8 +1131,9 @@
   const WORKER_START_TIMEOUT = 15000;
   const WORKER_PROGRESS_STALL_TIMEOUT = 90 * 1000;
   const WORKER_RESPONSE_TIMEOUT = 8 * 60 * 1000;
+  const MEDIA_WORKER_RESPONSE_TIMEOUT = 90 * 1000;
   const DASHSCOPE_CHAT_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
-  const YANGSHIPIN_VIDEO_URL = 'https://yangshipin.cn/video/home';
+  const YANGSHIPIN_VIDEO_WORKER_URL = 'https://w.yangshipin.cn/video';
 
   function injectPanelStyle() {
     GM_addStyle(PANEL_STYLE);
@@ -1672,6 +1678,12 @@
       return false;
     }
     return isListPage() || isDetailPage();
+  }
+
+  function isYangshipinMediaWorkerPage() {
+    return ['m.yangshipin.cn', 'w.yangshipin.cn'].includes(location.hostname)
+      && location.pathname.startsWith('/video')
+      && Boolean(getSecondaryQcMediaWorkerRequestIdFromLocation());
   }
 
   function isListPage() {
@@ -2597,9 +2609,22 @@
     return `${STORAGE_KEYS.secondaryQcWorkerStopPrefix}${requestId}`;
   }
 
+  function buildSecondaryQcMediaWorkerRequestKey(requestId) {
+    return `${STORAGE_KEYS.secondaryQcMediaWorkerRequestPrefix}${requestId}`;
+  }
+
+  function buildSecondaryQcMediaWorkerResponseKey(requestId) {
+    return `${STORAGE_KEYS.secondaryQcMediaWorkerResponsePrefix}${requestId}`;
+  }
+
   function getSecondaryQcWorkerRequestIdFromLocation() {
     const params = new URLSearchParams(location.search);
     return normalizeText(params.get('ysp_qc_request'));
+  }
+
+  function getSecondaryQcMediaWorkerRequestIdFromLocation() {
+    const params = new URLSearchParams(location.search);
+    return normalizeText(params.get('ysp_media_request'));
   }
 
   async function updateSecondaryQcWorkerProgress(requestId, text) {
@@ -2973,42 +2998,6 @@
         }, 200);
       }
     });
-  }
-
-  async function fetchYangshipinPageHtml(videoVid, cancelCheck) {
-    const query = new URLSearchParams({ vid: videoVid });
-    const response = await gmXmlhttpRequestPromise({
-      method: 'GET',
-      url: `${YANGSHIPIN_VIDEO_URL}?${query.toString()}`,
-      cancelCheck
-    });
-    if (!response || response.status >= 400) {
-      throw new Error(`央视频页面获取失败：${response ? response.status : '未知状态'}`);
-    }
-    return response.responseText || '';
-  }
-
-  function extractYangshipinVideoUrl(htmlText) {
-    const source = String(htmlText || '');
-    const matchers = [
-      /<video[^>]+src=["']([^"']+\.mp4[^"']*)["']/i,
-      /"src"\s*:\s*"([^"]+\.mp4[^"]*)"/i,
-      /(https?:\\\/\\\/[^"'\\]+\.mp4[^"'\\]*)/i,
-      /(https?:\/\/[^"'<>]+\.mp4[^"'<>]*)/i
-    ];
-    for (const matcher of matchers) {
-      const matched = source.match(matcher);
-      if (!matched || !matched[1]) {
-        continue;
-      }
-      const decoded = decodeHtmlEntities(matched[1])
-        .replace(/\\u0026/g, '&')
-        .replace(/\\\//g, '/');
-      if (/\.mp4/i.test(decoded)) {
-        return decoded;
-      }
-    }
-    throw new Error('未在央视频页面中找到视频地址');
   }
 
   async function requestDashscopeText(apiKey, payload, isStream, cancelCheck) {
@@ -4477,6 +4466,110 @@
     throw new Error('等待详情页结果超时');
   }
 
+  async function waitForSecondaryQcMediaWorkerResponse(requestId, timeoutMs, cancelCheck) {
+    const responseKey = buildSecondaryQcMediaWorkerResponseKey(requestId);
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      if (cancelCheck && cancelCheck()) {
+        throw new Error('采集已结束');
+      }
+      const storage = await storageGet(responseKey);
+      const response = unwrapCacheEnvelope(storage[responseKey]);
+      if (response && typeof response === 'object') {
+        return response;
+      }
+      await sleep(400);
+    }
+    throw new Error('等待视频地址结果超时');
+  }
+
+  function getYangshipinPlayInfoScriptUrl() {
+    const script = Array.from(document.querySelectorAll('script[src]')).find((element) => {
+      const src = normalizeText(element.getAttribute('src'));
+      return /playvv\.yangshipin\.cn\/playvinfo/i.test(src);
+    });
+    return script ? decodeHtmlEntities(script.getAttribute('src') || '') : '';
+  }
+
+  async function waitForYangshipinPlayInfoScriptUrl(cancelCheck) {
+    return waitFor(() => {
+      const scriptUrl = getYangshipinPlayInfoScriptUrl();
+      return scriptUrl ? scriptUrl : '';
+    }, DETAIL_PAGE_TIMEOUT, '未获取到央视频播放信息', { cancelCheck });
+  }
+
+  function parseYangshipinJsonpPayload(text) {
+    const source = normalizeText(text);
+    const firstParen = source.indexOf('(');
+    const lastParen = source.lastIndexOf(')');
+    if (firstParen < 0 || lastParen <= firstParen) {
+      throw new Error('央视频播放信息格式异常');
+    }
+    return JSON.parse(source.slice(firstParen + 1, lastParen));
+  }
+
+  function buildYangshipinVideoUrlFromPlayInfo(playInfo) {
+    if (!playInfo || normalizeText(playInfo.s) !== 'o') {
+      throw new Error(normalizeText(playInfo && playInfo.errinfo) || '央视频播放信息返回失败');
+    }
+    const videoList = playInfo && playInfo.vl && Array.isArray(playInfo.vl.vi) ? playInfo.vl.vi : [];
+    const videoInfo = videoList.find((item) => item && item.fvkey && item.fn && item.ul && Array.isArray(item.ul.ui) && item.ul.ui.length) || null;
+    if (!videoInfo) {
+      throw new Error('央视频播放信息里没有视频地址');
+    }
+    const baseUrl = normalizeText(videoInfo.ul.ui[0] && videoInfo.ul.ui[0].url);
+    const fileName = normalizeText(videoInfo.fn);
+    const vkey = normalizeText(videoInfo.fvkey);
+    if (!baseUrl || !fileName || !vkey) {
+      throw new Error('央视频播放信息不完整');
+    }
+    return `${baseUrl}${fileName}?vkey=${vkey}`;
+  }
+
+  async function fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck) {
+    const requestId = createRuntimeToken('ysp-media');
+    const requestKey = buildSecondaryQcMediaWorkerRequestKey(requestId);
+    const responseKey = buildSecondaryQcMediaWorkerResponseKey(requestId);
+    const mediaUrl = `${YANGSHIPIN_VIDEO_WORKER_URL}?type=0&vid=${encodeURIComponent(videoVid)}&ysp_media_request=${encodeURIComponent(requestId)}`;
+
+    await storageRemove(responseKey);
+    await storageSetCached({
+      [requestKey]: {
+        requestId,
+        videoVid,
+        createdAt: new Date().toISOString()
+      }
+    });
+
+    const openedWindow = window.open(mediaUrl, '_blank');
+    if (!openedWindow) {
+      const anchor = document.createElement('a');
+      anchor.href = mediaUrl;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.click();
+    }
+
+    let response = null;
+    try {
+      response = await waitForSecondaryQcMediaWorkerResponse(requestId, MEDIA_WORKER_RESPONSE_TIMEOUT, cancelCheck);
+    } finally {
+      await storageRemove([requestKey, responseKey]);
+    }
+
+    if (!response) {
+      throw new Error('未收到视频地址结果');
+    }
+    if (response.status === 'error') {
+      throw new Error(response.error || '获取视频地址失败');
+    }
+    const videoUrl = normalizeText(response.videoUrl);
+    if (!videoUrl) {
+      throw new Error('视频地址为空');
+    }
+    return videoUrl;
+  }
+
   function getListBodyScrollElement() {
     const selectors = [
       '.vxe-table--body-wrapper',
@@ -4606,6 +4699,69 @@
     }, 300);
   }
 
+  async function runSecondaryQcMediaWorker(requestId) {
+    const requestKey = buildSecondaryQcMediaWorkerRequestKey(requestId);
+    const responseKey = buildSecondaryQcMediaWorkerResponseKey(requestId);
+    let responsePayload = null;
+    try {
+      const requestState = await storageGet(requestKey);
+      const request = unwrapCacheEnvelope(requestState[requestKey]);
+      if (!request || typeof request !== 'object') {
+        throw new Error('未找到视频地址任务上下文');
+      }
+
+      const videoVid = normalizeText(request.videoVid || new URLSearchParams(location.search).get('vid'));
+      if (!videoVid) {
+        throw new Error('未提供视频 VID');
+      }
+
+      const scriptUrl = await waitForYangshipinPlayInfoScriptUrl();
+      const normalizedScriptUrl = scriptUrl.startsWith('//')
+        ? `https:${scriptUrl}`
+        : scriptUrl;
+      const playInfoResponse = await gmXmlhttpRequestPromise({
+        method: 'GET',
+        url: normalizedScriptUrl,
+        headers: {
+          Referer: location.href
+        },
+        timeout: DASHSCOPE_REQUEST_TIMEOUT
+      });
+      if (!playInfoResponse || playInfoResponse.status >= 400) {
+        throw new Error(`央视频播放信息获取失败：${playInfoResponse ? playInfoResponse.status : '未知状态'}`);
+      }
+      const playInfo = parseYangshipinJsonpPayload(playInfoResponse.responseText || '');
+      const videoUrl = buildYangshipinVideoUrlFromPlayInfo(playInfo);
+
+      responsePayload = {
+        status: 'completed',
+        requestId,
+        videoVid,
+        videoUrl,
+        completedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      responsePayload = {
+        status: 'error',
+        requestId,
+        error: error && error.message ? error.message : String(error),
+        completedAt: new Date().toISOString()
+      };
+    } finally {
+      const latestRequestState = await storageGet(requestKey);
+      const latestRequest = unwrapCacheEnvelope(latestRequestState[requestKey]);
+      if (!latestRequest || typeof latestRequest !== 'object') {
+        await closeCurrentWorkerPage();
+        return;
+      }
+      await storageSetCached({
+        [responseKey]: responsePayload
+      });
+      await storageRemove(requestKey);
+      await closeCurrentWorkerPage();
+    }
+  }
+
   async function runSecondaryQcDetailWorker(requestId) {
     const requestKey = buildSecondaryQcWorkerRequestKey(requestId);
     const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
@@ -4647,8 +4803,8 @@
         throw new Error('未读取到顶部 VID');
       }
 
-      const yangshipinHtml = await fetchYangshipinPageHtml(videoVid, cancelCheck);
-      const videoUrl = extractYangshipinVideoUrl(yangshipinHtml);
+      await reportProgress('正在获取视频地址');
+      const videoUrl = await fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck);
       await ensureSecondaryQcWorkerNotStopped(requestId);
 
       await reportProgress('正在理解视频内容');
@@ -6378,6 +6534,7 @@
   let booting = false;
   let lastHref = location.href;
   let activeWorkerRequestId = '';
+  let activeMediaWorkerRequestId = '';
 
   async function ensureListWorkbenchMounted() {
     if (!isListPage()) {
@@ -6412,12 +6569,29 @@
     await runSecondaryQcDetailWorker(requestId);
   }
 
+  async function ensureYangshipinMediaWorkerHandled() {
+    if (!isYangshipinMediaWorkerPage()) {
+      activeMediaWorkerRequestId = '';
+      return;
+    }
+    const requestId = getSecondaryQcMediaWorkerRequestIdFromLocation();
+    if (!requestId || requestId === activeMediaWorkerRequestId) {
+      return;
+    }
+    activeMediaWorkerRequestId = requestId;
+    await runSecondaryQcMediaWorker(requestId);
+  }
+
   async function runBootstrap() {
     if (booting) {
       return;
     }
     booting = true;
     try {
+      if (isYangshipinMediaWorkerPage()) {
+        await ensureYangshipinMediaWorkerHandled();
+        return;
+      }
       if (!isSupportedPage()) {
         if (app) {
           app.destroy();
