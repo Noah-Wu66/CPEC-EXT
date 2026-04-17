@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.11
+// @version      2.1.12
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -2830,12 +2830,14 @@
   }
 
   function getVisiblePager() {
-    return Array.from(document.querySelectorAll('.vxe-pager')).find(isVisible) || null;
+    return Array.from(document.querySelectorAll('.vxe-pager, .el-pagination')).find(isVisible) || null;
   }
 
   function getPagerGotoInput() {
     const pager = getVisiblePager();
-    return pager ? pager.querySelector('.vxe-pager--goto input, .vxe-pager--goto .vxe-input--inner') : null;
+    return pager
+      ? pager.querySelector('.vxe-pager--goto input, .vxe-pager--goto .vxe-input--inner, .el-pagination__jump input, .el-pagination__jump .el-input__inner, .el-pagination__editor input, .el-pagination__editor .el-input__inner')
+      : null;
   }
 
   function getPagerCurrentPage() {
@@ -2843,7 +2845,7 @@
     if (!pager) {
       return null;
     }
-    const activeButton = pager.querySelector('.vxe-pager--num-btn.is--active, .vxe-pager--num-btn.is-active');
+    const activeButton = pager.querySelector('.vxe-pager--num-btn.is--active, .vxe-pager--num-btn.is-active, .el-pager li.is-active, .el-pager li.number.is-active');
     if (activeButton) {
       return Number(normalizeText(activeButton.textContent));
     }
@@ -2859,19 +2861,20 @@
     if (!pager) {
       return null;
     }
-    const sizeInput = pager.querySelector('.vxe-pager--sizes input, .vxe-pager--sizes .vxe-input--inner');
-    const text = normalizeText(sizeInput ? sizeInput.value : pager.textContent);
+    const sizeInput = pager.querySelector('.vxe-pager--sizes input, .vxe-pager--sizes .vxe-input--inner, .el-pagination__sizes input, .el-pagination__sizes .el-input__inner');
+    const selectedText = pager.querySelector('.el-pagination__sizes .el-select__selected-item, .el-pagination__sizes .el-select__placeholder, .el-pagination__sizes .el-select span');
+    const text = normalizeText(sizeInput ? sizeInput.value : (selectedText ? selectedText.textContent : pager.textContent));
     const matched = text.match(/(\d+)\s*条\/页/);
     return matched ? Number(matched[1]) : null;
   }
 
   function getPagerSizeWrapper() {
     const pager = getVisiblePager();
-    return pager ? pager.querySelector('.vxe-pager--sizes') : null;
+    return pager ? pager.querySelector('.vxe-pager--sizes, .el-pagination__sizes') : null;
   }
 
   function getVisibleVxeSelectPanels() {
-    return Array.from(document.querySelectorAll('.vxe-select--panel, .vxe-pulldown--panel'))
+    return Array.from(document.querySelectorAll('.vxe-select--panel, .vxe-pulldown--panel, .el-select__popper, .el-select-dropdown'))
       .filter((element) => isVisible(element));
   }
 
@@ -2879,7 +2882,7 @@
     if (!panel) {
       return [];
     }
-    const options = Array.from(panel.querySelectorAll('.vxe-select-option--item, .vxe-select-option, [role="option"], li'))
+    const options = Array.from(panel.querySelectorAll('.vxe-select-option--item, .vxe-select-option, .el-select-dropdown__item, [role="option"], li'))
       .filter((element) => isVisible(element));
     if (options.length) {
       return options;
@@ -2902,7 +2905,14 @@
   }
 
   function isDisabledVxeSelectOption(element) {
-    return !!(element && (element.classList.contains('is--disabled') || element.classList.contains('is-disabled')));
+    return !!(
+      element
+      && (
+        element.classList.contains('is--disabled')
+        || element.classList.contains('is-disabled')
+        || element.getAttribute('aria-disabled') === 'true'
+      )
+    );
   }
 
   function getPagerSizeOptions(panel) {
@@ -2934,7 +2944,7 @@
     if (!fallback) {
       return null;
     }
-    const clickable = fallback.closest('.vxe-select-option--item, .vxe-select-option, [role="option"], li');
+    const clickable = fallback.closest('.vxe-select-option--item, .vxe-select-option, .el-select-dropdown__item, [role="option"], li');
     if (!clickable) {
       return fallback;
     }
@@ -2946,7 +2956,7 @@
 
   async function openPagerSizeDropdown() {
     const wrapper = await waitFor(() => getPagerSizeWrapper(), 5000, '未找到每页条数设置');
-    const trigger = wrapper.querySelector('.vxe-input--wrapper, input, .vxe-input') || wrapper;
+    const trigger = wrapper.querySelector('.el-select__wrapper, .el-input__wrapper, .vxe-input--wrapper, input, .vxe-input, .el-select') || wrapper;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       triggerMouseClick(trigger);
       const panel = await waitFor(() => {
@@ -2995,8 +3005,8 @@
     if (!pager) {
       return null;
     }
-    const total = pager.querySelector('.vxe-pager--total');
-    const matched = normalizeText(total ? total.textContent : pager.textContent).match(/共\s*([\d,]+)\s*条记录/);
+    const total = pager.querySelector('.vxe-pager--total, .el-pagination__total');
+    const matched = normalizeText(total ? total.textContent : pager.textContent).match(/共\s*([\d,]+)\s*条(?:记录)?/);
     return matched ? Number(matched[1].replace(/,/g, '')) : null;
   }
 
