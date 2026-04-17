@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.18
+// @version      2.1.19
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -189,7 +189,8 @@
   gap: 16px;
   padding: 18px 18px 20px;
   overflow: hidden;
-  min-height: 540px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .ysp-daily-panel__main,
@@ -198,6 +199,15 @@
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+}
+
+.ysp-daily-panel__main {
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ysp-daily-panel__side {
+  overflow: hidden;
 }
 
 .ysp-daily-panel__section {
@@ -373,6 +383,11 @@
   gap: 10px;
 }
 
+.ysp-daily-panel__side > .ysp-daily-panel__actions {
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+
 .ysp-daily-panel__button {
   min-height: 48px;
   padding: 10px 12px;
@@ -422,6 +437,7 @@
   line-height: 1.5;
   color: #35516a;
   box-shadow: 0 8px 18px rgba(22, 51, 78, 0.08);
+  flex: 0 0 auto;
 }
 
 .ysp-daily-panel__status-head {
@@ -446,6 +462,43 @@
   border-top: 1px solid rgba(22, 51, 78, 0.08);
   font-size: 12px;
   color: #6b7a90;
+}
+
+.ysp-daily-panel__result-card {
+  flex: 0 0 auto;
+}
+
+.ysp-daily-panel__download-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ysp-daily-panel__log-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ysp-daily-panel__log-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ysp-daily-panel__log-entry {
+  padding: 8px 0;
+  border-bottom: 1px dashed #d8e2ee;
+  color: #40556f;
+  font-size: 12px;
+  line-height: 1.65;
+  word-break: break-all;
 }
 
 .ysp-daily-panel__report {
@@ -556,8 +609,24 @@
 
   .ysp-daily-panel__body {
     grid-template-columns: 1fr;
-    min-height: auto;
     overflow-y: auto;
+  }
+
+  .ysp-daily-panel__main,
+  .ysp-daily-panel__side {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .ysp-daily-panel__download-list,
+  .ysp-daily-panel__log-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .ysp-daily-panel__log-card {
+    min-height: auto;
   }
 
   .ysp-daily-panel__date-grid {
@@ -1043,7 +1112,8 @@
     secondaryQcWorkerActiveRequest: 'yspWorkbenchSecondaryQcWorkerActiveRequestV1',
     secondaryQcWorkerRequestPrefix: 'yspWorkbenchSecondaryQcWorkerRequest:',
     secondaryQcWorkerResponsePrefix: 'yspWorkbenchSecondaryQcWorkerResponse:',
-    secondaryQcWorkerProgressPrefix: 'yspWorkbenchSecondaryQcWorkerProgress:'
+    secondaryQcWorkerProgressPrefix: 'yspWorkbenchSecondaryQcWorkerProgress:',
+    secondaryQcWorkerStopPrefix: 'yspWorkbenchSecondaryQcWorkerStop:'
   };
 
   const SESSION_KEY = 'yspWorkbenchSessionKey';
@@ -1073,6 +1143,29 @@
     mediaStates: new Map(),
     mediaHandlers: new Map()
   };
+
+  const JOB_ABORT_CONTROLLER = {
+    listJobGeneration: 0,
+    listJobStoppedGeneration: 0,
+    secondaryQcWorkerStopped: false,
+    secondaryQcWorkerRequestId: '',
+    secondaryQcWorkerStopWatcher: 0
+  };
+
+  function beginListJobAbortSession() {
+    JOB_ABORT_CONTROLLER.listJobGeneration += 1;
+    return JOB_ABORT_CONTROLLER.listJobGeneration;
+  }
+
+  function requestListJobAbort(token) {
+    const normalizedToken = Number(token) || JOB_ABORT_CONTROLLER.listJobGeneration || 1;
+    JOB_ABORT_CONTROLLER.listJobStoppedGeneration = Math.max(JOB_ABORT_CONTROLLER.listJobStoppedGeneration, normalizedToken);
+  }
+
+  function isListJobAbortRequested(token) {
+    const normalizedToken = Number(token) || 0;
+    return normalizedToken > 0 && JOB_ABORT_CONTROLLER.listJobStoppedGeneration >= normalizedToken;
+  }
 
   function getMediaElementsFromNode(node) {
     if (!(node instanceof Element)) {
@@ -1660,9 +1753,14 @@
     }
   }
 
-  async function waitFor(checker, timeoutMs, message) {
+  async function waitFor(checker, timeoutMs, message, options) {
+    const cancelCheck = options && typeof options.cancelCheck === 'function' ? options.cancelCheck : null;
+    const cancelMessage = normalizeText(options && options.cancelMessage) || '采集已结束';
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
+      if (cancelCheck && cancelCheck()) {
+        throw new Error(cancelMessage);
+      }
       const result = checker();
       if (result) {
         return result;
@@ -1726,7 +1824,7 @@
     return Array.from(dropdown.querySelectorAll('.el-select-dropdown__item')).filter(isVisible);
   }
 
-  async function openDropdownForOption(wrapper, optionText) {
+  async function openDropdownForOption(wrapper, optionText, cancelCheck) {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       triggerMouseClick(wrapper);
       const dropdown = await waitFor(() => {
@@ -1734,7 +1832,7 @@
         return candidates.find((candidate) => {
           return getDropdownOptions(candidate).some((option) => normalizeText(option.textContent) === optionText);
         });
-      }, 4000, `未找到可选内容：${optionText}`);
+      }, 4000, `未找到可选内容：${optionText}`, { cancelCheck });
       if (dropdown) {
         return dropdown;
       }
@@ -1742,11 +1840,11 @@
     throw new Error(`无法展开选项：${optionText}`);
   }
 
-  async function selectOption(wrapper, optionText) {
+  async function selectOption(wrapper, optionText, cancelCheck) {
     if (getSelectedTextFromWrapper(wrapper) === optionText) {
       return;
     }
-    const dropdown = await openDropdownForOption(wrapper, optionText);
+    const dropdown = await openDropdownForOption(wrapper, optionText, cancelCheck);
     const option = getDropdownOptions(dropdown).find((item) => {
       return normalizeText(item.textContent) === optionText && !item.classList.contains('is-disabled');
     });
@@ -1754,7 +1852,7 @@
       throw new Error(`未找到选项：${optionText}`);
     }
     triggerMouseClick(option);
-    await waitFor(() => getSelectedTextFromWrapper(wrapper) === optionText, 4000, `选项未生效：${optionText}`);
+    await waitFor(() => getSelectedTextFromWrapper(wrapper) === optionText, 4000, `选项未生效：${optionText}`, { cancelCheck });
   }
 
   function setNativeInputValue(input, value) {
@@ -1764,7 +1862,7 @@
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  async function setDateRange(labelText, startDate, endDate) {
+  async function setDateRange(labelText, startDate, endDate, cancelCheck) {
     const item = getFormItemByLabel(labelText);
     if (!item) {
       throw new Error(`未找到日期设置：${labelText}`);
@@ -1785,7 +1883,7 @@
     inputs[1].dispatchEvent(createKeyboardEvent('keyup', { key: 'Enter' }));
     inputs[1].blur();
     document.body.dispatchEvent(createMouseEvent('click'));
-    await waitFor(() => inputs[0].value === startValue && inputs[1].value === endValue, 4000, `${labelText} 未写入成功`);
+    await waitFor(() => inputs[0].value === startValue && inputs[1].value === endValue, 4000, `${labelText} 未写入成功`, { cancelCheck });
   }
 
   function getVisibleLoadingMask() {
@@ -1804,7 +1902,7 @@
     return null;
   }
 
-  async function clickQueryAndReadCount() {
+  async function clickQueryAndReadCount(cancelCheck) {
     const queryButton = findButtonByText('查询');
     if (!queryButton) {
       throw new Error('页面还在加载，请稍后再试');
@@ -1814,6 +1912,9 @@
     let stableValue = null;
     let stableSince = 0;
     while (Date.now() - startedAt < QUERY_TIMEOUT) {
+      if (cancelCheck && cancelCheck()) {
+        throw new Error('采集已结束');
+      }
       const loading = getVisibleLoadingMask();
       const current = getTopResultCount();
       const enoughWait = Date.now() - startedAt > 800;
@@ -1844,14 +1945,14 @@
     await sleep(600);
   }
 
-  async function waitForPageReady() {
+  async function waitForPageReady(cancelCheck) {
     await waitFor(() => {
       return findButtonByText('查询')
         && findButtonByText('重置')
         && getCategoryWrapper(0)
         && getFormItemByLabel('创建时间')
         && getFormItemByLabel('修改时间');
-    }, PAGE_READY_TIMEOUT, '页面还在加载，请稍后再试');
+    }, PAGE_READY_TIMEOUT, '页面还在加载，请稍后再试', { cancelCheck });
   }
 
   function buildOrderedResults(items, results) {
@@ -2492,6 +2593,10 @@
     return `${STORAGE_KEYS.secondaryQcWorkerProgressPrefix}${requestId}`;
   }
 
+  function buildSecondaryQcWorkerStopKey(requestId) {
+    return `${STORAGE_KEYS.secondaryQcWorkerStopPrefix}${requestId}`;
+  }
+
   function getSecondaryQcWorkerRequestIdFromLocation() {
     const params = new URLSearchParams(location.search);
     return normalizeText(params.get('ysp_qc_request'));
@@ -2523,6 +2628,69 @@
       return;
     }
     await storageRemove(STORAGE_KEYS.secondaryQcWorkerActiveRequest);
+  }
+
+  async function requestSecondaryQcWorkerStop(requestId) {
+    const normalizedRequestId = normalizeText(requestId);
+    if (!normalizedRequestId) {
+      return;
+    }
+    await storageSetCached({
+      [buildSecondaryQcWorkerStopKey(normalizedRequestId)]: {
+        requestId: normalizedRequestId,
+        stoppedAt: new Date().toISOString()
+      }
+    });
+  }
+
+  async function clearSecondaryQcWorkerStopSignal(requestId) {
+    const normalizedRequestId = normalizeText(requestId);
+    if (!normalizedRequestId) {
+      return;
+    }
+    await storageRemove(buildSecondaryQcWorkerStopKey(normalizedRequestId));
+  }
+
+  async function syncSecondaryQcWorkerStopState(requestId) {
+    const normalizedRequestId = normalizeText(requestId);
+    if (!normalizedRequestId) {
+      return false;
+    }
+    const state = await storageGet(buildSecondaryQcWorkerStopKey(normalizedRequestId));
+    const stopSignal = unwrapCacheEnvelope(state[buildSecondaryQcWorkerStopKey(normalizedRequestId)]);
+    const stopped = Boolean(stopSignal && typeof stopSignal === 'object');
+    JOB_ABORT_CONTROLLER.secondaryQcWorkerStopped = stopped;
+    return stopped;
+  }
+
+  function stopSecondaryQcWorkerAbortWatcher() {
+    if (JOB_ABORT_CONTROLLER.secondaryQcWorkerStopWatcher) {
+      window.clearInterval(JOB_ABORT_CONTROLLER.secondaryQcWorkerStopWatcher);
+      JOB_ABORT_CONTROLLER.secondaryQcWorkerStopWatcher = 0;
+    }
+    JOB_ABORT_CONTROLLER.secondaryQcWorkerStopped = false;
+    JOB_ABORT_CONTROLLER.secondaryQcWorkerRequestId = '';
+  }
+
+  function startSecondaryQcWorkerAbortWatcher(requestId) {
+    stopSecondaryQcWorkerAbortWatcher();
+    const normalizedRequestId = normalizeText(requestId);
+    if (!normalizedRequestId) {
+      return;
+    }
+    JOB_ABORT_CONTROLLER.secondaryQcWorkerRequestId = normalizedRequestId;
+    JOB_ABORT_CONTROLLER.secondaryQcWorkerStopWatcher = window.setInterval(() => {
+      syncSecondaryQcWorkerStopState(normalizedRequestId).catch(() => undefined);
+    }, 250);
+  }
+
+  async function ensureSecondaryQcWorkerNotStopped(requestId) {
+    if (JOB_ABORT_CONTROLLER.secondaryQcWorkerRequestId === normalizeText(requestId) && JOB_ABORT_CONTROLLER.secondaryQcWorkerStopped) {
+      throw new Error('采集已结束');
+    }
+    if (await syncSecondaryQcWorkerStopState(requestId)) {
+      throw new Error('采集已结束');
+    }
   }
 
   function decodeHtmlEntities(text) {
@@ -2752,30 +2920,67 @@
 
   function gmXmlhttpRequestPromise(options) {
     return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
+      const requestOptions = options || {};
+      const { cancelCheck: rawCancelCheck, ...xhrOptions } = requestOptions;
+      const cancelCheck = typeof rawCancelCheck === 'function' ? rawCancelCheck : null;
+      let settled = false;
+      let cancelTimer = 0;
+      const finish = (callback, payload) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (cancelTimer) {
+          window.clearInterval(cancelTimer);
+          cancelTimer = 0;
+        }
+        callback(payload);
+      };
+      const request = GM_xmlhttpRequest({
         timeout: 60000,
-        ...(options || {}),
+        ...xhrOptions,
         onload: (response) => {
-          resolve(response);
+          finish(resolve, response);
         },
         onerror: (error) => {
-          reject(new Error(error && error.error ? error.error : '请求失败'));
+          finish(reject, new Error(error && error.error ? error.error : '请求失败'));
         },
         ontimeout: () => {
-          reject(new Error('请求超时'));
+          finish(reject, new Error('请求超时'));
         },
         onabort: () => {
-          reject(new Error('请求已取消'));
+          finish(reject, new Error('请求已取消'));
         }
       });
+      if (cancelCheck && request && typeof request.abort === 'function') {
+        if (cancelCheck()) {
+          request.abort();
+          return;
+        }
+        cancelTimer = window.setInterval(() => {
+          if (settled) {
+            return;
+          }
+          let shouldCancel = false;
+          try {
+            shouldCancel = cancelCheck();
+          } catch (error) {
+            shouldCancel = false;
+          }
+          if (shouldCancel) {
+            request.abort();
+          }
+        }, 200);
+      }
     });
   }
 
-  async function fetchYangshipinPageHtml(videoVid) {
+  async function fetchYangshipinPageHtml(videoVid, cancelCheck) {
     const query = new URLSearchParams({ vid: videoVid });
     const response = await gmXmlhttpRequestPromise({
       method: 'GET',
-      url: `${YANGSHIPIN_VIDEO_URL}?${query.toString()}`
+      url: `${YANGSHIPIN_VIDEO_URL}?${query.toString()}`,
+      cancelCheck
     });
     if (!response || response.status >= 400) {
       throw new Error(`央视频页面获取失败：${response ? response.status : '未知状态'}`);
@@ -2806,7 +3011,7 @@
     throw new Error('未在央视频页面中找到视频地址');
   }
 
-  async function requestDashscopeText(apiKey, payload, isStream) {
+  async function requestDashscopeText(apiKey, payload, isStream, cancelCheck) {
     const response = await gmXmlhttpRequestPromise({
       method: 'POST',
       url: DASHSCOPE_CHAT_URL,
@@ -2815,7 +3020,8 @@
         'Content-Type': 'application/json'
       },
       data: JSON.stringify(payload),
-      timeout: DASHSCOPE_REQUEST_TIMEOUT
+      timeout: DASHSCOPE_REQUEST_TIMEOUT,
+      cancelCheck
     });
     if (!response || response.status >= 400) {
       throw new Error(`模型请求失败：${response ? response.status : '未知状态'}`);
@@ -2825,7 +3031,7 @@
       : extractTextFromDashscopeJson(response.responseText || '');
   }
 
-  async function requestOmniVideoSummary(apiKey, videoUrl, promptText) {
+  async function requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck) {
     const payload = {
       model: 'qwen3.5-omni-plus',
       messages: [
@@ -2849,10 +3055,10 @@
       },
       modalities: ['text']
     };
-    return requestDashscopeText(apiKey, payload, true);
+    return requestDashscopeText(apiKey, payload, true, cancelCheck);
   }
 
-  async function requestTagJudge(apiKey, promptText) {
+  async function requestTagJudge(apiKey, promptText, cancelCheck) {
     const payload = {
       model: 'qwen3.6-plus',
       messages: [
@@ -2862,7 +3068,7 @@
         }
       ]
     };
-    return requestDashscopeText(apiKey, payload, false);
+    return requestDashscopeText(apiKey, payload, false, cancelCheck);
   }
 
   function getVisiblePager() {
@@ -2969,12 +3175,12 @@
     });
   }
 
-  async function waitForDetailPageReady() {
+  async function waitForDetailPageReady(cancelCheck) {
     await waitFor(() => {
       return findButtonByText('退出任务操作')
         && document.querySelector('.main-footer')
         && document.querySelector('.article-header');
-    }, DETAIL_PAGE_TIMEOUT, '详情页还在加载，请稍后再试');
+    }, DETAIL_PAGE_TIMEOUT, '详情页还在加载，请稍后再试', { cancelCheck });
   }
 
   function getDetailFormItemByLabel(labelText) {
@@ -3035,7 +3241,7 @@
       }) || null;
   }
 
-  async function searchAvailableTagOptions(keyword) {
+  async function searchAvailableTagOptions(keyword, cancelCheck) {
     const input = getDetailTagSearchInput();
     if (!input) {
       throw new Error('未找到成品标签输入框');
@@ -3043,7 +3249,7 @@
     input.focus();
     setNativeInputValue(input, keyword);
     await sleep(250);
-    const dropdown = await waitFor(() => getVisibleTagDropdown(), 3000, `未收到标签检索结果：${keyword}`);
+    const dropdown = await waitFor(() => getVisibleTagDropdown(), 3000, `未收到标签检索结果：${keyword}`, { cancelCheck });
     const options = Array.from(dropdown.querySelectorAll('.el-select-dropdown__item'))
       .filter(isVisible)
       .map((item) => normalizeText(item.textContent))
@@ -4196,7 +4402,7 @@
     return [];
   }
 
-  async function waitForSecondaryQcWorkerResponse(requestId, timeoutMs, onProgress) {
+  async function waitForSecondaryQcWorkerResponse(requestId, timeoutMs, onProgress, cancelCheck) {
     const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
     const progressKey = buildSecondaryQcWorkerProgressKey(requestId);
     const startedAt = Date.now();
@@ -4204,6 +4410,9 @@
     let lastActiveAt = startedAt;
     let hasProgress = false;
     while (Date.now() - startedAt < timeoutMs) {
+      if (cancelCheck && cancelCheck()) {
+        throw new Error('采集已结束');
+      }
       const storage = await storageGet([responseKey, progressKey]);
       const progress = unwrapCacheEnvelope(storage[progressKey]);
       if (progress && typeof progress === 'object') {
@@ -4255,9 +4464,12 @@
     return null;
   }
 
-  async function waitForListTableSettled() {
+  async function waitForListTableSettled(cancelCheck) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < QUERY_TIMEOUT) {
+      if (cancelCheck && cancelCheck()) {
+        throw new Error('采集已结束');
+      }
       if (!getVisibleLoadingMask()) {
         await sleep(250);
         if (!getVisibleLoadingMask()) {
@@ -4269,11 +4481,11 @@
     throw new Error('列表加载超时');
   }
 
-  async function gotoListPageNumber(pageNumber) {
+  async function gotoListPageNumber(pageNumber, cancelCheck) {
     const targetPage = Math.max(1, Number(pageNumber) || 1);
-    const input = await waitFor(() => getPagerGotoInput(), 5000, '未找到分页跳转输入框');
+    const input = await waitFor(() => getPagerGotoInput(), 5000, '未找到分页跳转输入框', { cancelCheck });
     if (getPagerCurrentPage() === targetPage) {
-      await waitForListTableSettled();
+      await waitForListTableSettled(cancelCheck);
       return;
     }
     input.focus();
@@ -4283,8 +4495,8 @@
     input.dispatchEvent(createKeyboardEvent('keypress', { key: 'Enter', code: 'Enter' }));
     input.blur();
     document.body.dispatchEvent(createMouseEvent('click'));
-    await waitFor(() => getPagerCurrentPage() === targetPage, 15000, `跳转到第 ${targetPage} 页失败`);
-    await waitForListTableSettled();
+    await waitFor(() => getPagerCurrentPage() === targetPage, 15000, `跳转到第 ${targetPage} 页失败`, { cancelCheck });
+    await waitForListTableSettled(cancelCheck);
   }
 
   async function scrollListBodyTo(scrollTop) {
@@ -4366,6 +4578,7 @@
   async function runSecondaryQcDetailWorker(requestId) {
     const requestKey = buildSecondaryQcWorkerRequestKey(requestId);
     const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
+    const cancelCheck = () => JOB_ABORT_CONTROLLER.secondaryQcWorkerStopped;
     const reportProgress = async (text) => {
       mountWorkerBadge(text);
       try {
@@ -4374,18 +4587,21 @@
         // ignore progress sync errors
       }
     };
+    startSecondaryQcWorkerAbortWatcher(requestId);
     enforcePageMuted();
     await reportProgress('详情页已打开，正在加载内容');
     let responsePayload = null;
     try {
+      await ensureSecondaryQcWorkerNotStopped(requestId);
       const requestState = await storageGet(requestKey);
       const request = unwrapCacheEnvelope(requestState[requestKey]);
       if (!request || typeof request !== 'object') {
         throw new Error('未找到二次质检任务上下文');
       }
 
-      await waitForDetailPageReady();
+      await waitForDetailPageReady(cancelCheck);
       await reportProgress('正在读取视频信息');
+      await ensureSecondaryQcWorkerNotStopped(requestId);
 
       const apiKey = normalizeText(request.apiKey);
       if (!apiKey) {
@@ -4398,18 +4614,21 @@
         throw new Error('未读取到顶部 VID');
       }
 
-      const yangshipinHtml = await fetchYangshipinPageHtml(videoVid);
+      const yangshipinHtml = await fetchYangshipinPageHtml(videoVid, cancelCheck);
       const videoUrl = extractYangshipinVideoUrl(yangshipinHtml);
+      await ensureSecondaryQcWorkerNotStopped(requestId);
 
       await reportProgress('正在理解视频内容');
-      const videoSummary = await requestOmniVideoSummary(apiKey, videoUrl, buildOmniVideoSummaryPrompt());
+      const videoSummary = await requestOmniVideoSummary(apiKey, videoUrl, buildOmniVideoSummaryPrompt(), cancelCheck);
+      await ensureSecondaryQcWorkerNotStopped(requestId);
 
       await reportProgress('正在分析成品标签');
       const selectedTags = getDetailSelectedTags();
-      const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(videoSummary, selectedTags));
+      const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(videoSummary, selectedTags), cancelCheck);
       const firstJudge = JSON.parse(extractFirstJsonObject(firstJudgeRaw));
       const wrongTags = normalizeTagArray(firstJudge.wrong_tags);
       const missingCandidates = normalizeTagArray(firstJudge.missing_tags_candidate);
+      await ensureSecondaryQcWorkerNotStopped(requestId);
 
       await reportProgress(
         missingCandidates.length
@@ -4423,17 +4642,22 @@
           continue;
         }
         await reportProgress(`正在验证候选标签（${candidateIndex + 1}/${missingCandidates.length}）`);
+        await ensureSecondaryQcWorkerNotStopped(requestId);
         try {
-          const options = await searchAvailableTagOptions(candidate);
+          const options = await searchAvailableTagOptions(candidate, cancelCheck);
           searchResults.push({
             keyword: candidate,
             options
           });
         } catch (error) {
+          const message = error && error.message ? error.message : String(error);
+          if (message === '采集已结束') {
+            throw error;
+          }
           searchResults.push({
             keyword: candidate,
             options: [],
-            error: error && error.message ? error.message : String(error)
+            error: message
           });
         }
       }
@@ -4451,7 +4675,8 @@
             summary: normalizeText(firstJudge.summary)
           },
           searchResults
-        )
+        ),
+        cancelCheck
       );
       const finalJudge = JSON.parse(extractFirstJsonObject(finalJudgeRaw));
       const missingTagsActionable = normalizeTagArray(finalJudge.missing_tags_actionable);
@@ -4493,6 +4718,8 @@
       });
       await storageRemove(requestKey);
       await clearSecondaryQcWorkerActiveRequest(requestId);
+      await clearSecondaryQcWorkerStopSignal(requestId);
+      stopSecondaryQcWorkerAbortWatcher();
       try {
         await clickDetailExitButton();
       } catch (error) {
@@ -4514,6 +4741,7 @@
         minimized: false,
         running: false,
         jobType: '',
+        listJobAbortToken: 0,
         stopping: false,
         pauseRequested: false,
         statusText: '等待开始',
@@ -4600,6 +4828,7 @@
       this.runtime.statusText = '等待开始';
       this.runtime.running = false;
       this.runtime.jobType = '';
+      this.runtime.listJobAbortToken = 0;
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
 
@@ -4624,6 +4853,7 @@
         const active = candidates[0];
         this.runtime.running = true;
         this.runtime.jobType = active.jobType;
+        this.runtime.listJobAbortToken = beginListJobAbortSession();
         this.runtime.logs = Array.isArray(active.checkpoint.logs) ? active.checkpoint.logs.slice(0, MAX_LOGS) : [];
         this.runtime.statusText = active.checkpoint.statusText || '检测到未完成任务，正在准备继续';
         this.runtime.minimized = false;
@@ -4735,13 +4965,13 @@
                 <div class="ysp-daily-panel__toolbar">
                   <span class="ysp-daily-panel__label">下载中心</span>
                 </div>
-                <div data-role="downloads"></div>
+                <div class="ysp-daily-panel__download-list" data-role="downloads"></div>
               </div>
               <div class="ysp-daily-panel__log-card">
                 <div class="ysp-daily-panel__toolbar">
                   <span class="ysp-daily-panel__label">运行日志</span>
                 </div>
-                <div data-role="logs"></div>
+                <div class="ysp-daily-panel__log-list" data-role="logs"></div>
               </div>
               <div class="ysp-daily-panel__actions">
                 <button type="button" class="ysp-daily-panel__button" data-role="pause">暂停任务</button>
@@ -4833,6 +5063,11 @@
         return this.runtime.secondaryQc.checkpoint;
       }
       return null;
+    }
+
+    getListAbortCheck() {
+      const abortToken = this.runtime.listJobAbortToken;
+      return () => isListJobAbortRequested(abortToken);
     }
 
     getPausedTaskMeta() {
@@ -5021,7 +5256,9 @@
       this.refs.resume.addEventListener('click', () => {
         this.resumePausedJob().catch((error) => this.failJob(error));
       });
-      this.refs.stop.addEventListener('click', () => this.stopCurrentJob());
+      this.refs.stop.addEventListener('click', () => {
+        this.stopCurrentJob().catch((error) => this.failJob(error));
+      });
       this.refs.clearData.addEventListener('click', () => {
         this.clearAllCachedData().catch((error) => this.failJob(error));
       });
@@ -5211,7 +5448,7 @@
         return;
       }
       this.refs.logs.innerHTML = this.runtime.logs
-        .map((log) => `<div style="padding: 8px 0; border-bottom: 1px dashed #d8e2ee; color: #40556f;">${escapeXml(log)}</div>`)
+        .map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(log)}</div>`)
         .join('');
     }
 
@@ -5272,6 +5509,9 @@
     }
 
     ensureNotStopped() {
+      if (isListJobAbortRequested(this.runtime.listJobAbortToken)) {
+        throw new Error('采集已结束');
+      }
       if (this.runtime.stopping) {
         throw new Error('采集已结束');
       }
@@ -5328,7 +5568,8 @@
         clearKeys.push(
           buildSecondaryQcWorkerRequestKey(activeRequestId),
           buildSecondaryQcWorkerResponseKey(activeRequestId),
-          buildSecondaryQcWorkerProgressKey(activeRequestId)
+          buildSecondaryQcWorkerProgressKey(activeRequestId),
+          buildSecondaryQcWorkerStopKey(activeRequestId)
         );
       }
       const confirmed = window.confirm('这只会清除工作台本地缓存、结果和任务进度，不会清空已保存的日期和 API Key。确认清除吗？');
@@ -5356,14 +5597,34 @@
       this.render();
     }
 
-    stopCurrentJob() {
+    async stopCurrentJob() {
       if (!this.runtime.running) {
         return;
       }
+      const jobType = this.runtime.jobType;
+      const checkpoint = this.getActiveCheckpoint();
+      const stoppedStatusText = '采集已结束，可以重新开始';
+      requestListJobAbort(this.runtime.listJobAbortToken);
       this.runtime.stopping = true;
       this.runtime.pauseRequested = false;
-      this.runtime.statusText = '正在结束当前任务';
-      this.pushLog('正在结束当前任务');
+      this.runtime.statusText = stoppedStatusText;
+      this.pushLog('采集已结束');
+      if (checkpoint) {
+        checkpoint.status = 'stopped';
+        checkpoint.statusText = stoppedStatusText;
+        await this.saveCheckpoint(jobType);
+      }
+      if (jobType === 'secondaryQc') {
+        const activeRequestState = await storageGet(STORAGE_KEYS.secondaryQcWorkerActiveRequest);
+        const activeRequestId = normalizeText(unwrapCacheEnvelope(activeRequestState[STORAGE_KEYS.secondaryQcWorkerActiveRequest]));
+        if (activeRequestId) {
+          await requestSecondaryQcWorkerStop(activeRequestId);
+        }
+      }
+      this.runtime.running = false;
+      this.runtime.jobType = '';
+      this.runtime.stopping = false;
+      this.runtime.pauseRequested = false;
       this.render();
     }
 
@@ -5382,6 +5643,7 @@
       if (this.runtime.running) {
         return;
       }
+      this.runtime.listJobAbortToken = beginListJobAbortSession();
       const pausedTask = this.getPausedTaskMeta();
       if (!pausedTask) {
         throw new Error('当前没有可继续的暂停任务');
@@ -5457,6 +5719,7 @@
       if (this.runtime.running) {
         return;
       }
+      this.runtime.listJobAbortToken = beginListJobAbortSession();
       const startDate = this.settings.daily.startDate;
       const endDate = this.settings.daily.endDate || startDate;
       const maxDate = getYesterdayDateString();
@@ -5510,8 +5773,9 @@
       await this.runDailyFromCheckpoint();
     }
 
-    async runDailyFromCheckpoint() {
-      await waitForPageReady();
+    async runDailyFromCheckpoint(cancelCheck) {
+      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
+      await waitForPageReady(activeCancelCheck);
       const checkpoint = this.runtime.daily.checkpoint;
       if (!checkpoint || checkpoint.status !== 'running') {
         this.runtime.running = false;
@@ -5544,13 +5808,13 @@
             }
             checkpoint.phase = 'std';
             await this.saveCheckpoint('daily');
-            return this.runDailyFromCheckpoint();
+            return this.runDailyFromCheckpoint(activeCancelCheck);
           }
           this.updateCheckpointStatus(
             `正在继续 ${item.exportLabel}`,
             `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 质检`
           );
-          await this.runDailyQualityCheckForItem(currentDate, item);
+          await this.runDailyQualityCheckForItem(currentDate, item, activeCancelCheck);
           checkpoint.currentItemIndex += 1;
           if (checkpoint.currentItemIndex >= items.length) {
             checkpoint.currentDateIndex += 1;
@@ -5593,7 +5857,7 @@
           `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 标准化`
         );
         await this.saveCheckpoint('daily');
-        await this.runDailyStandardizationForItem(currentDate, item);
+        await this.runDailyStandardizationForItem(currentDate, item, activeCancelCheck);
 
         checkpoint.phase = 'resume-qc';
         this.updateCheckpointStatus(
@@ -5609,26 +5873,27 @@
       await this.completeDailyJob();
     }
 
-    async runDailyStandardizationForItem(date, item) {
+    async runDailyStandardizationForItem(date, item, cancelCheck) {
       this.ensureNotStopped();
+      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
       const checkpoint = this.runtime.daily.checkpoint;
       const result = checkpoint.results[date][item.key] || createEmptyResult(item);
       const range = buildDateRange(date);
 
       await clickResetButton();
-      await this.applyCategory(item);
-      await setDateRange('创建时间', range.start, range.end);
+      await this.applyCategory(item, activeCancelCheck);
+      await setDateRange('创建时间', range.start, range.end, activeCancelCheck);
 
       this.pushLog(`${date} ${this.describeItem(item)}：读取入库量`);
-      result.inboundCount = await clickQueryAndReadCount();
+      result.inboundCount = await clickQueryAndReadCount(activeCancelCheck);
       this.pushLog(`${date} ${this.describeItem(item)}：入库量 ${result.inboundCount}`);
 
-      await this.applySelectByLabel('标准化状态', '标准化通过');
-      result.stdPassCount = await clickQueryAndReadCount();
+      await this.applySelectByLabel('标准化状态', '标准化通过', activeCancelCheck);
+      result.stdPassCount = await clickQueryAndReadCount(activeCancelCheck);
       this.pushLog(`${date} ${this.describeItem(item)}：标准化通过 ${result.stdPassCount}`);
 
-      await this.applySelectByLabel('标准化状态', '标准化拒绝');
-      result.stdRejectCount = await clickQueryAndReadCount();
+      await this.applySelectByLabel('标准化状态', '标准化拒绝', activeCancelCheck);
+      result.stdRejectCount = await clickQueryAndReadCount(activeCancelCheck);
       result.stdTotalCount = result.stdPassCount + result.stdRejectCount;
       result.stdRejectRate = calculateRatio(result.stdRejectCount, result.stdTotalCount);
       this.pushLog(`${date} ${this.describeItem(item)}：标准化拒绝 ${result.stdRejectCount}`);
@@ -5646,22 +5911,23 @@
       await this.saveCheckpoint('daily');
     }
 
-    async runDailyQualityCheckForItem(date, item) {
+    async runDailyQualityCheckForItem(date, item, cancelCheck) {
       this.ensureNotStopped();
+      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
       const checkpoint = this.runtime.daily.checkpoint;
       const result = checkpoint.results[date][item.key] || createEmptyResult(item);
       const range = buildDateRange(date);
 
       await clickResetButton();
-      await this.applyCategory(item);
-      await setDateRange('修改时间', range.start, range.end);
+      await this.applyCategory(item, activeCancelCheck);
+      await setDateRange('修改时间', range.start, range.end, activeCancelCheck);
 
-      await this.applySelectByLabel('质检状态', '质检通过');
-      result.qcPassCount = await clickQueryAndReadCount();
+      await this.applySelectByLabel('质检状态', '质检通过', activeCancelCheck);
+      result.qcPassCount = await clickQueryAndReadCount(activeCancelCheck);
       this.pushLog(`${date} ${this.describeItem(item)}：质检通过 ${result.qcPassCount}`);
 
-      await this.applySelectByLabel('质检状态', '质检拒绝');
-      result.qcRejectCount = await clickQueryAndReadCount();
+      await this.applySelectByLabel('质检状态', '质检拒绝', activeCancelCheck);
+      result.qcRejectCount = await clickQueryAndReadCount(activeCancelCheck);
       result.qcTotalCount = result.qcPassCount + result.qcRejectCount;
       result.qcRejectRate = calculateRatio(result.qcRejectCount, result.qcTotalCount);
       this.pushLog(`${date} ${this.describeItem(item)}：质检拒绝 ${result.qcRejectCount}`);
@@ -5712,6 +5978,7 @@
       if (this.runtime.running) {
         return;
       }
+      this.runtime.listJobAbortToken = beginListJobAbortSession();
       if (!isListPage()) {
         throw new Error('二次质检只能在标准化列表页启动');
       }
@@ -5776,8 +6043,9 @@
       await this.runSecondaryQcFromCheckpoint();
     }
 
-    async runSecondaryQcFromCheckpoint() {
-      await waitForPageReady();
+    async runSecondaryQcFromCheckpoint(cancelCheck) {
+      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
+      await waitForPageReady(activeCancelCheck);
       const checkpoint = this.runtime.secondaryQc.checkpoint;
       if (!checkpoint || checkpoint.status !== 'running') {
         this.runtime.running = false;
@@ -5814,7 +6082,7 @@
           `${itemIndex + 1}/${items.length} · 本品类 ${itemRecordedCount}/${itemTargetCount} · 总计 ${checkpoint.rows.length}/${checkpoint.targetCount}`
         );
         await this.saveCheckpoint('secondaryQc');
-        await this.processSecondaryQcItem(item, itemIndex);
+        await this.processSecondaryQcItem(item, itemIndex, activeCancelCheck);
         checkpoint.currentItemIndex += 1;
         await this.saveCheckpoint('secondaryQc');
       }
@@ -5822,8 +6090,9 @@
       await this.completeSecondaryQcJob();
     }
 
-    async processSecondaryQcItem(item, itemIndex) {
+    async processSecondaryQcItem(item, itemIndex, cancelCheck) {
       const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
       const range = buildDatePeriodRange(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
       const itemTargetCount = checkpoint.itemTargetCounts[itemIndex] || 0;
       const itemRecordedCount = checkpoint.itemRecordedCounts[itemIndex] || 0;
@@ -5832,11 +6101,11 @@
       }
 
       await clickResetButton();
-      await this.applyCategory(item);
-      await setDateRange('创建时间', range.start, range.end);
-      await this.applySelectByLabel('标准化状态', '标准化通过');
+      await this.applyCategory(item, activeCancelCheck);
+      await setDateRange('创建时间', range.start, range.end, activeCancelCheck);
+      await this.applySelectByLabel('标准化状态', '标准化通过', activeCancelCheck);
 
-      const queryCount = await clickQueryAndReadCount();
+      const queryCount = await clickQueryAndReadCount(activeCancelCheck);
       if (!queryCount) {
         this.pushLog(`${this.describeItem(item)}：当前筛选下没有数据`);
         return;
@@ -5847,20 +6116,20 @@
       const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
       this.pushLog(`${this.describeItem(item)}：命中 ${totalRecords} 条，本品类目标 ${itemTargetCount} 条，共 ${totalPages} 页，开始从最后一页倒序扫描`);
 
-      await gotoListPageNumber(totalPages);
+      await gotoListPageNumber(totalPages, activeCancelCheck);
 
       for (let pageNumber = totalPages; pageNumber >= 1; pageNumber -= 1) {
         if ((checkpoint.itemRecordedCounts[itemIndex] || 0) >= itemTargetCount || checkpoint.rows.length >= checkpoint.targetCount) {
           return;
         }
         if (getPagerCurrentPage() !== pageNumber) {
-          await gotoListPageNumber(pageNumber);
+          await gotoListPageNumber(pageNumber, activeCancelCheck);
         }
-        await this.scanCurrentSecondaryQcPage(item, itemIndex, pageNumber, totalPages);
+        await this.scanCurrentSecondaryQcPage(item, itemIndex, pageNumber, totalPages, activeCancelCheck);
       }
     }
 
-    async scanCurrentSecondaryQcPage(item, itemIndex, pageNumber, totalPages) {
+    async scanCurrentSecondaryQcPage(item, itemIndex, pageNumber, totalPages, cancelCheck) {
       const checkpoint = this.runtime.secondaryQc.checkpoint;
       const itemTargetCount = checkpoint.itemTargetCounts[itemIndex] || 0;
       const localSeen = new Set();
@@ -5883,7 +6152,7 @@
           localSeen.add(row.taskId);
           checkpoint.processedTaskIds.push(row.taskId);
           await this.saveCheckpoint('secondaryQc');
-          await this.handleSecondaryQcRow(item, itemIndex, row, pageNumber, totalPages);
+          await this.handleSecondaryQcRow(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
         }
 
         if (!body) {
@@ -5899,8 +6168,9 @@
       }
     }
 
-    async handleSecondaryQcRow(item, itemIndex, row, pageNumber, totalPages) {
+    async handleSecondaryQcRow(item, itemIndex, row, pageNumber, totalPages, cancelCheck) {
       const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
       const apiKey = normalizeText(this.settings.secrets.dashscopeApiKey);
       const requestId = createRuntimeToken('qc');
       const requestKey = buildSecondaryQcWorkerRequestKey(requestId);
@@ -5934,16 +6204,24 @@
         }
 
         let lastProgressText = '';
-        response = await waitForSecondaryQcWorkerResponse(requestId, WORKER_RESPONSE_TIMEOUT, (progress) => {
-          const progressText = normalizeText(progress && progress.text);
-          if (!progressText || progressText === lastProgressText) {
-            return;
-          }
-          lastProgressText = progressText;
-          this.pushLog(`${row.taskId}：${progressText}`);
-        });
+        response = await waitForSecondaryQcWorkerResponse(
+          requestId,
+          WORKER_RESPONSE_TIMEOUT,
+          (progress) => {
+            const progressText = normalizeText(progress && progress.text);
+            if (!progressText || progressText === lastProgressText) {
+              return;
+            }
+            lastProgressText = progressText;
+            this.pushLog(`${row.taskId}：${progressText}`);
+          },
+          activeCancelCheck
+        );
       } catch (error) {
         const message = error && error.message ? error.message : String(error);
+        if (message === '采集已结束') {
+          return;
+        }
         this.pushLog(`${row.taskId}：${message}，已跳过`);
         return;
       } finally {
@@ -6006,27 +6284,32 @@
       this.render();
     }
 
-    async applyCategory(item) {
+    async applyCategory(item, cancelCheck) {
+      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
       const primary = getCategoryWrapper(0);
       if (!primary) {
         throw new Error('未找到品类选项');
       }
-      await selectOption(primary, item.queryLabel);
+      await selectOption(primary, item.queryLabel, activeCancelCheck);
       this.pushLog(`已选择品类：${this.describeItem(item)}`);
     }
 
-    async applySelectByLabel(label, value) {
+    async applySelectByLabel(label, value, cancelCheck) {
+      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
       const wrapper = getSelectWrapperByLabel(label, 0);
       if (!wrapper) {
         throw new Error(`未找到筛选条件：${label}`);
       }
-      await selectOption(wrapper, value);
+      await selectOption(wrapper, value, activeCancelCheck);
     }
 
     async failJob(error) {
       const message = error && error.message ? error.message : String(error);
       const paused = message === '采集已暂停';
       const stopped = message === '采集已结束';
+      if (stopped && !this.runtime.running && !this.runtime.jobType) {
+        return;
+      }
       const checkpoint = this.getActiveCheckpoint();
       if (checkpoint) {
         checkpoint.status = paused ? 'paused' : stopped ? 'stopped' : 'error';
