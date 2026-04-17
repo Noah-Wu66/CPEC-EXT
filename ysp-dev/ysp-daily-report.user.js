@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.25
+// @version      2.1.26
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -3451,7 +3451,7 @@
 
   async function requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck) {
     const payload = {
-      model: 'qwen3.5-omni-plus',
+      model: 'qwen3.5-omni-flash',
       messages: [
         {
           role: 'user',
