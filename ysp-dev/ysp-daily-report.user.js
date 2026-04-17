@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.21
+// @version      2.1.24
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -937,12 +937,192 @@
   top: 18px;
   right: 18px;
   z-index: 2147483647;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(17, 36, 56, 0.92);
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100vh - 36px);
+  overflow: hidden;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(13, 31, 49, 0.98), rgba(18, 45, 70, 0.96));
+  color: #f7fbff;
+  border: 1px solid rgba(153, 198, 240, 0.22);
+  box-shadow: 0 22px 50px rgba(8, 20, 32, 0.34);
+  backdrop-filter: blur(16px);
+}
+
+.ysp-daily-worker-badge__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(197, 220, 244, 0.14);
+}
+
+.ysp-daily-worker-badge__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
   color: #ffffff;
+}
+
+.ysp-daily-worker-badge__subtitle {
+  margin-top: 4px;
   font-size: 12px;
-  box-shadow: 0 14px 28px rgba(16, 33, 50, 0.22);
+  line-height: 1.5;
+  color: rgba(227, 240, 252, 0.78);
+}
+
+.ysp-daily-worker-badge__stage {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(120, 185, 255, 0.16);
+  border: 1px solid rgba(153, 205, 255, 0.18);
+  font-size: 11px;
+  font-weight: 700;
+  color: #d8eeff;
+}
+
+.ysp-daily-worker-badge__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+  max-height: calc(100vh - 110px);
+}
+
+.ysp-daily-worker-badge__section {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(194, 222, 246, 0.12);
+}
+
+.ysp-daily-worker-badge__section-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #d9ecff;
+}
+
+.ysp-daily-worker-badge__meta {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 8px 10px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.ysp-daily-worker-badge__meta dt {
+  margin: 0;
+  color: rgba(215, 232, 247, 0.66);
+}
+
+.ysp-daily-worker-badge__meta dd {
+  margin: 0;
+  color: #f7fbff;
+  word-break: break-word;
+}
+
+.ysp-daily-worker-badge__text {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #f4f9ff;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ysp-daily-worker-badge__empty {
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(219, 236, 251, 0.56);
+}
+
+.ysp-daily-worker-badge__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ysp-daily-worker-badge__item {
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(198, 226, 248, 0.1);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #f7fbff;
+  word-break: break-word;
+}
+
+.ysp-daily-worker-badge__item-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 3px;
+}
+
+.ysp-daily-worker-badge__item-label {
+  font-weight: 700;
+}
+
+.ysp-daily-worker-badge__item-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.ysp-daily-worker-badge__item-badge.is-accepted {
+  background: rgba(78, 201, 134, 0.18);
+  color: #9af0b8;
+}
+
+.ysp-daily-worker-badge__item-badge.is-rejected {
+  background: rgba(255, 167, 38, 0.18);
+  color: #ffd79c;
+}
+
+.ysp-daily-worker-badge__item-subtext {
+  margin-top: 4px;
+  color: rgba(226, 239, 252, 0.72);
+}
+
+.ysp-daily-worker-badge__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ysp-daily-worker-badge__timeline-entry {
+  padding-left: 11px;
+  border-left: 2px solid rgba(118, 183, 250, 0.32);
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(239, 247, 255, 0.86);
+}
+
+.ysp-daily-worker-badge__final {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(111, 183, 255, 0.1);
+  border: 1px solid rgba(158, 208, 255, 0.16);
+}
+
+.ysp-daily-worker-badge__final-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #d8eeff;
+}
+
+.ysp-daily-worker-badge__final-value {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #ffffff;
 }
 
 @media (max-width: 920px) {
@@ -953,6 +1133,17 @@
 
   .ysp-daily-panel__button-row {
     flex-direction: column;
+  }
+
+  .ysp-daily-worker-badge {
+    top: 10px;
+    right: 10px;
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .ysp-daily-worker-badge__body {
+    max-height: calc(100vh - 94px);
   }
 }
   `;
@@ -1132,6 +1323,9 @@
   const WORKER_PROGRESS_STALL_TIMEOUT = 90 * 1000;
   const WORKER_RESPONSE_TIMEOUT = 8 * 60 * 1000;
   const MEDIA_WORKER_RESPONSE_TIMEOUT = 90 * 1000;
+  const MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS = 5 * 60;
+  const SECONDARY_QC_VIDEO_ANALYSIS_FPS = 3;
+  const SECONDARY_QC_VIDEO_ANALYSIS_MAX_PIXELS = 2073600;
   const DASHSCOPE_CHAT_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
   const YANGSHIPIN_VIDEO_WORKER_URL = 'https://w.yangshipin.cn/video';
 
@@ -1145,9 +1339,11 @@
 
   const PAGE_MUTE_CONTROLLER = {
     active: false,
+    pausePlayback: false,
     observer: null,
     mediaStates: new Map(),
-    mediaHandlers: new Map()
+    mediaHandlers: new Map(),
+    mediaPlayGuards: new Map()
   };
 
   const JOB_ABORT_CONTROLLER = {
@@ -1189,7 +1385,8 @@
     if (!PAGE_MUTE_CONTROLLER.mediaStates.has(element)) {
       PAGE_MUTE_CONTROLLER.mediaStates.set(element, {
         muted: Boolean(element.muted),
-        defaultMuted: Boolean(element.defaultMuted)
+        defaultMuted: Boolean(element.defaultMuted),
+        autoplay: Boolean(element.autoplay)
       });
     }
   }
@@ -1208,20 +1405,52 @@
     PAGE_MUTE_CONTROLLER.mediaHandlers.set(element, handler);
   }
 
-  function muteMediaElement(element) {
+  function attachMediaPauseGuard(element) {
+    if (PAGE_MUTE_CONTROLLER.mediaPlayGuards.has(element)) {
+      return;
+    }
+    const handler = () => {
+      if (!PAGE_MUTE_CONTROLLER.active || !PAGE_MUTE_CONTROLLER.pausePlayback) {
+        return;
+      }
+      if (!element.paused) {
+        try {
+          element.pause();
+        } catch (error) {
+          // ignore
+        }
+      }
+    };
+    element.addEventListener('play', handler, true);
+    element.addEventListener('playing', handler, true);
+    PAGE_MUTE_CONTROLLER.mediaPlayGuards.set(element, handler);
+  }
+
+  function muteMediaElement(element, pausePlayback) {
     if (!(element instanceof HTMLMediaElement)) {
       return;
     }
     rememberMediaState(element);
     attachMediaMuteGuard(element);
+    if (pausePlayback) {
+      attachMediaPauseGuard(element);
+      element.autoplay = false;
+      try {
+        element.pause();
+      } catch (error) {
+        // ignore
+      }
+    }
     element.defaultMuted = true;
     element.muted = true;
   }
 
-  function enforcePageMuted() {
+  function enforcePageMuted(options) {
+    const pausePlayback = Boolean(options && options.pausePlayback);
     PAGE_MUTE_CONTROLLER.active = true;
+    PAGE_MUTE_CONTROLLER.pausePlayback = PAGE_MUTE_CONTROLLER.pausePlayback || pausePlayback;
     Array.from(document.querySelectorAll('video, audio')).forEach((element) => {
-      muteMediaElement(element);
+      muteMediaElement(element, PAGE_MUTE_CONTROLLER.pausePlayback);
     });
     if (!PAGE_MUTE_CONTROLLER.observer) {
       PAGE_MUTE_CONTROLLER.observer = new MutationObserver((mutations) => {
@@ -1230,7 +1459,7 @@
         }
         mutations.forEach((mutation) => {
           mutation.addedNodes.forEach((node) => {
-            getMediaElementsFromNode(node).forEach((element) => muteMediaElement(element));
+            getMediaElementsFromNode(node).forEach((element) => muteMediaElement(element, PAGE_MUTE_CONTROLLER.pausePlayback));
           });
         });
       });
@@ -1243,6 +1472,7 @@
 
   function releasePageMuted() {
     PAGE_MUTE_CONTROLLER.active = false;
+    PAGE_MUTE_CONTROLLER.pausePlayback = false;
     if (PAGE_MUTE_CONTROLLER.observer) {
       PAGE_MUTE_CONTROLLER.observer.disconnect();
       PAGE_MUTE_CONTROLLER.observer = null;
@@ -1251,10 +1481,16 @@
       element.removeEventListener('volumechange', handler, true);
     });
     PAGE_MUTE_CONTROLLER.mediaHandlers.clear();
+    PAGE_MUTE_CONTROLLER.mediaPlayGuards.forEach((handler, element) => {
+      element.removeEventListener('play', handler, true);
+      element.removeEventListener('playing', handler, true);
+    });
+    PAGE_MUTE_CONTROLLER.mediaPlayGuards.clear();
     PAGE_MUTE_CONTROLLER.mediaStates.forEach((state, element) => {
       if (!(element instanceof HTMLMediaElement)) {
         return;
       }
+      element.autoplay = Boolean(state.autoplay);
       element.defaultMuted = Boolean(state.defaultMuted);
       element.muted = Boolean(state.muted);
     });
@@ -2760,6 +2996,38 @@
     return parts.join(' ');
   }
 
+  function formatDurationSeconds(seconds) {
+    const normalizedSeconds = Math.max(0, Math.trunc(Number(seconds) || 0));
+    if (!normalizedSeconds) {
+      return '';
+    }
+    const hh = Math.floor(normalizedSeconds / 3600);
+    const mm = Math.floor((normalizedSeconds % 3600) / 60);
+    const ss = normalizedSeconds % 60;
+    if (hh > 0) {
+      return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+    }
+    return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+  }
+
+  function parseDurationText(text) {
+    const matched = normalizeText(text).match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+    if (!matched || !matched[1]) {
+      return 0;
+    }
+    const parts = matched[1].split(':').map((part) => Number(part));
+    if (parts.some((part) => !Number.isFinite(part))) {
+      return 0;
+    }
+    if (parts.length === 3) {
+      return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+    }
+    if (parts.length === 2) {
+      return (parts[0] * 60) + parts[1];
+    }
+    return 0;
+  }
+
   function parseUserBadgeName(text) {
     return normalizeText(String(text || '').replace(/，?\s*退出.*/, ''));
   }
@@ -3029,7 +3297,11 @@
           content: [
             {
               type: 'video_url',
-              video_url: { url: videoUrl }
+              video_url: {
+                url: videoUrl,
+                fps: SECONDARY_QC_VIDEO_ANALYSIS_FPS,
+                max_pixels: SECONDARY_QC_VIDEO_ANALYSIS_MAX_PIXELS
+              }
             },
             {
               type: 'text',
@@ -3214,6 +3486,66 @@
     return explicitValue || consoleValue || playerValue || normalizeText(fallbackVid) || taskValue || '';
   }
 
+  function getDetailFormValueByLabels(labels) {
+    for (const label of labels || []) {
+      const item = getDetailFormItemByLabel(label);
+      if (!item) {
+        continue;
+      }
+      const input = item.querySelector('input, textarea');
+      const content = item.querySelector('.el-form-item__content');
+      const value = normalizeText(input ? input.value : (content ? content.textContent : ''));
+      if (value) {
+        return value;
+      }
+    }
+    return '';
+  }
+
+  function getDetailTitleText() {
+    const headerTitle = normalizeText(
+      document.querySelector('.article-header h1, .article-header .title, .article-header [class*="title"]')?.textContent
+    );
+    const fieldTitle = getDetailFormValueByLabels(['标题', '稿件标题', '内容标题', '节目标题']);
+    return headerTitle || fieldTitle || '';
+  }
+
+  function getDetailMediaDurationSeconds() {
+    const mediaElements = Array.from(document.querySelectorAll('video, audio'))
+      .filter((element) => element instanceof HTMLMediaElement);
+    for (const element of mediaElements) {
+      const duration = Number(element.duration);
+      if (Number.isFinite(duration) && duration > 0) {
+        return Math.round(duration);
+      }
+    }
+    return 0;
+  }
+
+  function getDetailDurationFromText() {
+    const fieldDuration = parseDurationText(getDetailFormValueByLabels(['时长', '片长', '节目时长']));
+    if (fieldDuration > 0) {
+      return fieldDuration;
+    }
+    const headerDuration = parseDurationText(document.querySelector('.article-header')?.textContent || '');
+    return headerDuration > 0 ? headerDuration : 0;
+  }
+
+  async function waitForDetailDurationSeconds(cancelCheck) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 5000) {
+      if (cancelCheck && cancelCheck()) {
+        throw new Error('采集已结束');
+      }
+      const mediaDuration = getDetailMediaDurationSeconds();
+      if (mediaDuration > 0) {
+        return mediaDuration;
+      }
+      await sleep(250);
+    }
+    return getDetailDurationFromText();
+  }
+
   function getDetailFinishedTagsField() {
     const item = getDetailFormItemByLabel('成品标签');
     return item ? item.querySelector('.video-label-select, .moveTag, .el-select') : null;
@@ -3275,7 +3607,125 @@
     await sleep(600);
   }
 
-  function mountWorkerBadge(text) {
+  function createWorkerBadgeState() {
+    return {
+      stageLabel: '准备中',
+      statusText: '',
+      taskId: '',
+      videoVid: '',
+      titleText: '',
+      durationSeconds: 0,
+      evidenceSummary: '',
+      videoSummary: '',
+      missingCandidates: [],
+      validatedCandidates: [],
+      rejectedCandidates: [],
+      wrongTags: [],
+      finalReason: '',
+      problemText: '',
+      skipReason: '',
+      timeline: []
+    };
+  }
+
+  function mergeWorkerBadgeState(state, patch) {
+    const target = state || createWorkerBadgeState();
+    if (!patch || typeof patch !== 'object') {
+      return target;
+    }
+    const keys = [
+      'stageLabel',
+      'statusText',
+      'taskId',
+      'videoVid',
+      'titleText',
+      'durationSeconds',
+      'evidenceSummary',
+      'videoSummary',
+      'finalReason',
+      'problemText',
+      'skipReason'
+    ];
+    keys.forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(patch, key)) {
+        target[key] = patch[key];
+      }
+    });
+    if (Object.prototype.hasOwnProperty.call(patch, 'missingCandidates')) {
+      target.missingCandidates = normalizeTagArray(patch.missingCandidates);
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'validatedCandidates')) {
+      target.validatedCandidates = Array.isArray(patch.validatedCandidates) ? patch.validatedCandidates : [];
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'rejectedCandidates')) {
+      target.rejectedCandidates = Array.isArray(patch.rejectedCandidates) ? patch.rejectedCandidates : [];
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'wrongTags')) {
+      target.wrongTags = normalizeTagArray(patch.wrongTags);
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'timeline')) {
+      target.timeline = Array.isArray(patch.timeline) ? patch.timeline.slice(0, 8) : [];
+    }
+    return target;
+  }
+
+  function pushWorkerBadgeTimeline(state, text) {
+    const entry = normalizeText(text);
+    if (!entry) {
+      return;
+    }
+    if (state.timeline[0] === entry) {
+      return;
+    }
+    state.timeline.unshift(entry);
+    state.timeline = state.timeline.slice(0, 8);
+  }
+
+  function renderWorkerBadgeCandidateList(items, emptyText) {
+    if (!Array.isArray(items) || !items.length) {
+      return `<div class="ysp-daily-worker-badge__empty">${escapeXml(emptyText)}</div>`;
+    }
+    return `
+      <div class="ysp-daily-worker-badge__list">
+        ${items.map((item) => {
+          const options = normalizeTextArray(item && item.options);
+          const accepted = item && item.accepted === true;
+          const rejected = item && item.accepted === false;
+          const badgeClass = accepted ? 'is-accepted' : rejected ? 'is-rejected' : '';
+          const badgeText = accepted ? '采纳' : rejected ? '放弃' : '待判定';
+          const reason = normalizeText(item && item.reason);
+          return `
+            <div class="ysp-daily-worker-badge__item">
+              <div class="ysp-daily-worker-badge__item-title">
+                <span class="ysp-daily-worker-badge__item-label">${escapeXml(normalizeText(item && item.keyword) || '未命名候选')}</span>
+                <span class="ysp-daily-worker-badge__item-badge ${badgeClass}">${badgeText}</span>
+              </div>
+              <div>${escapeXml(reason || '暂无说明')}</div>
+              <div class="ysp-daily-worker-badge__item-subtext">搜索结果：${escapeXml(options.join('、') || '页面无结果')}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function renderWorkerBadgeReasonList(items, emptyText) {
+    if (!Array.isArray(items) || !items.length) {
+      return `<div class="ysp-daily-worker-badge__empty">${escapeXml(emptyText)}</div>`;
+    }
+    return `
+      <div class="ysp-daily-worker-badge__list">
+        ${items.map((item) => `
+          <div class="ysp-daily-worker-badge__item">
+            <div class="ysp-daily-worker-badge__item-label">${escapeXml(normalizeText(item && item.keyword) || '未命名候选')}</div>
+            <div class="ysp-daily-worker-badge__item-subtext">${escapeXml(normalizeText(item && item.reason) || '暂无说明')}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function mountWorkerBadge(stateOrText) {
     let badge = document.getElementById('ysp-daily-worker-badge');
     if (!badge) {
       badge = document.createElement('div');
@@ -3283,7 +3733,77 @@
       badge.className = 'ysp-daily-worker-badge';
       document.body.appendChild(badge);
     }
-    badge.textContent = text;
+    const state = typeof stateOrText === 'string'
+      ? mergeWorkerBadgeState(createWorkerBadgeState(), { statusText: stateOrText })
+      : (stateOrText && typeof stateOrText === 'object' ? stateOrText : createWorkerBadgeState());
+    const subtitleParts = [];
+    if (state.taskId) {
+      subtitleParts.push(`任务 ${state.taskId}`);
+    }
+    if (state.durationSeconds > 0) {
+      subtitleParts.push(`时长 ${formatDurationSeconds(state.durationSeconds)}`);
+    }
+    badge.innerHTML = `
+      <div class="ysp-daily-worker-badge__header">
+        <div>
+          <div class="ysp-daily-worker-badge__title">二次质检决策过程</div>
+          <div class="ysp-daily-worker-badge__subtitle">${escapeXml(subtitleParts.join(' · ') || (state.statusText || '处理中'))}</div>
+        </div>
+        <div class="ysp-daily-worker-badge__stage">${escapeXml(state.stageLabel || '处理中')}</div>
+      </div>
+      <div class="ysp-daily-worker-badge__body">
+        <section class="ysp-daily-worker-badge__section">
+          <h3 class="ysp-daily-worker-badge__section-title">视频信息</h3>
+          <dl class="ysp-daily-worker-badge__meta">
+            <dt>任务 VID</dt>
+            <dd>${escapeXml(state.taskId || '未识别')}</dd>
+            <dt>顶部 VID</dt>
+            <dd>${escapeXml(state.videoVid || '未识别')}</dd>
+            <dt>标题</dt>
+            <dd>${escapeXml(state.titleText || '未读取到标题')}</dd>
+            <dt>时长</dt>
+            <dd>${escapeXml(formatDurationSeconds(state.durationSeconds) || '未读取到')}</dd>
+          </dl>
+        </section>
+        <section class="ysp-daily-worker-badge__section">
+          <h3 class="ysp-daily-worker-badge__section-title">过程</h3>
+          <div class="ysp-daily-worker-badge__timeline">
+            ${(state.timeline.length ? state.timeline : [state.statusText || '处理中']).map((entry) => `
+              <div class="ysp-daily-worker-badge__timeline-entry">${escapeXml(entry)}</div>
+            `).join('')}
+          </div>
+        </section>
+        <section class="ysp-daily-worker-badge__section">
+          <h3 class="ysp-daily-worker-badge__section-title">证据摘要</h3>
+          <div class="ysp-daily-worker-badge__text">${escapeXml(state.evidenceSummary || state.videoSummary || '模型证据尚未生成')}</div>
+        </section>
+        <section class="ysp-daily-worker-badge__section">
+          <h3 class="ysp-daily-worker-badge__section-title">候选补打标签</h3>
+          <div class="ysp-daily-worker-badge__text">${escapeXml(state.missingCandidates.join('、') || '当前没有候选补打标签')}</div>
+        </section>
+        <section class="ysp-daily-worker-badge__section">
+          <h3 class="ysp-daily-worker-badge__section-title">搜索验证</h3>
+          ${renderWorkerBadgeCandidateList(state.validatedCandidates, '候选标签尚未进入搜索验证')}
+        </section>
+        <section class="ysp-daily-worker-badge__section">
+          <h3 class="ysp-daily-worker-badge__section-title">放弃候选</h3>
+          ${renderWorkerBadgeReasonList(state.rejectedCandidates, '当前没有被放弃的候选')}
+        </section>
+        <section class="ysp-daily-worker-badge__section">
+          <h3 class="ysp-daily-worker-badge__section-title">最终结论</h3>
+          <div class="ysp-daily-worker-badge__final">
+            <div class="ysp-daily-worker-badge__final-label">结论</div>
+            <div class="ysp-daily-worker-badge__final-value">${escapeXml(
+              state.skipReason === 'long_video'
+                ? `长视频跳过（超过 ${formatDurationSeconds(MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS)}）`
+                : state.problemText || state.finalReason || '当前不需要落表'
+            )}</div>
+          </div>
+          <div class="ysp-daily-worker-badge__text" style="margin-top: 10px;">${escapeXml(state.finalReason || '暂无最终说明')}</div>
+          <div class="ysp-daily-worker-badge__text" style="margin-top: 8px;">错打标签：${escapeXml(state.wrongTags.join('、') || '无')}</div>
+        </section>
+      </div>
+    `;
     return badge;
   }
 
@@ -4408,6 +4928,95 @@
     return [];
   }
 
+  function normalizeTextArray(value) {
+    if (Array.isArray(value)) {
+      return uniqueTextList(value.map((item) => normalizeText(item)));
+    }
+    if (typeof value === 'string') {
+      return uniqueTextList(
+        value.split(/[，,、\n]/).map((item) => normalizeText(item))
+      );
+    }
+    return [];
+  }
+
+  function normalizeOmniTimelineEntry(entry) {
+    if (!entry || typeof entry !== 'object') {
+      return null;
+    }
+    const time = normalizeText(entry.time);
+    const summary = normalizeText(entry.summary || entry.content || entry.description);
+    if (!time && !summary) {
+      return null;
+    }
+    return {
+      time,
+      summary
+    };
+  }
+
+  function normalizeOmniVideoAnalysis(value) {
+    const raw = value && typeof value === 'object' ? value : {};
+    return {
+      overallTheme: normalizeText(raw.overall_theme || raw.theme || raw.summary),
+      timeline: Array.isArray(raw.timeline) ? raw.timeline.map(normalizeOmniTimelineEntry).filter(Boolean) : [],
+      repeatedSignals: normalizeTextArray(raw.repeated_signals),
+      titleClues: normalizeTextArray(raw.title_clues),
+      strongEvidence: normalizeTextArray(raw.strong_evidence),
+      uncertainPoints: normalizeTextArray(raw.uncertain_points)
+    };
+  }
+
+  function formatOmniVideoAnalysisForPrompt(analysis) {
+    const normalized = normalizeOmniVideoAnalysis(analysis);
+    const timelineText = normalized.timeline.length
+      ? normalized.timeline.map((item) => `${item.time || '时间未标注'} ${item.summary || '无描述'}`).join('；')
+      : '无';
+    return [
+      `整体主题：${normalized.overallTheme || '无'}`,
+      `标题线索：${normalized.titleClues.join('、') || '无'}`,
+      `时间线摘要：${timelineText}`,
+      `重复出现的核心信息：${normalized.repeatedSignals.join('、') || '无'}`,
+      `强证据：${normalized.strongEvidence.join('、') || '无'}`,
+      `不确定点：${normalized.uncertainPoints.join('、') || '无'}`
+    ].join('\n');
+  }
+
+  function normalizeCandidateDecision(entry) {
+    if (!entry || typeof entry !== 'object') {
+      return null;
+    }
+    const keyword = normalizeTagDisplayName(entry.keyword);
+    if (!keyword) {
+      return null;
+    }
+    return {
+      keyword,
+      accepted: Boolean(entry.accepted),
+      reason: normalizeText(entry.reason)
+    };
+  }
+
+  function normalizeCandidateDecisionArray(value) {
+    return Array.isArray(value) ? value.map(normalizeCandidateDecision).filter(Boolean) : [];
+  }
+
+  function buildValidatedCandidates(searchResults, candidateDecisions) {
+    const decisionMap = new Map(
+      normalizeCandidateDecisionArray(candidateDecisions).map((item) => [item.keyword, item])
+    );
+    return (Array.isArray(searchResults) ? searchResults : []).map((item) => {
+      const keyword = normalizeTagDisplayName(item && item.keyword);
+      const decision = decisionMap.get(keyword) || null;
+      return {
+        keyword,
+        options: normalizeTextArray(item && item.options),
+        accepted: decision ? Boolean(decision.accepted) : false,
+        reason: decision ? normalizeText(decision.reason) : ''
+      };
+    }).filter((item) => item.keyword);
+  }
+
   function prefixTaskError(taskId, message) {
     const normalizedTaskId = normalizeText(taskId);
     const normalizedMessage = normalizeText(message);
@@ -4634,26 +5243,42 @@
     return true;
   }
 
-  function buildOmniVideoSummaryPrompt() {
+  function buildOmniVideoSummaryPrompt(titleText) {
+    const normalizedTitle = normalizeText(titleText);
     return [
-      '你是视频内容理解助手，请完整理解这个视频。',
-      '请用中文输出清晰、可复核的内容理解结果。',
-      '必须覆盖：视频主体、核心事件、出现的人物、地点、重要物体、动作、画面主题、明显可支撑的标签线索。',
-      '如果某个信息不确定，请明确写“无法确认”或“不确定”，不要臆断。'
+      '你是央视频二次质检的视频理解助手。',
+      '这是最后一道查缺补漏，请认真看完整个视频，不要只看开头，也不要凭印象猜测。',
+      normalizedTitle ? `参考标题：${normalizedTitle}` : '参考标题：无',
+      '请只返回 JSON，不要输出其他文字。',
+      '必须覆盖：',
+      '1. overall_theme：视频整体主题，必须简洁明确。',
+      '2. timeline：按时间顺序列出关键片段，time 用 00:00-00:20 这类格式，summary 写该片段发生了什么。',
+      '3. title_clues：标题里能直接支撑打标的关键词或主题线索。',
+      '4. repeated_signals：视频里反复出现、多次提及、或持续围绕展开的核心信息。',
+      '5. strong_evidence：真正能支撑补打重要标签的强证据，必须谨慎。',
+      '6. uncertain_points：不确定、无法确认、证据不足的信息。',
+      '如果某个信息不确定，必须写入 uncertain_points，不要臆断。',
+      '',
+      '输出格式：',
+      '{"overall_theme":"","timeline":[{"time":"","summary":""}],"title_clues":[],"repeated_signals":[],"strong_evidence":[],"uncertain_points":[]}'
     ].join('\n');
   }
 
-  function buildFirstTagJudgePrompt(videoSummary, selectedTags) {
+  function buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags) {
     return [
       '你是央视频标准化系统的二次质检助手。',
-      '请根据“视频理解结果”和“当前已选成品标签”，判断现有成品标签是否错打，以及是否存在值得去系统里检索验证的缺失标签。',
+      '这是一条已经过多次校对后的最终查缺补漏任务，你的主要目标是补打真正重要且缺失的标签，不要为了凑结果而补。',
+      '请根据“标题”“视频理解结果”和“当前已选成品标签”，判断现有成品标签是否明显错打，以及是否存在值得去系统里检索验证的缺失标签。',
       '规则：',
-      '1. wrong_tags 只填明显错打的标签。',
-      '2. missing_tags_candidate 只填可能需要补打、且值得去页面输入框搜索验证的标签。',
-      '3. need_record 只要 wrong_tags 或 missing_tags_candidate 任一非空，就返回 true，否则 false。',
-      '4. summary 用一句中文说明判断原因。',
-      '5. 只能返回 JSON，不要返回其他文字。',
+      '1. wrong_tags 默认从严，只有现有标签和视频核心事实明显冲突时才允许输出；大多数情况下应为空。',
+      '2. missing_tags_candidate 只保留非常重要的标签，并且至少满足其一：标题直接提到；视频主题明确围绕它展开；视频中多次提及或反复出现；画面与口播共同支持。',
+      '3. 单次擦边出现、弱相关、泛泛概念、可有可无的标签，一律不要给。',
+      '4. 不要推荐已经在当前已选成品标签里的标签。',
+      '5. need_record 只要 wrong_tags 或 missing_tags_candidate 任一非空，就返回 true，否则 false。',
+      '6. summary 用一句中文总结判断原因。',
+      '7. 只能返回 JSON，不要返回其他文字。',
       '',
+      `标题：${normalizeText(titleText) || '无'}`,
       `当前已选成品标签：${JSON.stringify(selectedTags || [])}`,
       `视频理解结果：${videoSummary}`,
       '',
@@ -4662,25 +5287,29 @@
     ].join('\n');
   }
 
-  function buildFinalTagJudgePrompt(videoSummary, selectedTags, firstJudge, searchResults) {
+  function buildFinalTagJudgePrompt(titleText, videoSummary, selectedTags, firstJudge, searchResults) {
     return [
       '你是央视频标准化系统的最终二次质检裁定助手。',
-      '现在你已经拿到了视频理解结果、当前已选成品标签、第一轮判断结果，以及候选标签在系统中的真实搜索结果。',
-      '请给出最终可落表结论。',
+      '这一步是最后落表结论，请严格执行“补打优先、错打极严”的标准。',
+      '你现在拿到了标题、视频理解结果、当前已选成品标签、第一轮判断结果，以及候选标签在系统中的真实搜索结果。',
       '规则：',
-      '1. missing_tags_actionable 只保留“页面真实搜得到”且“确实应该补打”的标签。',
-      '2. wrong_tags 只保留明确错打的标签。',
-      '3. problem_text 必须按这个格式输出：补打XX、YY 错打AA、BB。',
-      '4. 如果没有补打项，就不要写“补打”；如果没有错打项，就不要写“错打”；如果都没有，返回空字符串。',
-      '5. 只能返回 JSON，不要返回其他文字。',
+      '1. missing_tags_actionable 只保留“页面真实搜得到”且“确实应该补打”的重要标签。',
+      '2. wrong_tags 只保留证据非常强、与视频核心事实明显冲突的错打标签；大多数情况应为空。',
+      '3. candidate_decisions 必须覆盖每一个候选标签，每个候选只出现一次，accepted 表示最终是否采纳，reason 必须说明原因。',
+      '4. evidence_summary 要概括真正支持结论的强证据，重点看标题、主题、反复出现的信息、画面与口播共同支持的点。',
+      '5. final_reason 用一句中文说明为什么最终落到这个结论。',
+      '6. problem_text 默认只输出“补打XX、YY”；只有 wrong_tags 非空时才追加“错打AA、BB”；如果都没有，返回空字符串。',
+      '7. 单次擦边出现、弱相关、没有反复支撑、不是主题核心的标签，一律不要补。',
+      '8. 只能返回 JSON，不要返回其他文字。',
       '',
+      `标题：${normalizeText(titleText) || '无'}`,
       `视频理解结果：${videoSummary}`,
       `当前已选成品标签：${JSON.stringify(selectedTags || [])}`,
       `第一轮判断：${JSON.stringify(firstJudge || {})}`,
       `候选标签真实搜索结果：${JSON.stringify(searchResults || [])}`,
       '',
       '输出格式：',
-      '{"missing_tags_actionable":[],"wrong_tags":[],"problem_text":""}'
+      '{"missing_tags_actionable":[],"wrong_tags":[],"candidate_decisions":[{"keyword":"","accepted":false,"reason":""}],"evidence_summary":"","final_reason":"","problem_text":""}'
     ].join('\n');
   }
 
@@ -4704,6 +5333,7 @@
     const responseKey = buildSecondaryQcMediaWorkerResponseKey(requestId);
     let responsePayload = null;
     try {
+      enforcePageMuted({ pausePlayback: true });
       const requestState = await storageGet(requestKey);
       const request = unwrapCacheEnvelope(requestState[requestKey]);
       if (!request || typeof request !== 'object') {
@@ -4766,8 +5396,18 @@
     const requestKey = buildSecondaryQcWorkerRequestKey(requestId);
     const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
     const cancelCheck = () => JOB_ABORT_CONTROLLER.secondaryQcWorkerStopped;
-    const reportProgress = async (text) => {
-      mountWorkerBadge(text);
+    const badgeState = createWorkerBadgeState();
+    const applyBadgeState = (patch) => {
+      mergeWorkerBadgeState(badgeState, patch);
+      mountWorkerBadge(badgeState);
+    };
+    const reportProgress = async (text, patch) => {
+      applyBadgeState({
+        statusText: text,
+        ...(patch || {})
+      });
+      pushWorkerBadgeTimeline(badgeState, text);
+      mountWorkerBadge(badgeState);
       try {
         await updateSecondaryQcWorkerProgress(requestId, text);
       } catch (error) {
@@ -4775,8 +5415,8 @@
       }
     };
     startSecondaryQcWorkerAbortWatcher(requestId);
-    enforcePageMuted();
-    await reportProgress('详情页已打开，正在加载内容');
+    enforcePageMuted({ pausePlayback: true });
+    await reportProgress('详情页已打开，正在加载内容', { stageLabel: '加载详情页' });
     let responsePayload = null;
     try {
       await ensureSecondaryQcWorkerNotStopped(requestId);
@@ -4787,42 +5427,129 @@
       }
 
       const listVid = normalizeText(request.taskId || getDetailPageTaskId());
+      applyBadgeState({ taskId: listVid });
 
       await waitForDetailPageReady(cancelCheck);
       await waitForDetailAnalysisReady(listVid, cancelCheck);
-      await reportProgress('正在读取视频信息');
+      await reportProgress('正在读取视频信息', { stageLabel: '读取元数据' });
       await ensureSecondaryQcWorkerNotStopped(requestId);
+
+      const titleText = getDetailTitleText();
+      const durationSeconds = await waitForDetailDurationSeconds(cancelCheck);
+      const videoVid = getDetailVideoVid(listVid);
+      const selectedTags = getDetailSelectedTags();
+      applyBadgeState({
+        taskId: listVid,
+        videoVid,
+        titleText,
+        durationSeconds
+      });
+      await reportProgress(
+        durationSeconds > 0
+          ? `已读取视频信息，时长 ${formatDurationSeconds(durationSeconds)}`
+          : '已读取视频信息，未获取到时长，将继续分析',
+        { stageLabel: '时长判断' }
+      );
+
+      if (durationSeconds > MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS) {
+        const finalReason = `视频时长 ${formatDurationSeconds(durationSeconds)}，超过 ${formatDurationSeconds(MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS)}，按规则跳过`;
+        await reportProgress('视频超过 5 分钟，按规则跳过', {
+          stageLabel: '时长判断',
+          finalReason,
+          skipReason: 'long_video',
+          evidenceSummary: '当前视频超过 5 分钟，按质检规则直接跳过，不进入视频理解模型。',
+          problemText: '',
+          wrongTags: [],
+          missingCandidates: [],
+          validatedCandidates: [],
+          rejectedCandidates: []
+        });
+        responsePayload = {
+          status: 'completed',
+          requestId,
+          taskId: listVid,
+          videoVid,
+          videoUrl: '',
+          needRecord: false,
+          problemText: '',
+          missingTagsActionable: [],
+          wrongTags: [],
+          selectedTags,
+          searchResults: [],
+          summary: '',
+          durationSeconds,
+          titleText,
+          videoSummary: '',
+          evidenceSummary: '当前视频超过 5 分钟，按质检规则直接跳过，不进入视频理解模型。',
+          validatedCandidates: [],
+          rejectedCandidates: [],
+          finalReason,
+          skipped: true,
+          skipReason: 'long_video',
+          completedAt: new Date().toISOString()
+        };
+        await reportProgress('长视频跳过完成，正在返回结果', { stageLabel: '已完成' });
+        return;
+      }
 
       const apiKey = normalizeText(request.apiKey);
       if (!apiKey) {
         throw new Error('未配置 DASHSCOPE_API_KEY');
       }
-
-      const videoVid = getDetailVideoVid(listVid);
       if (!videoVid) {
         throw new Error('未读取到顶部 VID');
       }
 
-      await reportProgress('正在获取视频地址');
+      await reportProgress('正在获取视频地址', { stageLabel: '获取视频地址' });
       const videoUrl = await fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck);
       await ensureSecondaryQcWorkerNotStopped(requestId);
 
-      await reportProgress('正在理解视频内容');
-      const videoSummary = await requestOmniVideoSummary(apiKey, videoUrl, buildOmniVideoSummaryPrompt(), cancelCheck);
+      await reportProgress('正在理解视频内容', { stageLabel: '视频理解' });
+      const videoSummaryRaw = await requestOmniVideoSummary(apiKey, videoUrl, buildOmniVideoSummaryPrompt(titleText), cancelCheck);
+      const videoAnalysis = normalizeOmniVideoAnalysis(JSON.parse(extractFirstJsonObject(videoSummaryRaw)));
+      const videoSummary = formatOmniVideoAnalysisForPrompt(videoAnalysis);
+      const baseEvidenceSummary = [
+        videoAnalysis.overallTheme ? `整体主题：${videoAnalysis.overallTheme}` : '',
+        videoAnalysis.titleClues.length ? `标题线索：${videoAnalysis.titleClues.join('、')}` : '',
+        videoAnalysis.repeatedSignals.length ? `重复信号：${videoAnalysis.repeatedSignals.join('、')}` : '',
+        videoAnalysis.strongEvidence.length ? `强证据：${videoAnalysis.strongEvidence.join('、')}` : '',
+        videoAnalysis.timeline.length
+          ? `时间线：${videoAnalysis.timeline.map((item) => `${item.time || '时间未标注'} ${item.summary || '无描述'}`).join('；')}`
+          : '',
+        videoAnalysis.uncertainPoints.length ? `不确定点：${videoAnalysis.uncertainPoints.join('、')}` : ''
+      ].filter(Boolean).join('\n');
+      applyBadgeState({
+        videoSummary,
+        evidenceSummary: baseEvidenceSummary || videoSummary
+      });
       await ensureSecondaryQcWorkerNotStopped(requestId);
 
-      await reportProgress('正在分析成品标签');
-      const selectedTags = getDetailSelectedTags();
-      const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(videoSummary, selectedTags), cancelCheck);
+      await reportProgress('正在分析成品标签', { stageLabel: '候选分析' });
+      const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags), cancelCheck);
       const firstJudge = JSON.parse(extractFirstJsonObject(firstJudgeRaw));
       const wrongTags = normalizeTagArray(firstJudge.wrong_tags);
       const missingCandidates = normalizeTagArray(firstJudge.missing_tags_candidate);
+      const firstSummary = normalizeText(firstJudge.summary);
+      applyBadgeState({
+        missingCandidates,
+        wrongTags,
+        evidenceSummary: [firstSummary ? `候选判断：${firstSummary}` : '', baseEvidenceSummary].filter(Boolean).join('\n')
+      });
       await ensureSecondaryQcWorkerNotStopped(requestId);
 
       await reportProgress(
         missingCandidates.length
           ? `正在验证候选标签（1/${missingCandidates.length}）`
-          : '当前没有候选标签需要验证'
+          : '当前没有候选标签需要验证',
+        {
+          stageLabel: '搜索验证',
+          validatedCandidates: missingCandidates.map((keyword) => ({
+            keyword,
+            options: [],
+            accepted: null,
+            reason: ''
+          }))
+        }
       );
       const searchResults = [];
       for (let candidateIndex = 0; candidateIndex < missingCandidates.length; candidateIndex += 1) {
@@ -4837,19 +5564,29 @@
           keyword: candidate,
           options
         });
+        applyBadgeState({
+          stageLabel: '搜索验证',
+          validatedCandidates: searchResults.map((item) => ({
+            keyword: item.keyword,
+            options: item.options,
+            accepted: null,
+            reason: ''
+          }))
+        });
       }
 
-      await reportProgress('正在生成最终结论');
+      await reportProgress('正在生成最终结论', { stageLabel: '生成结论' });
       const finalJudgeRaw = await requestTagJudge(
         apiKey,
         buildFinalTagJudgePrompt(
+          titleText,
           videoSummary,
           selectedTags,
           {
             wrong_tags: wrongTags,
             missing_tags_candidate: missingCandidates,
             need_record: Boolean(firstJudge.need_record),
-            summary: normalizeText(firstJudge.summary)
+            summary: firstSummary
           },
           searchResults
         ),
@@ -4858,7 +5595,26 @@
       const finalJudge = JSON.parse(extractFirstJsonObject(finalJudgeRaw));
       const missingTagsActionable = normalizeTagArray(finalJudge.missing_tags_actionable);
       const finalWrongTags = normalizeTagArray(finalJudge.wrong_tags);
+      const candidateDecisions = normalizeCandidateDecisionArray(finalJudge.candidate_decisions);
+      const validatedCandidates = buildValidatedCandidates(searchResults, candidateDecisions);
+      const rejectedCandidates = validatedCandidates
+        .filter((item) => item.accepted === false)
+        .map((item) => ({
+          keyword: item.keyword,
+          reason: item.reason
+        }));
+      const evidenceSummary = normalizeText(finalJudge.evidence_summary) || [firstSummary, baseEvidenceSummary].filter(Boolean).join('\n');
+      const finalReason = normalizeText(finalJudge.final_reason) || firstSummary;
       const problemText = normalizeText(finalJudge.problem_text) || formatProblemText(missingTagsActionable, finalWrongTags);
+      applyBadgeState({
+        validatedCandidates,
+        rejectedCandidates,
+        wrongTags: finalWrongTags,
+        evidenceSummary,
+        finalReason,
+        problemText,
+        stageLabel: '已完成'
+      });
 
       responsePayload = {
         status: 'completed',
@@ -4872,10 +5628,19 @@
         wrongTags: finalWrongTags,
         selectedTags,
         searchResults,
-        summary: normalizeText(firstJudge.summary),
+        summary: firstSummary,
+        durationSeconds,
+        titleText,
+        videoSummary,
+        evidenceSummary,
+        validatedCandidates,
+        rejectedCandidates,
+        finalReason,
+        skipped: false,
+        skipReason: '',
         completedAt: new Date().toISOString()
       };
-      await reportProgress('处理完成，正在返回结果');
+      await reportProgress('处理完成，正在返回结果', { stageLabel: '已完成' });
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
       responsePayload = {
@@ -4932,14 +5697,16 @@
     }
 
     async init() {
-      if (!isListPage()) {
+      if (!isSupportedPage()) {
         return;
       }
       injectPanelStyle();
       await this.clearExpiredCache();
       await this.loadState();
       this.mountPanel();
-      await this.tryResume();
+      if (isListPage()) {
+        await this.tryResume();
+      }
     }
 
     async clearExpiredCache() {
@@ -5577,12 +6344,18 @@
         : this.runtime.jobType === 'daily'
           ? '日报'
           : '空闲';
+      const pageText = isListPage()
+        ? '当前页面：列表页'
+        : isDetailPage()
+          ? '当前页面：详情页，只保留工作台显示；开始或继续任务请回列表页'
+          : '当前页面：其他页面';
       this.refs.status.innerHTML = `
         <div class="ysp-daily-panel__status-head">
           <span class="ysp-daily-panel__label">当前状态</span>
         </div>
         <div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div>
         <div class="ysp-daily-panel__status-subtext">任务类型：${escapeXml(jobLabel)}</div>
+        <div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>
       `;
     }
 
@@ -5628,8 +6401,9 @@
       if (!this.panel) {
         return;
       }
+      const listPageActive = isListPage();
       if (this.runtime.running) {
-        enforcePageMuted();
+        enforcePageMuted({ pausePlayback: isDetailPage() });
       } else {
         releasePageMuted();
       }
@@ -5653,13 +6427,13 @@
       this.refs.secondaryQcStartDate.disabled = disabled;
       this.refs.secondaryQcEndDate.disabled = disabled;
       this.refs.secondaryQcTargetCount.disabled = disabled;
-      this.refs.startDaily.disabled = disabled;
-      this.refs.startSecondaryQc.disabled = disabled;
+      this.refs.startDaily.disabled = disabled || !listPageActive;
+      this.refs.startSecondaryQc.disabled = disabled || !listPageActive;
       this.refs.clearData.disabled = disabled;
       this.refs.pause.disabled = !disabled;
       this.refs.stop.disabled = !disabled;
       const pausedTask = this.getPausedTaskMeta();
-      this.refs.resume.disabled = disabled || !pausedTask;
+      this.refs.resume.disabled = disabled || !pausedTask || !listPageActive;
       this.refs.resume.textContent = pausedTask ? `继续${pausedTask.label}` : '继续任务';
       this.refs.startDaily.textContent = disabled && this.runtime.jobType === 'daily' ? '日报运行中' : '开始日报';
       this.refs.startSecondaryQc.textContent = disabled && this.runtime.jobType === 'secondaryQc' ? '质检运行中' : '开始质检';
@@ -5815,6 +6589,9 @@
       if (this.runtime.running) {
         return;
       }
+      if (!isListPage()) {
+        throw new Error('继续任务请回到标准化列表页');
+      }
       this.runtime.listJobAbortToken = beginListJobAbortSession();
       const pausedTask = this.getPausedTaskMeta();
       if (!pausedTask) {
@@ -5890,6 +6667,9 @@
     async startDailyJob() {
       if (this.runtime.running) {
         return;
+      }
+      if (!isListPage()) {
+        throw new Error('日报只能在标准化列表页启动');
       }
       this.runtime.listJobAbortToken = beginListJobAbortSession();
       const startDate = this.settings.daily.startDate;
@@ -6410,6 +7190,13 @@
         throw new Error(prefixTaskError(row.taskId, response.error));
       }
 
+      if (response.skipped && response.skipReason === 'long_video') {
+        this.pushLog(
+          `${row.taskId}：长视频跳过${response.durationSeconds ? `（${formatDurationSeconds(response.durationSeconds)}）` : ''}`
+        );
+        return;
+      }
+
       const problemText = normalizeText(response.problemText);
       if (!problemText) {
         this.pushLog(`${row.taskId}：未发现问题`);
@@ -6533,27 +7320,34 @@
   let app = null;
   let booting = false;
   let lastHref = location.href;
+  let lastPageKind = '';
   let activeWorkerRequestId = '';
   let activeMediaWorkerRequestId = '';
 
-  async function ensureListWorkbenchMounted() {
-    if (!isListPage()) {
+  async function ensureWorkbenchMounted() {
+    if (!isSupportedPage()) {
       if (app) {
         app.destroy();
         app = null;
       }
-      return;
+      return 'destroyed';
     }
     await waitForBodyReady();
     if (!app) {
       app = new YspWorkbenchApp();
       await app.init();
-      return;
+      return 'created';
     }
     if (!document.getElementById('ysp-daily-panel-root')) {
       app.mountPanel();
-      await app.tryResume();
+      if (isListPage()) {
+        await app.tryResume();
+      } else {
+        app.render();
+      }
+      return 'remounted';
     }
+    return 'noop';
   }
 
   async function ensureDetailWorkerHandled() {
@@ -6589,25 +7383,29 @@
     booting = true;
     try {
       if (isYangshipinMediaWorkerPage()) {
+        lastPageKind = 'media';
         await ensureYangshipinMediaWorkerHandled();
         return;
       }
       if (!isSupportedPage()) {
+        lastPageKind = 'unsupported';
         if (app) {
           app.destroy();
           app = null;
         }
         return;
       }
+      const currentPageKind = isDetailPage() ? 'detail' : 'list';
+      const mountState = await ensureWorkbenchMounted();
       if (isDetailPage()) {
-        if (app) {
-          app.destroy();
-          app = null;
-        }
+        lastPageKind = currentPageKind;
         await ensureDetailWorkerHandled();
         return;
       }
-      await ensureListWorkbenchMounted();
+      if (currentPageKind === 'list' && lastPageKind !== 'list' && mountState === 'noop' && app) {
+        await app.tryResume();
+      }
+      lastPageKind = currentPageKind;
     } catch (error) {
       console.error('[央视频标准化工作台]', error);
     } finally {
@@ -6648,7 +7446,7 @@
       if (!isSupportedPage()) {
         return;
       }
-      if (isListPage() && !document.getElementById('ysp-daily-panel-root')) {
+      if (!document.getElementById('ysp-daily-panel-root')) {
         queueBootstrap();
       }
     });
