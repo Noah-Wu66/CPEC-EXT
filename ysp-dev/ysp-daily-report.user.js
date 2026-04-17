@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.10
+// @version      2.1.11
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -2896,16 +2896,37 @@
     });
   }
 
+  function parsePagerSizeOptionValue(text) {
+    const matched = normalizeText(text).match(/(\d+)(?:\s*条\/页)?/);
+    return matched ? Number(matched[1]) : null;
+  }
+
+  function isDisabledVxeSelectOption(element) {
+    return !!(element && (element.classList.contains('is--disabled') || element.classList.contains('is-disabled')));
+  }
+
+  function getPagerSizeOptions(panel) {
+    return getVxeSelectPanelOptions(panel)
+      .map((element) => {
+        const text = normalizeText(element.textContent);
+        return {
+          element,
+          text,
+          value: parsePagerSizeOptionValue(text)
+        };
+      })
+      .filter((option) => option.text && option.value && !isDisabledVxeSelectOption(option.element));
+  }
+
   function findVxeSelectOption(panel, optionText) {
     const normalizedOptionText = normalizeText(optionText);
-    const option = getVxeSelectPanelOptions(panel).find((element) => {
-      const elementText = normalizeText(element.textContent);
-      return elementText === normalizedOptionText
-        && !element.classList.contains('is--disabled')
-        && !element.classList.contains('is-disabled');
+    const expectedValue = parsePagerSizeOptionValue(normalizedOptionText);
+    const option = getPagerSizeOptions(panel).find((candidate) => {
+      return candidate.text === normalizedOptionText
+        || (expectedValue && candidate.value === expectedValue);
     });
     if (option) {
-      return option;
+      return option.element;
     }
     const fallback = Array.from(panel.querySelectorAll('*')).find((element) => {
       return isVisible(element) && normalizeText(element.textContent) === normalizedOptionText;
@@ -2917,44 +2938,56 @@
     if (!clickable) {
       return fallback;
     }
-    if (clickable.classList.contains('is--disabled') || clickable.classList.contains('is-disabled')) {
+    if (isDisabledVxeSelectOption(clickable)) {
       return null;
     }
     return clickable;
   }
 
-  async function openPagerSizeDropdown(optionText) {
+  async function openPagerSizeDropdown() {
     const wrapper = await waitFor(() => getPagerSizeWrapper(), 5000, '未找到每页条数设置');
     const trigger = wrapper.querySelector('.vxe-input--wrapper, input, .vxe-input') || wrapper;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       triggerMouseClick(trigger);
       const panel = await waitFor(() => {
         return getVisibleVxeSelectPanels().find((candidate) => {
-          return !!findVxeSelectOption(candidate, optionText);
+          return getPagerSizeOptions(candidate).length > 0;
         });
-      }, 4000, `未找到每页条数选项：${optionText}`);
+      }, 4000, '未找到每页条数下拉面板');
       if (panel) {
         return panel;
       }
     }
-    throw new Error(`无法展开每页条数选项：${optionText}`);
+    throw new Error('无法展开每页条数下拉面板');
   }
 
   async function setPagerPageSize(pageSize) {
     const normalizedPageSize = Math.max(1, Math.trunc(Number(pageSize) || 0));
-    const optionText = String(normalizedPageSize);
     if (getPagerPageSize() === normalizedPageSize) {
       await waitForListTableSettled();
-      return;
+      return normalizedPageSize;
     }
-    const panel = await openPagerSizeDropdown(optionText);
-    const option = findVxeSelectOption(panel, optionText);
-    if (!option) {
-      throw new Error(`未找到每页条数选项：${optionText}`);
+    const panel = await openPagerSizeDropdown();
+    const options = getPagerSizeOptions(panel);
+    if (!options.length) {
+      throw new Error('未读取到每页条数选项');
     }
-    triggerMouseClick(option);
-    await waitFor(() => getPagerPageSize() === normalizedPageSize, 10000, `切换每页条数失败：${optionText}`);
+    const targetOption = options.find((option) => option.value === normalizedPageSize)
+      || options.reduce((best, option) => {
+        if (!best || option.value > best.value) {
+          return option;
+        }
+        return best;
+      }, null);
+    if (!targetOption) {
+      throw new Error('未找到可用的每页条数选项');
+    }
+    if (getPagerPageSize() !== targetOption.value) {
+      triggerMouseClick(targetOption.element);
+      await waitFor(() => getPagerPageSize() === targetOption.value, 10000, `切换每页条数失败：${targetOption.text}`);
+    }
     await waitForListTableSettled();
+    return targetOption.value;
   }
 
   function getPagerTotalRecords() {
@@ -5840,9 +5873,8 @@
         return;
       }
 
-      await setPagerPageSize(500);
+      const pageSize = await setPagerPageSize(500);
       const totalRecords = getPagerTotalRecords() || queryCount;
-      const pageSize = getPagerPageSize() || 500;
       const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
       this.pushLog(`${this.describeItem(item)}：命中 ${totalRecords} 条，本品类目标 ${itemTargetCount} 条，已切换 ${pageSize} 条/页，开始从最后一页倒序扫描`);
 
