@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.3
+// @version      2.1.4
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -785,13 +785,22 @@
   position: absolute;
   inset: 0;
   z-index: 6;
-  pointer-events: auto;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   background: rgba(9, 20, 33, 0.32);
   backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+
+#ysp-daily-panel-root.is-settings-open .ysp-daily-panel__modal-mask {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .ysp-daily-panel__modal {
@@ -4552,7 +4561,7 @@
           </div>
         </div>
         <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button>
-        <div class="ysp-daily-panel__modal-mask" data-role="settings-mask" hidden>
+        <div class="ysp-daily-panel__modal-mask" data-role="settings-mask">
           <div class="ysp-daily-panel__modal">
             <div class="ysp-daily-panel__toolbar">
               <span class="ysp-daily-panel__label">设置</span>
@@ -5024,8 +5033,6 @@
       }
       this.panel.classList.toggle('is-minimized', this.runtime.minimized);
       this.panel.classList.toggle('is-settings-open', this.settingsModalOpen);
-      this.refs.settingsMask.hidden = !this.settingsModalOpen;
-
       this.syncSettingsToInputs();
       this.renderGroupCards(this.refs.dailyGroups, 'daily');
       this.renderGroupCards(this.refs.secondaryQcGroups, 'secondaryQc');
