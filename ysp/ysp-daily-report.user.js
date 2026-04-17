@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.33
+// @version      1.2.34
 // @description  在标准化系统页面按日期区间和编组子品类采集日报，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -407,7 +407,7 @@
   justify-content: center;
   width: fit-content;
   max-width: 100%;
-  margin: 10px auto 0;
+  margin: 4px auto 6px;
   padding: 7px 14px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
@@ -1958,8 +1958,8 @@
                   <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start">开始采集</button>
                   <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清除数据</button>
                 </div>
-                <div class="ysp-daily-panel__status" data-role="status"></div>
               </div>
+              <div class="ysp-daily-panel__status" data-role="status"></div>
               <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
                 <div class="ysp-daily-panel__toolbar">
                   <span class="ysp-daily-panel__label">下载中心</span>
