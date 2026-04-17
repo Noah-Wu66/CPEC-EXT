@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.6
+// @version      2.1.9
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1250,6 +1250,12 @@
     return formatInputDate(date);
   }
 
+  function getTodayDateString() {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return formatInputDate(date);
+  }
+
   function buildDateList(startDateString, endDateString) {
     const startDate = normalizeText(startDateString);
     const endDate = normalizeText(endDateString) || startDate;
@@ -2280,7 +2286,7 @@
         groupIds: []
       },
       secondaryQc: {
-        startDate: yesterday,
+        startDate: '',
         endDate: '',
         groupIds: [],
         targetCount: 10
@@ -2291,8 +2297,8 @@
     };
   }
 
-  function normalizeDateInputValue(value) {
-    const maxDate = getYesterdayDateString();
+  function normalizeDateInputValue(value, maxDateString) {
+    const maxDate = normalizeText(maxDateString) || getYesterdayDateString();
     const date = normalizeText(value);
     if (!date) {
       return '';
@@ -2314,15 +2320,17 @@
   function normalizeWorkbenchSettings(rawSettings) {
     const defaults = createDefaultWorkbenchSettings();
     const source = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
+    const dailyMaxDate = getYesterdayDateString();
+    const secondaryQcMaxDate = getTodayDateString();
 
-    const dailyStartDate = normalizeDateInputValue(source.daily && source.daily.startDate) || defaults.daily.startDate;
-    let dailyEndDate = normalizeDateInputValue(source.daily && source.daily.endDate);
+    const dailyStartDate = normalizeDateInputValue(source.daily && source.daily.startDate, dailyMaxDate) || defaults.daily.startDate;
+    let dailyEndDate = normalizeDateInputValue(source.daily && source.daily.endDate, dailyMaxDate);
     if (dailyEndDate && dailyEndDate < dailyStartDate) {
       dailyEndDate = '';
     }
 
-    const qcStartDate = normalizeDateInputValue(source.secondaryQc && source.secondaryQc.startDate) || defaults.secondaryQc.startDate;
-    let qcEndDate = normalizeDateInputValue(source.secondaryQc && source.secondaryQc.endDate);
+    const qcStartDate = normalizeDateInputValue(source.secondaryQc && source.secondaryQc.startDate, secondaryQcMaxDate) || defaults.secondaryQc.startDate;
+    let qcEndDate = normalizeDateInputValue(source.secondaryQc && source.secondaryQc.endDate, secondaryQcMaxDate);
     if (qcEndDate && qcEndDate < qcStartDate) {
       qcEndDate = '';
     }
@@ -2891,7 +2899,8 @@
   function findVxeSelectOption(panel, optionText) {
     const normalizedOptionText = normalizeText(optionText);
     const option = getVxeSelectPanelOptions(panel).find((element) => {
-      return normalizeText(element.textContent) === normalizedOptionText
+      const elementText = normalizeText(element.textContent);
+      return elementText === normalizedOptionText
         && !element.classList.contains('is--disabled')
         && !element.classList.contains('is-disabled');
     });
@@ -2933,7 +2942,7 @@
 
   async function setPagerPageSize(pageSize) {
     const normalizedPageSize = Math.max(1, Math.trunc(Number(pageSize) || 0));
-    const optionText = `${normalizedPageSize}条/页`;
+    const optionText = String(normalizedPageSize);
     if (getPagerPageSize() === normalizedPageSize) {
       await waitForListTableSettled();
       return;
@@ -4697,11 +4706,11 @@
                 <div class="ysp-daily-panel__module-body" data-role="secondary-qc-body">
                   <div class="ysp-daily-panel__field-grid">
                     <label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-start-date">
-                      <span class="ysp-daily-panel__date-caption">开始日期</span>
+                      <span class="ysp-daily-panel__date-caption">开始周期</span>
                       <input id="ysp-secondary-qc-start-date" class="ysp-daily-panel__date" type="date" />
                     </label>
                     <label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-end-date">
-                      <span class="ysp-daily-panel__date-caption">结束日期</span>
+                      <span class="ysp-daily-panel__date-caption">结束周期</span>
                       <input id="ysp-secondary-qc-end-date" class="ysp-daily-panel__date" type="date" />
                     </label>
                     <label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-target-count">
@@ -4737,7 +4746,7 @@
                 <button type="button" class="ysp-daily-panel__button" data-role="pause">暂停任务</button>
                 <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="resume">继续任务</button>
                 <button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button>
-                <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清除数据</button>
+                <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清理缓存</button>
               </div>
             </div>
           </div>
@@ -4749,7 +4758,7 @@
               <span class="ysp-daily-panel__label">设置</span>
             </div>
             <label class="ysp-daily-panel__date-field" for="ysp-settings-dashscope-api-key">
-              <span class="ysp-daily-panel__date-caption">环境变量 DASHSCOPE_API_KEY</span>
+              <span class="ysp-daily-panel__date-caption">DASHSCOPE_API_KEY（本地保存）</span>
               <input id="ysp-settings-dashscope-api-key" class="ysp-daily-panel__input" type="password" placeholder="请输入阿里云模型 Key" />
             </label>
             <div class="ysp-daily-panel__actions">
@@ -4877,18 +4886,19 @@
     }
 
     syncSettingsToInputs() {
-      const maxDate = getYesterdayDateString();
+      const dailyMaxDate = getYesterdayDateString();
+      const secondaryQcMaxDate = getTodayDateString();
       const daily = this.settings.daily;
       const secondaryQc = this.settings.secondaryQc;
 
-      this.refs.dailyStartDate.max = maxDate;
-      this.refs.dailyEndDate.max = maxDate;
+      this.refs.dailyStartDate.max = dailyMaxDate;
+      this.refs.dailyEndDate.max = dailyMaxDate;
       this.refs.dailyEndDate.min = daily.startDate || '';
       this.refs.dailyStartDate.value = daily.startDate || '';
       this.refs.dailyEndDate.value = daily.endDate || '';
 
-      this.refs.secondaryQcStartDate.max = maxDate;
-      this.refs.secondaryQcEndDate.max = maxDate;
+      this.refs.secondaryQcStartDate.max = secondaryQcMaxDate;
+      this.refs.secondaryQcEndDate.max = secondaryQcMaxDate;
       this.refs.secondaryQcEndDate.min = secondaryQc.startDate || '';
       this.refs.secondaryQcStartDate.value = secondaryQc.startDate || '';
       this.refs.secondaryQcEndDate.value = secondaryQc.endDate || '';
@@ -5086,16 +5096,16 @@
 
     updateModuleDate(moduleType, key, value) {
       const moduleSettings = this.getModuleSettings(moduleType);
-      const maxDate = getYesterdayDateString();
-      const normalizedValue = normalizeDateInputValue(value);
+      const maxDate = moduleType === 'secondaryQc' ? getTodayDateString() : getYesterdayDateString();
+      const normalizedValue = normalizeDateInputValue(value, maxDate);
       if (key === 'startDate') {
-        moduleSettings.startDate = normalizedValue || maxDate;
-        if (moduleSettings.endDate && moduleSettings.endDate < moduleSettings.startDate) {
+        moduleSettings.startDate = moduleType === 'secondaryQc' ? normalizedValue : (normalizedValue || maxDate);
+        if (moduleSettings.endDate && moduleSettings.startDate && moduleSettings.endDate < moduleSettings.startDate) {
           moduleSettings.endDate = '';
         }
       } else {
         moduleSettings.endDate = normalizedValue;
-        if (moduleSettings.endDate && moduleSettings.endDate < moduleSettings.startDate) {
+        if (moduleSettings.endDate && moduleSettings.startDate && moduleSettings.endDate < moduleSettings.startDate) {
           moduleSettings.endDate = '';
         }
       }
@@ -5303,26 +5313,33 @@
       if (this.runtime.running) {
         return;
       }
-      const confirmed = window.confirm('这会清除工作台已保存的设置、结果和进度。确认清除吗？');
-      if (!confirmed) {
-        return;
-      }
-      await storageRemove([
-        STORAGE_KEYS.settings,
+      const activeRequestState = await storageGet(STORAGE_KEYS.secondaryQcWorkerActiveRequest);
+      const activeRequestId = normalizeText(unwrapCacheEnvelope(activeRequestState[STORAGE_KEYS.secondaryQcWorkerActiveRequest]));
+      const clearKeys = [
         STORAGE_KEYS.report,
         STORAGE_KEYS.resultCache,
         STORAGE_KEYS.dailyCheckpoint,
         STORAGE_KEYS.secondaryQcReport,
         STORAGE_KEYS.secondaryQcCheckpoint,
         STORAGE_KEYS.secondaryQcWorkerActiveRequest
-      ]);
-      this.settings = createDefaultWorkbenchSettings();
+      ];
+      if (activeRequestId) {
+        clearKeys.push(
+          buildSecondaryQcWorkerRequestKey(activeRequestId),
+          buildSecondaryQcWorkerResponseKey(activeRequestId)
+        );
+      }
+      const confirmed = window.confirm('这只会清除工作台本地缓存、结果和任务进度，不会清空已保存的日期和 API Key。确认清除吗？');
+      if (!confirmed) {
+        return;
+      }
+      await storageRemove(clearKeys);
       this.settingsDraft = cloneWorkbenchSettings(this.settings);
       this.runtime.running = false;
       this.runtime.jobType = '';
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
-      this.runtime.statusText = '已清除全部已保存数据';
+      this.runtime.statusText = '已清除本地缓存';
       this.runtime.logs = [];
       this.runtime.daily = {
         checkpoint: null,
@@ -5696,22 +5713,25 @@
       if (!isListPage()) {
         throw new Error('二次质检只能在标准化列表页启动');
       }
-      const startDate = this.settings.secondaryQc.startDate;
-      const endDate = this.settings.secondaryQc.endDate || startDate;
+      const startDate = normalizeText(this.settings.secondaryQc.startDate);
+      const endDate = normalizeText(this.settings.secondaryQc.endDate);
       const targetCount = normalizePositiveInteger(this.settings.secondaryQc.targetCount, 10, 1, 999);
-      const maxDate = getYesterdayDateString();
+      const maxDate = getTodayDateString();
       const groupIds = this.settings.secondaryQc.groupIds.slice();
       const groups = this.getSelectedGroupEntries('secondaryQc');
       const items = this.getSelectedEntries('secondaryQc');
       const apiKey = normalizeText(this.settings.secrets.dashscopeApiKey);
       if (!startDate) {
-        throw new Error('请先选择二次质检开始日期');
+        throw new Error('请先选择二次质检开始周期');
+      }
+      if (!endDate) {
+        throw new Error('请先选择二次质检结束周期');
       }
       if (startDate > maxDate || endDate > maxDate) {
-        throw new Error('日期只能选择昨天及以前');
+        throw new Error('二次质检周期只能选择今天及以前');
       }
       if (endDate < startDate) {
-        throw new Error('结束日期不能早于开始日期');
+        throw new Error('结束周期不能早于开始周期');
       }
       if (!groups.length) {
         throw new Error('请至少选择一个二次质检编组');
