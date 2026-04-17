@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.13
+// @version      2.1.14
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -2863,104 +2863,6 @@
     const text = normalizeText(sizeInput ? sizeInput.value : pager.textContent);
     const matched = text.match(/(\d+)\s*条\/页/);
     return matched ? Number(matched[1]) : null;
-  }
-
-  function getPagerSizeWrapper() {
-    const pager = getVisiblePager();
-    return pager ? pager.querySelector('.vxe-pager--sizes') : null;
-  }
-
-  function getPagerSizePanel(wrapper) {
-    return wrapper ? wrapper.querySelector('.vxe-select--panel, .vxe-pulldown--panel') : null;
-  }
-
-  function getVxeSelectPanelOptions(panel) {
-    if (!panel) {
-      return [];
-    }
-    const options = Array.from(panel.querySelectorAll('.vxe-select-option--item, .vxe-select-option, [role="option"], li'))
-      .filter((element) => isVisible(element));
-    if (options.length) {
-      return options;
-    }
-    return Array.from(panel.querySelectorAll('*')).filter((element) => {
-      if (!isVisible(element)) {
-        return false;
-      }
-      const text = normalizeText(element.textContent);
-      if (!text || element.children.length) {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  function parsePagerSizeOptionValue(text) {
-    const matched = normalizeText(text).match(/(\d+)(?:\s*条\/页)?/);
-    return matched ? Number(matched[1]) : null;
-  }
-
-  function isDisabledVxeSelectOption(element) {
-    return !!(element && (element.classList.contains('is--disabled') || element.classList.contains('is-disabled')));
-  }
-
-  function getPagerSizeOptions(panel) {
-    return getVxeSelectPanelOptions(panel)
-      .map((element) => {
-        const text = normalizeText(element.textContent);
-        return {
-          element,
-          text,
-          value: parsePagerSizeOptionValue(text)
-        };
-      })
-      .filter((option) => option.text && option.value && !isDisabledVxeSelectOption(option.element));
-  }
-
-  async function openPagerSizeDropdown() {
-    const wrapper = await waitFor(() => getPagerSizeWrapper(), 5000, '未找到每页条数设置');
-    const panel = getPagerSizePanel(wrapper);
-    if (!panel) {
-      throw new Error('未找到每页条数面板容器');
-    }
-    const trigger = wrapper.querySelector('.vxe-input--wrapper, input, .vxe-input') || wrapper;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      triggerMouseClick(trigger);
-      await waitFor(() => getPagerSizeOptions(panel).length > 0, 4000, '未找到每页条数下拉选项');
-      if (getPagerSizeOptions(panel).length > 0) {
-        return panel;
-      }
-    }
-    throw new Error('无法展开每页条数下拉选项');
-  }
-
-  async function setPagerPageSize(pageSize) {
-    const normalizedPageSize = Math.max(1, Math.trunc(Number(pageSize) || 0));
-    if (getPagerPageSize() === normalizedPageSize) {
-      await waitForListTableSettled();
-      return normalizedPageSize;
-    }
-    const panel = await openPagerSizeDropdown();
-    const options = getPagerSizeOptions(panel);
-    if (!options.length) {
-      throw new Error('未读取到每页条数选项');
-    }
-    const targetOption = options.find((option) => option.value === normalizedPageSize)
-      || options.reduce((best, option) => {
-        if (!best || option.value > best.value) {
-          return option;
-        }
-        return best;
-      }, null);
-    if (!targetOption) {
-      throw new Error('未找到可用的每页条数选项');
-    }
-    if (getPagerPageSize() !== targetOption.value) {
-      triggerMouseClick(targetOption.element);
-      await waitFor(() => getPagerPageSize() === targetOption.value, 10000, `切换每页条数失败：${targetOption.text}`);
-    }
-    await waitForListTableSettled();
-    return targetOption.value;
   }
 
   function getPagerTotalRecords() {
@@ -5846,10 +5748,10 @@
         return;
       }
 
-      const pageSize = await setPagerPageSize(500);
+      const pageSize = getPagerPageSize() || 50;
       const totalRecords = getPagerTotalRecords() || queryCount;
       const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
-      this.pushLog(`${this.describeItem(item)}：命中 ${totalRecords} 条，本品类目标 ${itemTargetCount} 条，已切换 ${pageSize} 条/页，开始从最后一页倒序扫描`);
+      this.pushLog(`${this.describeItem(item)}：命中 ${totalRecords} 条，本品类目标 ${itemTargetCount} 条，当前 ${pageSize} 条/页，开始从最后一页倒序扫描`);
 
       await gotoListPageNumber(totalPages);
 
