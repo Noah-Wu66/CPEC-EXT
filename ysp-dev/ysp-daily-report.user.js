@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.17
+// @version      2.1.18
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1042,7 +1042,8 @@
     secondaryQcCheckpoint: 'yspWorkbenchSecondaryQcCheckpointV1',
     secondaryQcWorkerActiveRequest: 'yspWorkbenchSecondaryQcWorkerActiveRequestV1',
     secondaryQcWorkerRequestPrefix: 'yspWorkbenchSecondaryQcWorkerRequest:',
-    secondaryQcWorkerResponsePrefix: 'yspWorkbenchSecondaryQcWorkerResponse:'
+    secondaryQcWorkerResponsePrefix: 'yspWorkbenchSecondaryQcWorkerResponse:',
+    secondaryQcWorkerProgressPrefix: 'yspWorkbenchSecondaryQcWorkerProgress:'
   };
 
   const SESSION_KEY = 'yspWorkbenchSessionKey';
@@ -1051,7 +1052,10 @@
   const QUERY_TIMEOUT = 90000;
   const PAGE_READY_TIMEOUT = 60000;
   const DETAIL_PAGE_TIMEOUT = 60000;
-  const WORKER_RESPONSE_TIMEOUT = 10 * 60 * 1000;
+  const DASHSCOPE_REQUEST_TIMEOUT = 90 * 1000;
+  const WORKER_START_TIMEOUT = 15000;
+  const WORKER_PROGRESS_STALL_TIMEOUT = 90 * 1000;
+  const WORKER_RESPONSE_TIMEOUT = 8 * 60 * 1000;
   const DASHSCOPE_CHAT_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
   const YANGSHIPIN_VIDEO_URL = 'https://yangshipin.cn/video/home';
 
@@ -2484,9 +2488,41 @@
     return `${STORAGE_KEYS.secondaryQcWorkerResponsePrefix}${requestId}`;
   }
 
+  function buildSecondaryQcWorkerProgressKey(requestId) {
+    return `${STORAGE_KEYS.secondaryQcWorkerProgressPrefix}${requestId}`;
+  }
+
   function getSecondaryQcWorkerRequestIdFromLocation() {
     const params = new URLSearchParams(location.search);
     return normalizeText(params.get('ysp_qc_request'));
+  }
+
+  async function updateSecondaryQcWorkerProgress(requestId, text) {
+    const normalizedRequestId = normalizeText(requestId);
+    const normalizedText = normalizeText(text);
+    if (!normalizedRequestId || !normalizedText) {
+      return;
+    }
+    await storageSetCached({
+      [buildSecondaryQcWorkerProgressKey(normalizedRequestId)]: {
+        requestId: normalizedRequestId,
+        text: normalizedText,
+        updatedAt: new Date().toISOString()
+      }
+    });
+  }
+
+  async function clearSecondaryQcWorkerActiveRequest(requestId) {
+    const normalizedRequestId = normalizeText(requestId);
+    if (!normalizedRequestId) {
+      return;
+    }
+    const state = await storageGet(STORAGE_KEYS.secondaryQcWorkerActiveRequest);
+    const activeRequestId = normalizeText(unwrapCacheEnvelope(state[STORAGE_KEYS.secondaryQcWorkerActiveRequest]));
+    if (!activeRequestId || activeRequestId !== normalizedRequestId) {
+      return;
+    }
+    await storageRemove(STORAGE_KEYS.secondaryQcWorkerActiveRequest);
   }
 
   function decodeHtmlEntities(text) {
@@ -2779,7 +2815,7 @@
         'Content-Type': 'application/json'
       },
       data: JSON.stringify(payload),
-      timeout: WORKER_RESPONSE_TIMEOUT
+      timeout: DASHSCOPE_REQUEST_TIMEOUT
     });
     if (!response || response.status >= 400) {
       throw new Error(`模型请求失败：${response ? response.status : '未知状态'}`);
@@ -4160,14 +4196,41 @@
     return [];
   }
 
-  async function waitForSecondaryQcWorkerResponse(requestId, timeoutMs) {
+  async function waitForSecondaryQcWorkerResponse(requestId, timeoutMs, onProgress) {
     const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
+    const progressKey = buildSecondaryQcWorkerProgressKey(requestId);
     const startedAt = Date.now();
+    let lastProgressToken = '';
+    let lastActiveAt = startedAt;
+    let hasProgress = false;
     while (Date.now() - startedAt < timeoutMs) {
-      const storage = await storageGet(responseKey);
+      const storage = await storageGet([responseKey, progressKey]);
+      const progress = unwrapCacheEnvelope(storage[progressKey]);
+      if (progress && typeof progress === 'object') {
+        const progressToken = normalizeText(progress.updatedAt) || normalizeText(progress.text);
+        if (progressToken && progressToken !== lastProgressToken) {
+          lastProgressToken = progressToken;
+          hasProgress = true;
+          lastActiveAt = Date.now();
+          if (typeof onProgress === 'function') {
+            try {
+              onProgress(progress);
+            } catch (error) {
+              // ignore progress callback errors
+            }
+          }
+        }
+      }
       const response = unwrapCacheEnvelope(storage[responseKey]);
       if (response && typeof response === 'object') {
         return response;
+      }
+      const now = Date.now();
+      if (!hasProgress && now - startedAt >= WORKER_START_TIMEOUT) {
+        throw new Error('详情页未启动，可能被浏览器拦截或新标签页没有打开');
+      }
+      if (hasProgress && now - lastActiveAt >= WORKER_PROGRESS_STALL_TIMEOUT) {
+        throw new Error('详情页处理卡住，已超时跳过');
       }
       await sleep(800);
     }
@@ -4303,8 +4366,16 @@
   async function runSecondaryQcDetailWorker(requestId) {
     const requestKey = buildSecondaryQcWorkerRequestKey(requestId);
     const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
+    const reportProgress = async (text) => {
+      mountWorkerBadge(text);
+      try {
+        await updateSecondaryQcWorkerProgress(requestId, text);
+      } catch (error) {
+        // ignore progress sync errors
+      }
+    };
     enforcePageMuted();
-    mountWorkerBadge('二次质检处理中');
+    await reportProgress('详情页已打开，正在加载内容');
     let responsePayload = null;
     try {
       const requestState = await storageGet(requestKey);
@@ -4314,7 +4385,7 @@
       }
 
       await waitForDetailPageReady();
-      mountWorkerBadge('正在读取视频信息');
+      await reportProgress('正在读取视频信息');
 
       const apiKey = normalizeText(request.apiKey);
       if (!apiKey) {
@@ -4330,22 +4401,28 @@
       const yangshipinHtml = await fetchYangshipinPageHtml(videoVid);
       const videoUrl = extractYangshipinVideoUrl(yangshipinHtml);
 
-      mountWorkerBadge('正在理解视频内容');
+      await reportProgress('正在理解视频内容');
       const videoSummary = await requestOmniVideoSummary(apiKey, videoUrl, buildOmniVideoSummaryPrompt());
 
-      mountWorkerBadge('正在分析成品标签');
+      await reportProgress('正在分析成品标签');
       const selectedTags = getDetailSelectedTags();
       const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(videoSummary, selectedTags));
       const firstJudge = JSON.parse(extractFirstJsonObject(firstJudgeRaw));
       const wrongTags = normalizeTagArray(firstJudge.wrong_tags);
       const missingCandidates = normalizeTagArray(firstJudge.missing_tags_candidate);
 
-      mountWorkerBadge('正在验证候选标签');
+      await reportProgress(
+        missingCandidates.length
+          ? `正在验证候选标签（1/${missingCandidates.length}）`
+          : '当前没有候选标签需要验证'
+      );
       const searchResults = [];
-      for (const candidate of missingCandidates) {
+      for (let candidateIndex = 0; candidateIndex < missingCandidates.length; candidateIndex += 1) {
+        const candidate = missingCandidates[candidateIndex];
         if (!candidate) {
           continue;
         }
+        await reportProgress(`正在验证候选标签（${candidateIndex + 1}/${missingCandidates.length}）`);
         try {
           const options = await searchAvailableTagOptions(candidate);
           searchResults.push({
@@ -4361,7 +4438,7 @@
         }
       }
 
-      mountWorkerBadge('正在生成最终结论');
+      await reportProgress('正在生成最终结论');
       const finalJudgeRaw = await requestTagJudge(
         apiKey,
         buildFinalTagJudgePrompt(
@@ -4396,18 +4473,26 @@
         summary: normalizeText(firstJudge.summary),
         completedAt: new Date().toISOString()
       };
+      await reportProgress('处理完成，正在返回结果');
     } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      try {
+        await updateSecondaryQcWorkerProgress(requestId, `处理失败：${message}`);
+      } catch (syncError) {
+        // ignore progress sync errors
+      }
       responsePayload = {
         status: 'error',
         requestId,
-        error: error && error.message ? error.message : String(error),
+        error: message,
         completedAt: new Date().toISOString()
       };
     } finally {
       await storageSetCached({
         [responseKey]: responsePayload
       });
-      await storageRemove([requestKey, STORAGE_KEYS.secondaryQcWorkerActiveRequest]);
+      await storageRemove(requestKey);
+      await clearSecondaryQcWorkerActiveRequest(requestId);
       try {
         await clickDetailExitButton();
       } catch (error) {
@@ -5242,7 +5327,8 @@
       if (activeRequestId) {
         clearKeys.push(
           buildSecondaryQcWorkerRequestKey(activeRequestId),
-          buildSecondaryQcWorkerResponseKey(activeRequestId)
+          buildSecondaryQcWorkerResponseKey(activeRequestId),
+          buildSecondaryQcWorkerProgressKey(activeRequestId)
         );
       }
       const confirmed = window.confirm('这只会清除工作台本地缓存、结果和任务进度，不会清空已保存的日期和 API Key。确认清除吗？');
@@ -5819,36 +5905,50 @@
       const requestId = createRuntimeToken('qc');
       const requestKey = buildSecondaryQcWorkerRequestKey(requestId);
       const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
+      const progressKey = buildSecondaryQcWorkerProgressKey(requestId);
       const detailUrl = `${location.origin}/stdDetail/${encodeURIComponent(row.taskId)}?select_type=2&ysp_qc_request=${encodeURIComponent(requestId)}`;
-
-      await storageRemove(responseKey);
-      await storageSetCached({
-        [requestKey]: {
-          requestId,
-          apiKey,
-          taskId: row.taskId,
-          standardOperator: row.standardOperator,
-          qcOperator: checkpoint.qcOperator,
-          createdAt: new Date().toISOString()
-        },
-        [STORAGE_KEYS.secondaryQcWorkerActiveRequest]: requestId
-      });
-
-      this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页处理 ${row.taskId}`);
-      const openedWindow = window.open(detailUrl, '_blank');
-      if (!openedWindow) {
-        const anchor = document.createElement('a');
-        anchor.href = detailUrl;
-        anchor.target = '_blank';
-        anchor.rel = 'noopener noreferrer';
-        anchor.click();
-      }
 
       let response = null;
       try {
-        response = await waitForSecondaryQcWorkerResponse(requestId, WORKER_RESPONSE_TIMEOUT);
+        await storageRemove([responseKey, progressKey]);
+        await storageSetCached({
+          [requestKey]: {
+            requestId,
+            apiKey,
+            taskId: row.taskId,
+            standardOperator: row.standardOperator,
+            qcOperator: checkpoint.qcOperator,
+            createdAt: new Date().toISOString()
+          },
+          [STORAGE_KEYS.secondaryQcWorkerActiveRequest]: requestId
+        });
+
+        this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页处理 ${row.taskId}`);
+        const openedWindow = window.open(detailUrl, '_blank');
+        if (!openedWindow) {
+          const anchor = document.createElement('a');
+          anchor.href = detailUrl;
+          anchor.target = '_blank';
+          anchor.rel = 'noopener noreferrer';
+          anchor.click();
+        }
+
+        let lastProgressText = '';
+        response = await waitForSecondaryQcWorkerResponse(requestId, WORKER_RESPONSE_TIMEOUT, (progress) => {
+          const progressText = normalizeText(progress && progress.text);
+          if (!progressText || progressText === lastProgressText) {
+            return;
+          }
+          lastProgressText = progressText;
+          this.pushLog(`${row.taskId}：${progressText}`);
+        });
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        this.pushLog(`${row.taskId}：${message}，已跳过`);
+        return;
       } finally {
-        await storageRemove([requestKey, responseKey, STORAGE_KEYS.secondaryQcWorkerActiveRequest]);
+        await storageRemove([requestKey, responseKey, progressKey]);
+        await clearSecondaryQcWorkerActiveRequest(requestId);
       }
 
       if (!response) {
