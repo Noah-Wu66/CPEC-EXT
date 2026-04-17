@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.2
+// @version      2.1.3
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -41,6 +41,10 @@
   pointer-events: none;
   color: #17304b;
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+
+#ysp-daily-panel-root.is-settings-open {
+  pointer-events: auto;
 }
 
 .ysp-daily-panel__backdrop {
@@ -5019,6 +5023,7 @@
         releasePageMuted();
       }
       this.panel.classList.toggle('is-minimized', this.runtime.minimized);
+      this.panel.classList.toggle('is-settings-open', this.settingsModalOpen);
       this.refs.settingsMask.hidden = !this.settingsModalOpen;
 
       this.syncSettingsToInputs();
