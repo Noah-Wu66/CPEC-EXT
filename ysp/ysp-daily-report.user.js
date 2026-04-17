@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.32
+// @version      1.2.33
 // @description  在标准化系统页面按日期区间和编组子品类采集日报，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -402,13 +402,21 @@
 }
 
 .ysp-daily-panel__status {
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(22, 51, 78, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px auto 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(22, 51, 78, 0.1);
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.4;
   color: #35516a;
+  text-align: center;
+  box-shadow: 0 8px 18px rgba(22, 51, 78, 0.08);
 }
 
 .ysp-daily-panel__report {
