@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         二次质检日报采集
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.24
+// @version      1.2.26
 // @description  在标准化系统页面按日期区间和编组子品类采集日报，并静默缓存到本地
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
 // @match        https://std.video.cloud.cctv.com/*
-// @updateURL    https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp/ysp-daily-report.user.js
-// @downloadURL  https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp/ysp-daily-report.user.js
+// @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp/ysp-daily-report.user.js
+// @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp/ysp-daily-report.user.js
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
@@ -24,7 +24,7 @@
   }
   window.__YSP_DAILY_REPORTER__ = true;
 
-  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.24';
+  const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || '1.2.26';
 
   const PANEL_STYLE = `
 #ysp-daily-panel-root {
@@ -2138,6 +2138,10 @@
       }
       this.handleOutsideInteraction = (event) => {
         if (this.runtime.minimized) {
+          return;
+        }
+        // 采集流程会脚本化点击页面控件，这类事件不应触发面板收起。
+        if (event.isTrusted === false) {
           return;
         }
         const target = event.target;
