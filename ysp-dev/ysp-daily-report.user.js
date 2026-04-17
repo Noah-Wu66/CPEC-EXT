@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.19
+// @version      2.1.20
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -3195,7 +3195,22 @@
     return match ? normalizeText(match[1]) : '';
   }
 
-  function getDetailVideoVid() {
+  function getDetailVideoVidFromPlayer() {
+    const candidates = [
+      ...Array.from(document.querySelectorAll('video[id^="myvideo"]')),
+      ...Array.from(document.querySelectorAll('[id^="vodbox"]'))
+    ];
+    for (const element of candidates) {
+      const id = normalizeText(element && element.id);
+      const matched = id.match(/(?:myvideo|vodbox)([a-z0-9]+)/i);
+      if (matched && matched[1]) {
+        return normalizeText(matched[1]);
+      }
+    }
+    return '';
+  }
+
+  function getDetailVideoVid(fallbackVid) {
     const explicitItem = getDetailFormItemByLabel('VID');
     const explicitInput = explicitItem && explicitItem.querySelector('input');
     const explicitContent = explicitItem ? explicitItem.querySelector('.el-form-item__content') : null;
@@ -3204,19 +3219,21 @@
         ? explicitInput.value
         : (explicitContent ? explicitContent.textContent : '')
     );
-    if (explicitValue && explicitValue !== getDetailPageTaskId()) {
-      return explicitValue;
-    }
     const consoleValue = normalizeText(document.querySelector('[data-role="txp-ui-console-vid"]')?.textContent);
-    if (consoleValue) {
-      return consoleValue;
-    }
-    return explicitValue || '';
+    const playerValue = getDetailVideoVidFromPlayer();
+    const taskValue = getDetailPageTaskId();
+    return explicitValue || consoleValue || playerValue || normalizeText(fallbackVid) || taskValue || '';
   }
 
   function getDetailFinishedTagsField() {
     const item = getDetailFormItemByLabel('成品标签');
     return item ? item.querySelector('.video-label-select, .moveTag, .el-select') : null;
+  }
+
+  async function waitForDetailAnalysisReady(fallbackVid, cancelCheck) {
+    await waitFor(() => {
+      return getDetailFinishedTagsField() && getDetailVideoVid(fallbackVid);
+    }, DETAIL_PAGE_TIMEOUT, '详情页视频信息未准备完成', { cancelCheck });
   }
 
   function getDetailSelectedTags() {
@@ -4402,6 +4419,20 @@
     return [];
   }
 
+  function prefixTaskError(taskId, message) {
+    const normalizedTaskId = normalizeText(taskId);
+    const normalizedMessage = normalizeText(message);
+    if (!normalizedTaskId) {
+      return normalizedMessage;
+    }
+    if (!normalizedMessage) {
+      return normalizedTaskId;
+    }
+    return normalizedMessage.startsWith(`${normalizedTaskId}：`)
+      ? normalizedMessage
+      : `${normalizedTaskId}：${normalizedMessage}`;
+  }
+
   async function waitForSecondaryQcWorkerResponse(requestId, timeoutMs, onProgress, cancelCheck) {
     const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
     const progressKey = buildSecondaryQcWorkerProgressKey(requestId);
@@ -4599,7 +4630,10 @@
         throw new Error('未找到二次质检任务上下文');
       }
 
+      const listVid = normalizeText(request.taskId || getDetailPageTaskId());
+
       await waitForDetailPageReady(cancelCheck);
+      await waitForDetailAnalysisReady(listVid, cancelCheck);
       await reportProgress('正在读取视频信息');
       await ensureSecondaryQcWorkerNotStopped(requestId);
 
@@ -4608,8 +4642,7 @@
         throw new Error('未配置 DASHSCOPE_API_KEY');
       }
 
-      const listVid = normalizeText(request.taskId || getDetailPageTaskId());
-      const videoVid = getDetailVideoVid();
+      const videoVid = getDetailVideoVid(listVid);
       if (!videoVid) {
         throw new Error('未读取到顶部 VID');
       }
@@ -4643,23 +4676,11 @@
         }
         await reportProgress(`正在验证候选标签（${candidateIndex + 1}/${missingCandidates.length}）`);
         await ensureSecondaryQcWorkerNotStopped(requestId);
-        try {
-          const options = await searchAvailableTagOptions(candidate, cancelCheck);
-          searchResults.push({
-            keyword: candidate,
-            options
-          });
-        } catch (error) {
-          const message = error && error.message ? error.message : String(error);
-          if (message === '采集已结束') {
-            throw error;
-          }
-          searchResults.push({
-            keyword: candidate,
-            options: [],
-            error: message
-          });
-        }
+        const options = await searchAvailableTagOptions(candidate, cancelCheck);
+        searchResults.push({
+          keyword: candidate,
+          options
+        });
       }
 
       await reportProgress('正在生成最终结论');
@@ -4701,11 +4722,6 @@
       await reportProgress('处理完成，正在返回结果');
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
-      try {
-        await updateSecondaryQcWorkerProgress(requestId, `处理失败：${message}`);
-      } catch (syncError) {
-        // ignore progress sync errors
-      }
       responsePayload = {
         status: 'error',
         requestId,
@@ -6140,8 +6156,10 @@
 
       let reachedTop = false;
       while (!reachedTop && checkpoint.rows.length < checkpoint.targetCount && (checkpoint.itemRecordedCounts[itemIndex] || 0) < itemTargetCount) {
+        this.ensureNotStopped();
         const rows = parseCurrentListRows().filter((row) => row && row.taskId);
         for (let index = rows.length - 1; index >= 0; index -= 1) {
+          this.ensureNotStopped();
           if (checkpoint.rows.length >= checkpoint.targetCount || (checkpoint.itemRecordedCounts[itemIndex] || 0) >= itemTargetCount) {
             return;
           }
@@ -6150,9 +6168,9 @@
             continue;
           }
           localSeen.add(row.taskId);
+          await this.handleSecondaryQcRow(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
           checkpoint.processedTaskIds.push(row.taskId);
           await this.saveCheckpoint('secondaryQc');
-          await this.handleSecondaryQcRow(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
         }
 
         if (!body) {
@@ -6193,6 +6211,7 @@
           [STORAGE_KEYS.secondaryQcWorkerActiveRequest]: requestId
         });
 
+        this.ensureNotStopped();
         this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页处理 ${row.taskId}`);
         const openedWindow = window.open(detailUrl, '_blank');
         if (!openedWindow) {
@@ -6220,22 +6239,19 @@
       } catch (error) {
         const message = error && error.message ? error.message : String(error);
         if (message === '采集已结束') {
-          return;
+          throw error;
         }
-        this.pushLog(`${row.taskId}：${message}，已跳过`);
-        return;
+        throw new Error(prefixTaskError(row.taskId, message));
       } finally {
         await storageRemove([requestKey, responseKey, progressKey]);
         await clearSecondaryQcWorkerActiveRequest(requestId);
       }
 
       if (!response) {
-        this.pushLog(`${row.taskId}：未收到详情页结果`);
-        return;
+        throw new Error(prefixTaskError(row.taskId, '未收到详情页结果'));
       }
       if (response.status === 'error') {
-        this.pushLog(`${row.taskId}：处理失败，${response.error}`);
-        return;
+        throw new Error(prefixTaskError(row.taskId, response.error));
       }
 
       const problemText = normalizeText(response.problemText);
