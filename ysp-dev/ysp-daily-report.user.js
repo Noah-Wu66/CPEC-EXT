@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.26
+// @version      2.1.27
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -16,8 +16,6 @@
 // @grant        GM_addStyle
 // @grant        GM_info
 // @grant        GM_xmlhttpRequest
-// @connect      yangshipin.cn
-// @connect      playvv.yangshipin.cn
 // @connect      dashscope.aliyuncs.com
 // @run-at       document-idle
 // ==/UserScript==
@@ -2954,12 +2952,6 @@
     }
   }
 
-  function decodeHtmlEntities(text) {
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = String(text || '');
-    return textarea.value;
-  }
-
   function normalizeTagDisplayName(rawValue) {
     if (rawValue && typeof rawValue === 'object') {
       return normalizeText(
@@ -3172,11 +3164,26 @@
   }
 
   function parseDurationText(text) {
-    const matched = normalizeText(text).match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
-    if (!matched || !matched[1]) {
+    const normalized = normalizeText(text);
+    if (!normalized) {
       return 0;
     }
-    const parts = matched[1].split(':').map((part) => Number(part));
+    const compact = normalized.replace(/\s+/g, '');
+    const chineseMatched = compact.match(/(?:(\d{1,2})时)?(?:(\d{1,2})分)?(?:(\d{1,2})秒)/);
+    if (chineseMatched && (chineseMatched[1] || chineseMatched[2] || chineseMatched[3])) {
+      const hh = Number(chineseMatched[1] || 0);
+      const mm = Number(chineseMatched[2] || 0);
+      const ss = Number(chineseMatched[3] || 0);
+      if ([hh, mm, ss].every((part) => Number.isFinite(part))) {
+        return (hh * 3600) + (mm * 60) + ss;
+      }
+    }
+    const colonMatches = Array.from(compact.matchAll(/(^|[^\d])(\d{1,2}:\d{2}(?::\d{2})?)(?!\d)/g));
+    if (!colonMatches.length) {
+      return 0;
+    }
+    const matched = colonMatches[colonMatches.length - 1][2];
+    const parts = matched.split(':').map((part) => Number(part));
     if (parts.some((part) => !Number.isFinite(part))) {
       return 0;
     }
@@ -3683,13 +3690,45 @@
     return 0;
   }
 
-  function getDetailDurationFromText() {
-    const fieldDuration = parseDurationText(getDetailFormValueByLabels(['时长', '片长', '节目时长']));
-    if (fieldDuration > 0) {
-      return fieldDuration;
+  function getDurationSecondsFromSelectors(selectors) {
+    const normalizedSelectors = Array.isArray(selectors)
+      ? selectors.filter(Boolean)
+      : [];
+    if (!normalizedSelectors.length) {
+      return 0;
     }
-    const headerDuration = parseDurationText(document.querySelector('.article-header')?.textContent || '');
-    return headerDuration > 0 ? headerDuration : 0;
+    const elements = Array.from(document.querySelectorAll(normalizedSelectors.join(', ')));
+    const getValues = (candidateElements) => candidateElements
+      .map((element) => parseDurationText(element.textContent || ''))
+      .filter((value) => value > 0);
+    const visibleValues = getValues(elements.filter(isVisible));
+    if (visibleValues.length) {
+      return Math.max(...visibleValues);
+    }
+    const fallbackValues = getValues(elements);
+    return fallbackValues.length ? Math.max(...fallbackValues) : 0;
+  }
+
+  function getDetailDurationFromText() {
+    const playerDuration = getDurationSecondsFromSelectors([
+      '[data-role="txp-control-duration"]',
+      '[data-role="txp-button-duration-time"]',
+      '.txp_time_duration',
+      '.time-r'
+    ]);
+    if (playerDuration > 0) {
+      return playerDuration;
+    }
+    const detailDuration = getDurationSecondsFromSelectors([
+      '.task-wrap .time',
+      '.main-body .time',
+      '.article .time'
+    ]);
+    if (detailDuration > 0) {
+      return detailDuration;
+    }
+    const fieldDuration = parseDurationText(getDetailFormValueByLabels(['时长', '片长', '节目时长']));
+    return fieldDuration > 0 ? fieldDuration : 0;
   }
 
   async function waitForDetailDurationSeconds(cancelCheck) {
@@ -5396,47 +5435,69 @@
     throw new Error('等待视频地址结果超时');
   }
 
-  function getYangshipinPlayInfoScriptUrl() {
-    const script = Array.from(document.querySelectorAll('script[src]')).find((element) => {
-      const src = normalizeText(element.getAttribute('src'));
-      return /playvv\.yangshipin\.cn\/playvinfo/i.test(src);
+  function normalizeMediaSourceUrl(value) {
+    const normalized = normalizeText(String(value || '')).replace(/&amp;/gi, '&');
+    return /^https?:\/\//i.test(normalized) ? normalized : '';
+  }
+
+  function getMediaSourceUrl(element) {
+    if (!(element instanceof HTMLMediaElement)) {
+      return '';
+    }
+    const sourceElement = element.querySelector('source[src]');
+    const candidates = [
+      element.currentSrc,
+      element.src,
+      element.getAttribute('src'),
+      sourceElement ? sourceElement.getAttribute('src') : ''
+    ];
+    for (const candidate of candidates) {
+      const mediaUrl = normalizeMediaSourceUrl(candidate);
+      if (mediaUrl) {
+        return mediaUrl;
+      }
+    }
+    return '';
+  }
+
+  function getYangshipinVideoElements(videoVid) {
+    const normalizedVid = normalizeText(videoVid);
+    const candidates = [];
+    if (normalizedVid) {
+      const explicitVideo = document.getElementById(`myvideo${normalizedVid}`);
+      if (explicitVideo instanceof HTMLMediaElement) {
+        candidates.push(explicitVideo);
+      }
+      const explicitContainer = document.getElementById(`vodbox${normalizedVid}`);
+      if (explicitContainer instanceof Element) {
+        candidates.push(...Array.from(explicitContainer.querySelectorAll('video')));
+      }
+    }
+    candidates.push(...Array.from(document.querySelectorAll('video[id^="myvideo"]')));
+    candidates.push(...Array.from(document.querySelectorAll('[id^="vodbox"] video')));
+    candidates.push(...Array.from(document.querySelectorAll('video')));
+    return candidates.filter((element, index, array) => {
+      return element instanceof HTMLMediaElement && array.indexOf(element) === index;
     });
-    return script ? decodeHtmlEntities(script.getAttribute('src') || '') : '';
   }
 
-  async function waitForYangshipinPlayInfoScriptUrl(cancelCheck) {
+  function getYangshipinDirectVideoUrl(videoVid) {
+    const mediaElements = getYangshipinVideoElements(videoVid);
+    const visibleElement = mediaElements.find((element) => {
+      return isVisible(element) && getMediaSourceUrl(element);
+    });
+    if (visibleElement) {
+      return getMediaSourceUrl(visibleElement);
+    }
+    const anyElement = mediaElements.find((element) => getMediaSourceUrl(element));
+    return anyElement ? getMediaSourceUrl(anyElement) : '';
+  }
+
+  async function waitForYangshipinDirectVideoUrl(videoVid, cancelCheck) {
     return waitFor(() => {
-      const scriptUrl = getYangshipinPlayInfoScriptUrl();
-      return scriptUrl ? scriptUrl : '';
-    }, DETAIL_PAGE_TIMEOUT, '未获取到央视频播放信息', { cancelCheck });
-  }
-
-  function parseYangshipinJsonpPayload(text) {
-    const source = normalizeText(text);
-    const firstParen = source.indexOf('(');
-    const lastParen = source.lastIndexOf(')');
-    if (firstParen < 0 || lastParen <= firstParen) {
-      throw new Error('央视频播放信息格式异常');
-    }
-    return JSON.parse(source.slice(firstParen + 1, lastParen));
-  }
-
-  function buildYangshipinVideoUrlFromPlayInfo(playInfo) {
-    if (!playInfo || normalizeText(playInfo.s) !== 'o') {
-      throw new Error(normalizeText(playInfo && playInfo.errinfo) || '央视频播放信息返回失败');
-    }
-    const videoList = playInfo && playInfo.vl && Array.isArray(playInfo.vl.vi) ? playInfo.vl.vi : [];
-    const videoInfo = videoList.find((item) => item && item.fvkey && item.fn && item.ul && Array.isArray(item.ul.ui) && item.ul.ui.length) || null;
-    if (!videoInfo) {
-      throw new Error('央视频播放信息里没有视频地址');
-    }
-    const baseUrl = normalizeText(videoInfo.ul.ui[0] && videoInfo.ul.ui[0].url);
-    const fileName = normalizeText(videoInfo.fn);
-    const vkey = normalizeText(videoInfo.fvkey);
-    if (!baseUrl || !fileName || !vkey) {
-      throw new Error('央视频播放信息不完整');
-    }
-    return `${baseUrl}${fileName}?vkey=${vkey}`;
+      const mediaUrl = getYangshipinDirectVideoUrl(videoVid);
+      return mediaUrl || '';
+    }, DETAIL_PAGE_TIMEOUT, '未获取到视频地址', { cancelCheck });
   }
 
   async function fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck) {
@@ -5651,23 +5712,7 @@
         throw new Error('未提供视频 VID');
       }
 
-      const scriptUrl = await waitForYangshipinPlayInfoScriptUrl();
-      const normalizedScriptUrl = scriptUrl.startsWith('//')
-        ? `https:${scriptUrl}`
-        : scriptUrl;
-      const playInfoResponse = await gmXmlhttpRequestPromise({
-        method: 'GET',
-        url: normalizedScriptUrl,
-        headers: {
-          Referer: location.href
-        },
-        timeout: DASHSCOPE_REQUEST_TIMEOUT
-      });
-      if (!playInfoResponse || playInfoResponse.status >= 400) {
-        throw new Error(`央视频播放信息获取失败：${playInfoResponse ? playInfoResponse.status : '未知状态'}`);
-      }
-      const playInfo = parseYangshipinJsonpPayload(playInfoResponse.responseText || '');
-      const videoUrl = buildYangshipinVideoUrlFromPlayInfo(playInfo);
+      const videoUrl = await waitForYangshipinDirectVideoUrl(videoVid);
 
       responsePayload = {
         status: 'completed',
