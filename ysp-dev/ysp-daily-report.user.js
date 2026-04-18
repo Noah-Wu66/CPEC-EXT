@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.30
+// @version      2.1.31
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -146,7 +146,9 @@
 .ysp-daily-panel__header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .ysp-daily-panel__title {
@@ -157,30 +159,33 @@
   line-height: 1.15;
 }
 
-.ysp-daily-panel__version {
-  flex-shrink: 0;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-}
-
-.ysp-daily-panel__minimize {
+.ysp-daily-panel__header-chip {
   position: relative;
   z-index: 3;
-  min-width: 56px;
-  min-height: 32px;
-  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 60px;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 14px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
   font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+button.ysp-daily-panel__header-chip {
   cursor: pointer;
+}
+
+button.ysp-daily-panel__header-chip:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .ysp-daily-panel__body {
@@ -635,43 +640,39 @@
   }
 }
 
+.ysp-daily-panel__module-switcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ysp-daily-panel__module-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(24, 52, 76, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #1c496b;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ysp-daily-panel__module-tab.is-active {
+  border-color: rgba(31, 94, 139, 0.2);
+  background: linear-gradient(135deg, rgba(27, 82, 122, 0.96), rgba(16, 50, 78, 0.98));
+  color: #f9fbff;
+  box-shadow: 0 10px 24px rgba(19, 57, 88, 0.18);
+}
+
 .ysp-daily-panel__module {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.ysp-daily-panel__module-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.ysp-daily-panel__module-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #18344c;
-}
-
-.ysp-daily-panel__module-meta {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #5f7284;
-}
-
-.ysp-daily-panel__collapse {
-  min-width: 72px;
-  min-height: 32px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(24, 52, 76, 0.1);
-  background: rgba(255, 255, 255, 0.84);
-  color: #1c496b;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .ysp-daily-panel__module-body {
@@ -680,7 +681,7 @@
   gap: 14px;
 }
 
-.ysp-daily-panel__module.is-collapsed .ysp-daily-panel__module-body {
+.ysp-daily-panel__module[hidden] {
   display: none;
 }
 
@@ -2774,8 +2775,7 @@
       version: 1,
       ui: {
         panelMinimized: true,
-        dailyCollapsed: true,
-        secondaryQcCollapsed: false
+        activeModule: 'secondaryQc'
       },
       daily: {
         startDate: yesterday,
@@ -2812,6 +2812,10 @@
       return maxValue;
     }
     return numberValue;
+  }
+
+  function normalizeActiveModule(value) {
+    return value === 'daily' ? 'daily' : 'secondaryQc';
   }
 
   function normalizeWorkbenchSettings(rawSettings) {
@@ -2852,12 +2856,7 @@
         panelMinimized: source.ui && source.ui.panelMinimized !== undefined
           ? Boolean(source.ui.panelMinimized)
           : defaults.ui.panelMinimized,
-        dailyCollapsed: source.ui && source.ui.dailyCollapsed !== undefined
-          ? Boolean(source.ui.dailyCollapsed)
-          : defaults.ui.dailyCollapsed,
-        secondaryQcCollapsed: source.ui && source.ui.secondaryQcCollapsed !== undefined
-          ? Boolean(source.ui.secondaryQcCollapsed)
-          : defaults.ui.secondaryQcCollapsed
+        activeModule: normalizeActiveModule(source.ui && source.ui.activeModule)
       },
       daily: {
         startDate: dailyStartDate,
@@ -5425,22 +5424,20 @@
                 <div class="ysp-daily-panel__title">央视频标准化工作台</div>
               </div>
               <div class="ysp-daily-panel__header-actions">
-                <button type="button" class="ysp-daily-panel__button" data-role="open-settings">设置</button>
-                <div class="ysp-daily-panel__version">v${SCRIPT_VERSION}</div>
-                <button type="button" class="ysp-daily-panel__minimize" data-role="minimize">收起</button>
+                <button type="button" class="ysp-daily-panel__header-chip" data-role="open-settings">设置</button>
+                <div class="ysp-daily-panel__header-chip">v${SCRIPT_VERSION}</div>
+                <button type="button" class="ysp-daily-panel__header-chip" data-role="minimize">收起</button>
               </div>
             </div>
           </div>
           <div class="ysp-daily-panel__body">
             <div class="ysp-daily-panel__main">
+              <div class="ysp-daily-panel__module-switcher" role="tablist" aria-label="模块切换">
+                <button type="button" class="ysp-daily-panel__module-tab" data-role="show-daily" aria-selected="false">日报模块</button>
+                <button type="button" class="ysp-daily-panel__module-tab" data-role="show-secondary-qc" aria-selected="true">质检模块</button>
+              </div>
               <section class="ysp-daily-panel__module" data-role="daily-module">
-                <div class="ysp-daily-panel__module-header">
-                  <div class="ysp-daily-panel__toolbar">
-                    <span class="ysp-daily-panel__label">日报模块</span>
-                  </div>
-                  <button type="button" class="ysp-daily-panel__collapse" data-role="toggle-daily">展开</button>
-                </div>
-                <div class="ysp-daily-panel__module-body" data-role="daily-body">
+                <div class="ysp-daily-panel__module-body">
                   <div class="ysp-daily-panel__field-grid">
                     <label class="ysp-daily-panel__date-field" for="ysp-daily-start-date">
                       <span class="ysp-daily-panel__date-caption">开始日期</span>
@@ -5462,13 +5459,7 @@
               </section>
 
               <section class="ysp-daily-panel__module" data-role="secondary-qc-module">
-                <div class="ysp-daily-panel__module-header">
-                  <div class="ysp-daily-panel__toolbar">
-                    <span class="ysp-daily-panel__label">二次质检</span>
-                  </div>
-                  <button type="button" class="ysp-daily-panel__collapse" data-role="toggle-secondary-qc">收起</button>
-                </div>
-                <div class="ysp-daily-panel__module-body" data-role="secondary-qc-body">
+                <div class="ysp-daily-panel__module-body">
                   <div class="ysp-daily-panel__field-grid">
                     <label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-start-date">
                       <span class="ysp-daily-panel__date-caption">开始周期</span>
@@ -5545,15 +5536,13 @@
         saveSettings: root.querySelector('[data-role="save-settings"]'),
         closeSettings: root.querySelector('[data-role="close-settings"]'),
         dailyModule: root.querySelector('[data-role="daily-module"]'),
-        dailyBody: root.querySelector('[data-role="daily-body"]'),
-        dailyToggle: root.querySelector('[data-role="toggle-daily"]'),
+        dailyTab: root.querySelector('[data-role="show-daily"]'),
         dailyStartDate: root.querySelector('#ysp-daily-start-date'),
         dailyEndDate: root.querySelector('#ysp-daily-end-date'),
         dailyGroups: root.querySelector('[data-role="daily-groups"]'),
         startDaily: root.querySelector('[data-role="start-daily"]'),
         secondaryQcModule: root.querySelector('[data-role="secondary-qc-module"]'),
-        secondaryQcBody: root.querySelector('[data-role="secondary-qc-body"]'),
-        secondaryQcToggle: root.querySelector('[data-role="toggle-secondary-qc"]'),
+        secondaryQcTab: root.querySelector('[data-role="show-secondary-qc"]'),
         secondaryQcStartDate: root.querySelector('#ysp-secondary-qc-start-date'),
         secondaryQcEndDate: root.querySelector('#ysp-secondary-qc-end-date'),
         secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'),
@@ -5615,7 +5604,7 @@
       if (this.runtime.secondaryQc.checkpoint && this.runtime.secondaryQc.checkpoint.status === 'paused') {
         candidates.push({
           jobType: 'secondaryQc',
-          label: '二次质检',
+          label: '质检模块',
           checkpoint: this.runtime.secondaryQc.checkpoint,
           updatedAt: this.runtime.secondaryQc.checkpoint.updatedAt || this.runtime.secondaryQc.checkpoint.startedAt || ''
         });
@@ -5780,16 +5769,8 @@
         this.render();
       });
 
-      this.refs.dailyToggle.addEventListener('click', () => {
-        this.settings.ui.dailyCollapsed = !this.settings.ui.dailyCollapsed;
-        this.persistSettings().catch(() => undefined);
-        this.render();
-      });
-      this.refs.secondaryQcToggle.addEventListener('click', () => {
-        this.settings.ui.secondaryQcCollapsed = !this.settings.ui.secondaryQcCollapsed;
-        this.persistSettings().catch(() => undefined);
-        this.render();
-      });
+      this.refs.dailyTab.addEventListener('click', () => this.setActiveModule('daily'));
+      this.refs.secondaryQcTab.addEventListener('click', () => this.setActiveModule('secondaryQc'));
 
       this.refs.dailyGroups.addEventListener('click', (event) => this.handleGroupSelection(event, 'daily'));
       this.refs.secondaryQcGroups.addEventListener('click', (event) => this.handleGroupSelection(event, 'secondaryQc'));
@@ -5917,6 +5898,17 @@
       this.render();
     }
 
+    setActiveModule(moduleType) {
+      const nextModule = normalizeActiveModule(moduleType);
+      if (this.settings.ui.activeModule === nextModule) {
+        return;
+      }
+      this.settings.ui.activeModule = nextModule;
+      this.runtime.openGroupMenu = '';
+      this.persistSettings().catch(() => undefined);
+      this.render();
+    }
+
     openSettingsModal() {
       this.settingsDraft = cloneWorkbenchSettings(this.settings);
       this.settingsModalOpen = true;
@@ -5982,7 +5974,7 @@
 
     renderStatus() {
       const jobLabel = this.runtime.jobType === 'secondaryQc'
-        ? '二次质检'
+        ? '质检模块'
         : this.runtime.jobType === 'daily'
           ? '日报'
           : '空闲';
@@ -6058,13 +6050,13 @@
       this.renderGroupSelector(this.refs.dailyGroups, 'daily');
       this.renderGroupSelector(this.refs.secondaryQcGroups, 'secondaryQc');
 
-      this.refs.dailyModule.classList.toggle('is-collapsed', this.settings.ui.dailyCollapsed);
-      this.refs.dailyBody.hidden = this.settings.ui.dailyCollapsed;
-      this.refs.dailyToggle.textContent = this.settings.ui.dailyCollapsed ? '展开' : '收起';
-
-      this.refs.secondaryQcModule.classList.toggle('is-collapsed', this.settings.ui.secondaryQcCollapsed);
-      this.refs.secondaryQcBody.hidden = this.settings.ui.secondaryQcCollapsed;
-      this.refs.secondaryQcToggle.textContent = this.settings.ui.secondaryQcCollapsed ? '展开' : '收起';
+      const activeModule = normalizeActiveModule(this.settings.ui.activeModule);
+      this.refs.dailyModule.hidden = activeModule !== 'daily';
+      this.refs.secondaryQcModule.hidden = activeModule !== 'secondaryQc';
+      this.refs.dailyTab.classList.toggle('is-active', activeModule === 'daily');
+      this.refs.dailyTab.setAttribute('aria-selected', activeModule === 'daily' ? 'true' : 'false');
+      this.refs.secondaryQcTab.classList.toggle('is-active', activeModule === 'secondaryQc');
+      this.refs.secondaryQcTab.setAttribute('aria-selected', activeModule === 'secondaryQc' ? 'true' : 'false');
 
       const disabled = this.runtime.running;
       this.refs.dailyStartDate.disabled = disabled;
