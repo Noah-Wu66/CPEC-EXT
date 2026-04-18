@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.27
+// @version      2.1.30
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -731,6 +731,161 @@
   cursor: not-allowed;
 }
 
+.ysp-daily-panel__group-picker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ysp-daily-panel__group-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid rgba(24, 52, 76, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #17212b;
+  box-shadow: inset 0 1px 2px rgba(17, 41, 66, 0.04);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ysp-daily-panel__group-trigger:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.ysp-daily-panel__group-trigger-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+.ysp-daily-panel__group-trigger-icon {
+  flex: 0 0 auto;
+  color: #60778d;
+  font-size: 12px;
+}
+
+.ysp-daily-panel__group-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: none;
+  max-height: 280px;
+  padding: 10px;
+  overflow-y: auto;
+  border: 1px solid rgba(24, 52, 76, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 36px rgba(23, 56, 84, 0.16);
+  backdrop-filter: blur(16px);
+}
+
+.ysp-daily-panel__group-picker.is-open .ysp-daily-panel__group-menu {
+  display: grid;
+  gap: 8px;
+}
+
+.ysp-daily-panel__group-option {
+  --accent: #3276aa;
+  --accent-soft: rgba(50, 118, 170, 0.1);
+  --accent-border: rgba(50, 118, 170, 0.14);
+  --accent-ink: #214866;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.9));
+  color: var(--accent-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ysp-daily-panel__group-option:hover {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 44%, white), rgba(255, 255, 255, 0.94));
+}
+
+.ysp-daily-panel__group-option.is-selected {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 78%, white), rgba(255, 255, 255, 0.96));
+  border-color: color-mix(in srgb, var(--accent) 26%, white);
+}
+
+.ysp-daily-panel__group-option:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.ysp-daily-panel__group-option[data-theme="knowledge"] {
+  --accent: #cf7d2e;
+  --accent-soft: rgba(207, 125, 46, 0.12);
+  --accent-border: rgba(207, 125, 46, 0.16);
+  --accent-ink: #7d4b1f;
+}
+
+.ysp-daily-panel__group-option[data-theme="information"] {
+  --accent: #4b7fab;
+  --accent-soft: rgba(75, 127, 171, 0.12);
+  --accent-border: rgba(75, 127, 171, 0.16);
+  --accent-ink: #274766;
+}
+
+.ysp-daily-panel__group-option[data-theme="culture"] {
+  --accent: #be6b58;
+  --accent-soft: rgba(190, 107, 88, 0.12);
+  --accent-border: rgba(190, 107, 88, 0.16);
+  --accent-ink: #733d31;
+}
+
+.ysp-daily-panel__group-option-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ysp-daily-panel__group-option-meta {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6a7f91;
+}
+
+.ysp-daily-panel__group-option-label {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: inherit;
+}
+
+.ysp-daily-panel__group-option-check {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 82%, #18344c);
+  white-space: nowrap;
+}
+
+.ysp-daily-panel__group-summary {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #5f7284;
+  word-break: break-word;
+}
+
 .ysp-daily-panel__input--secret {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
@@ -1295,23 +1450,20 @@
   ];
 
   const STORAGE_KEYS = {
-    settings: 'yspWorkbenchSettingsV1',
-    report: 'yspWorkbenchDailyReportV1',
-    resultCache: 'yspWorkbenchDailyResultCacheV1',
-    secondaryQcReport: 'yspWorkbenchSecondaryQcReportV1',
-    dailyCheckpoint: 'yspWorkbenchDailyCheckpointV1',
-    secondaryQcCheckpoint: 'yspWorkbenchSecondaryQcCheckpointV1',
-    secondaryQcWorkerActiveRequest: 'yspWorkbenchSecondaryQcWorkerActiveRequestV1',
-    secondaryQcWorkerRequestPrefix: 'yspWorkbenchSecondaryQcWorkerRequest:',
-    secondaryQcWorkerResponsePrefix: 'yspWorkbenchSecondaryQcWorkerResponse:',
-    secondaryQcWorkerProgressPrefix: 'yspWorkbenchSecondaryQcWorkerProgress:',
-    secondaryQcWorkerStopPrefix: 'yspWorkbenchSecondaryQcWorkerStop:',
-    secondaryQcMediaWorkerRequestPrefix: 'yspWorkbenchSecondaryQcMediaWorkerRequest:',
-    secondaryQcMediaWorkerResponsePrefix: 'yspWorkbenchSecondaryQcMediaWorkerResponse:'
+    settings: 'yspWorkbenchSettingsV2',
+    report: 'yspWorkbenchDailyReportV2',
+    resultCache: 'yspWorkbenchDailyResultCacheV2',
+    secondaryQcReport: 'yspWorkbenchSecondaryQcReportV2',
+    dailyCheckpoint: 'yspWorkbenchDailyCheckpointV2',
+    secondaryQcCheckpoint: 'yspWorkbenchSecondaryQcCheckpointV2',
+    secondaryQcWorkerActiveRequest: 'yspWorkbenchSecondaryQcWorkerActiveRequestV2',
+    secondaryQcWorkerRequestPrefix: 'yspWorkbenchSecondaryQcWorkerRequestV2:',
+    secondaryQcWorkerResponsePrefix: 'yspWorkbenchSecondaryQcWorkerResponseV2:',
+    secondaryQcWorkerProgressPrefix: 'yspWorkbenchSecondaryQcWorkerProgressV2:',
+    secondaryQcWorkerStopPrefix: 'yspWorkbenchSecondaryQcWorkerStopV2:',
+    secondaryQcMediaWorkerRequestPrefix: 'yspWorkbenchSecondaryQcMediaWorkerRequestV2:',
+    secondaryQcMediaWorkerResponsePrefix: 'yspWorkbenchSecondaryQcMediaWorkerResponseV2:'
   };
-
-  const SESSION_KEY = 'yspWorkbenchSessionKey';
-  const CHECKPOINT_PREFIX = 'yspWorkbenchCheckpoint:';
   const MAX_LOGS = 50;
   const QUERY_TIMEOUT = 90000;
   const PAGE_READY_TIMEOUT = 60000;
@@ -1549,25 +1701,6 @@
     return `${y}-${m}-${d}`;
   }
 
-  function createCacheEnvelope(data) {
-    return {
-      cachedAt: new Date().toISOString(),
-      data
-    };
-  }
-
-  function unwrapCacheEnvelope(value) {
-    if (
-      value
-      && typeof value === 'object'
-      && Object.prototype.hasOwnProperty.call(value, 'cachedAt')
-      && Object.prototype.hasOwnProperty.call(value, 'data')
-    ) {
-      return value.data;
-    }
-    return value;
-  }
-
   function getQuarterCutoffDateString(referenceValue) {
     const date = referenceValue instanceof Date ? new Date(referenceValue) : new Date(referenceValue || Date.now());
     date.setHours(0, 0, 0, 0);
@@ -1719,12 +1852,11 @@
 
   function normalizeStoredResultRow(rawRow) {
     const entry = getCategoryEntry(rawRow && rawRow.key);
-    const base = createEmptyResult(entry || '');
-    if (!rawRow || typeof rawRow !== 'object') {
-      return base;
+    if (!rawRow || typeof rawRow !== 'object' || !entry) {
+      return null;
     }
     return {
-      ...base,
+      ...createEmptyResult(entry),
       inboundCount: Number(rawRow.inboundCount || 0),
       stdPassCount: Number(rawRow.stdPassCount || 0),
       stdRejectCount: Number(rawRow.stdRejectCount || 0),
@@ -1743,11 +1875,24 @@
   }
 
   function normalizeStoredReport(report) {
-    if (!report || typeof report !== 'object' || !Array.isArray(report.itemKeys) || !Array.isArray(report.rows)) {
+    if (
+      !report
+      || typeof report !== 'object'
+      || report.version !== 1
+      || !normalizeText(report.startDate)
+      || !normalizeText(report.endDate)
+      || !normalizeText(report.generatedAt)
+      || !Array.isArray(report.itemKeys)
+      || !Array.isArray(report.columns)
+      || !Array.isArray(report.rows)
+    ) {
       return null;
     }
 
     const sourceKeys = normalizeSelectedKeys(report.itemKeys);
+    if (!sourceKeys.length || sourceKeys.length !== report.itemKeys.length) {
+      return null;
+    }
     const columns = buildReportColumns(getEntriesByKeys(sourceKeys));
     const normalizedRows = [];
 
@@ -1758,7 +1903,7 @@
       const rowMap = new Map();
       for (const result of rawRow.results) {
         const normalized = normalizeStoredResultRow(result);
-        if (normalized.key) {
+        if (normalized) {
           rowMap.set(normalized.key, normalized);
         }
       }
@@ -1768,22 +1913,33 @@
       });
     }
 
-    if (!report.startDate || !report.endDate || !normalizedRows.length) {
+    if (!normalizedRows.length) {
       return null;
     }
 
     return {
+      version: 1,
       startDate: report.startDate,
       endDate: report.endDate,
       itemKeys: sourceKeys,
       columns,
       rows: normalizedRows,
-      generatedAt: report.generatedAt || new Date().toISOString()
+      generatedAt: report.generatedAt
     };
   }
 
   function normalizeStoredCheckpoint(checkpoint) {
-    if (!checkpoint || typeof checkpoint !== 'object') {
+    if (
+      !checkpoint
+      || typeof checkpoint !== 'object'
+      || checkpoint.version !== 4
+      || !normalizeText(checkpoint.startDate)
+      || !normalizeText(checkpoint.endDate)
+      || !normalizeText(checkpoint.status)
+      || !normalizeText(checkpoint.phase)
+      || !normalizeText(checkpoint.startedAt)
+      || !normalizeText(checkpoint.updatedAt)
+    ) {
       return null;
     }
     const groupIds = normalizeSelectedGroupIds(checkpoint.groupIds);
@@ -1794,6 +1950,18 @@
     if (!startDate || !endDate || !groupIds.length || !itemKeys.length || !dateList.length) {
       return null;
     }
+    if (!Number.isInteger(checkpoint.currentDateIndex) || !Number.isInteger(checkpoint.currentItemIndex)) {
+      return null;
+    }
+    if (checkpoint.currentDateIndex < 0 || checkpoint.currentDateIndex > dateList.length || checkpoint.currentItemIndex < 0 || checkpoint.currentItemIndex > itemKeys.length) {
+      return null;
+    }
+    if (!['running', 'paused', 'stopped', 'error'].includes(normalizeText(checkpoint.status))) {
+      return null;
+    }
+    if (!['std', 'resume-qc'].includes(normalizeText(checkpoint.phase))) {
+      return null;
+    }
     const normalizedResults = {};
     if (checkpoint.results && typeof checkpoint.results === 'object') {
       for (const [date, dayResults] of Object.entries(checkpoint.results)) {
@@ -1801,12 +1969,9 @@
           continue;
         }
         const normalizedDayResults = {};
-        for (const [rowKey, rowValue] of Object.entries(dayResults)) {
-          const normalizedRow = normalizeStoredResultRow({
-            ...rowValue,
-            key: rowKey
-          });
-          if (!normalizedRow.key) {
+        for (const rowValue of Object.values(dayResults)) {
+          const normalizedRow = normalizeStoredResultRow(rowValue);
+          if (!normalizedRow) {
             continue;
           }
           normalizedDayResults[normalizedRow.key] = normalizedRow;
@@ -1824,8 +1989,8 @@
       dateList,
       groupIds,
       itemKeys,
-      currentDateIndex: Number.isFinite(Number(checkpoint.currentDateIndex)) ? Number(checkpoint.currentDateIndex) : 0,
-      currentItemIndex: Number.isFinite(Number(checkpoint.currentItemIndex)) ? Number(checkpoint.currentItemIndex) : 0,
+      currentDateIndex: checkpoint.currentDateIndex,
+      currentItemIndex: checkpoint.currentItemIndex,
       results: normalizedResults
     };
   }
@@ -1840,12 +2005,9 @@
         continue;
       }
       const normalizedDayResults = {};
-      for (const [rowKey, rowValue] of Object.entries(dayResults)) {
-        const normalizedRow = normalizeStoredResultRow({
-          ...rowValue,
-          key: rowKey
-        });
-        if (!normalizedRow.key || !normalizedRow.collectionCompleted) {
+      for (const rowValue of Object.values(dayResults)) {
+        const normalizedRow = normalizeStoredResultRow(rowValue);
+        if (!normalizedRow || !normalizedRow.collectionCompleted) {
           continue;
         }
         normalizedDayResults[normalizedRow.key] = normalizedRow;
@@ -1932,20 +2094,6 @@
     return waitFor(() => document.body, timeoutMs || 15000, '页面主体未准备完成');
   }
 
-  function getSessionToken() {
-    const existing = window.sessionStorage.getItem(SESSION_KEY);
-    if (existing) {
-      return existing;
-    }
-    const token = `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-    window.sessionStorage.setItem(SESSION_KEY, token);
-    return token;
-  }
-
-  function getCheckpointStorageKey() {
-    return `${CHECKPOINT_PREFIX}${getSessionToken()}`;
-  }
-
   function createMouseEvent(type, init) {
     return new MouseEvent(type, {
       bubbles: true,
@@ -1977,11 +2125,7 @@
   }
 
   async function storageSetCached(values) {
-    const wrappedValues = {};
-    for (const [key, value] of Object.entries(values)) {
-      wrappedValues[key] = createCacheEnvelope(value);
-    }
-    await storageSet(wrappedValues);
+    await storageSet(values);
   }
 
   async function storageRemove(keys) {
@@ -2627,7 +2771,9 @@
   function createDefaultWorkbenchSettings() {
     const yesterday = getYesterdayDateString();
     return {
+      version: 1,
       ui: {
+        panelMinimized: true,
         dailyCollapsed: true,
         secondaryQcCollapsed: false
       },
@@ -2670,7 +2816,22 @@
 
   function normalizeWorkbenchSettings(rawSettings) {
     const defaults = createDefaultWorkbenchSettings();
-    const source = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
+    if (!rawSettings || typeof rawSettings !== 'object' || rawSettings.version !== defaults.version) {
+      return defaults;
+    }
+    if (
+      !rawSettings.ui
+      || typeof rawSettings.ui !== 'object'
+      || !rawSettings.daily
+      || typeof rawSettings.daily !== 'object'
+      || !rawSettings.secondaryQc
+      || typeof rawSettings.secondaryQc !== 'object'
+      || !rawSettings.secrets
+      || typeof rawSettings.secrets !== 'object'
+    ) {
+      return defaults;
+    }
+    const source = rawSettings;
     const dailyMaxDate = getYesterdayDateString();
     const secondaryQcMaxDate = getTodayDateString();
 
@@ -2688,6 +2849,9 @@
 
     return {
       ui: {
+        panelMinimized: source.ui && source.ui.panelMinimized !== undefined
+          ? Boolean(source.ui.panelMinimized)
+          : defaults.ui.panelMinimized,
         dailyCollapsed: source.ui && source.ui.dailyCollapsed !== undefined
           ? Boolean(source.ui.dailyCollapsed)
           : defaults.ui.dailyCollapsed,
@@ -2882,7 +3046,7 @@
       return;
     }
     const state = await storageGet(STORAGE_KEYS.secondaryQcWorkerActiveRequest);
-    const activeRequestId = normalizeText(unwrapCacheEnvelope(state[STORAGE_KEYS.secondaryQcWorkerActiveRequest]));
+    const activeRequestId = normalizeText(state[STORAGE_KEYS.secondaryQcWorkerActiveRequest]);
     if (!activeRequestId || activeRequestId !== normalizedRequestId) {
       return;
     }
@@ -2916,7 +3080,7 @@
       return false;
     }
     const state = await storageGet(buildSecondaryQcWorkerStopKey(normalizedRequestId));
-    const stopSignal = unwrapCacheEnvelope(state[buildSecondaryQcWorkerStopKey(normalizedRequestId)]);
+    const stopSignal = state[buildSecondaryQcWorkerStopKey(normalizedRequestId)];
     const stopped = Boolean(stopSignal && typeof stopSignal === 'object');
     JOB_ABORT_CONTROLLER.secondaryQcWorkerStopped = stopped;
     return stopped;
@@ -4111,943 +4275,6 @@
     }
   }
 
-  class DailyReporterApp {
-    constructor() {
-      this.panel = null;
-      this.handleOutsideInteraction = null;
-      this.savedSettings = { startDate: '', endDate: '', groupIds: [] };
-      this.runtime = {
-        running: false,
-        minimized: true,
-        stopping: false,
-        currentCheckpoint: null,
-        lastReport: null,
-        resultCache: {},
-        logs: [],
-        statusText: '等待开始',
-        activeSessionKey: getCheckpointStorageKey()
-      };
-      this.refs = {};
-    }
-
-    async init() {
-      if (!isSupportedPage()) {
-        return;
-      }
-      injectPanelStyle();
-      await this.clearExpiredCache();
-      await this.loadState();
-      this.mountPanel();
-      await this.tryResume();
-    }
-
-    async clearExpiredCache() {
-      const state = await storageGet([
-        STORAGE_KEYS.report,
-        STORAGE_KEYS.resultCache,
-        this.runtime.activeSessionKey
-      ]);
-      const cutoffDate = getQuarterCutoffDateString(new Date());
-
-      const nextReport = trimReportByCutoff(unwrapCacheEnvelope(state[STORAGE_KEYS.report]), cutoffDate);
-      if (nextReport) {
-        await storageSetCached({
-          [STORAGE_KEYS.report]: nextReport
-        });
-      } else {
-        await storageRemove(STORAGE_KEYS.report);
-      }
-
-      const cachedResultData = normalizeStoredResultCache(unwrapCacheEnvelope(state[STORAGE_KEYS.resultCache]));
-      const nextResultCache = trimResultCacheByCutoff(cachedResultData, cutoffDate);
-      if (Object.keys(nextResultCache).length) {
-        await storageSetCached({
-          [STORAGE_KEYS.resultCache]: nextResultCache
-        });
-      } else {
-        await storageRemove(STORAGE_KEYS.resultCache);
-      }
-
-      const checkpoint = unwrapCacheEnvelope(state[this.runtime.activeSessionKey]);
-      const checkpointDate = checkpoint && (checkpoint.updatedAt || checkpoint.startedAt || '');
-      if (checkpointDate && isDateExpiredByQuarter(String(checkpointDate).slice(0, 10), cutoffDate)) {
-        await storageRemove(this.runtime.activeSessionKey);
-      }
-    }
-
-    async loadState() {
-      const state = await storageGet([
-        STORAGE_KEYS.settings,
-        STORAGE_KEYS.report,
-        STORAGE_KEYS.resultCache,
-        this.runtime.activeSessionKey
-      ]);
-      const rawSettings = unwrapCacheEnvelope(state[STORAGE_KEYS.settings]) || {};
-      const maxDate = getYesterdayDateString();
-      const startDate = rawSettings.startDate || '';
-      let endDate = rawSettings.endDate || '';
-      const normalizedStartDate = startDate && startDate <= maxDate ? startDate : maxDate;
-      if (endDate && endDate > maxDate) {
-        endDate = '';
-      }
-      if (normalizedStartDate && endDate && endDate < normalizedStartDate) {
-        endDate = '';
-      }
-      this.savedSettings = {
-        startDate: normalizedStartDate,
-        endDate,
-        groupIds: normalizeSelectedGroupIds(rawSettings.groupIds)
-      };
-      this.runtime.lastReport = null;
-      this.runtime.resultCache = normalizeStoredResultCache(unwrapCacheEnvelope(state[STORAGE_KEYS.resultCache]));
-      this.runtime.currentCheckpoint = normalizeStoredCheckpoint(unwrapCacheEnvelope(state[this.runtime.activeSessionKey]));
-      this.runtime.logs = Array.isArray(this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.logs)
-        ? this.runtime.currentCheckpoint.logs.slice(0, MAX_LOGS)
-        : [];
-
-      if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'running') {
-        this.runtime.running = true;
-        this.runtime.minimized = false;
-        this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '正在继续上次采集';
-      } else if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'stopped') {
-        this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次采集已结束';
-      } else if (this.runtime.currentCheckpoint && this.runtime.currentCheckpoint.status === 'error') {
-        this.runtime.statusText = this.runtime.currentCheckpoint.statusText || '上次采集未完成';
-      }
-    }
-
-    mountPanel() {
-      let root = document.getElementById('ysp-daily-panel-root');
-      if (root) {
-        root.remove();
-      }
-
-      root = document.createElement('div');
-      root.id = 'ysp-daily-panel-root';
-      root.innerHTML = `
-        <div class="ysp-daily-panel__backdrop"></div>
-        <div class="ysp-daily-panel">
-          <div class="ysp-daily-panel__header">
-            <div class="ysp-daily-panel__header-top">
-              <div>
-                <div class="ysp-daily-panel__title">二次质检日报采集</div>
-              </div>
-              <div class="ysp-daily-panel__header-actions">
-                <div class="ysp-daily-panel__version">v${SCRIPT_VERSION}</div>
-                <button type="button" class="ysp-daily-panel__minimize" data-role="minimize">收起</button>
-              </div>
-            </div>
-          </div>
-          <div class="ysp-daily-panel__body">
-            <div class="ysp-daily-panel__main">
-              <div class="ysp-daily-panel__section ysp-daily-panel__section--fill">
-                <div class="ysp-daily-panel__toolbar">
-                  <span class="ysp-daily-panel__label">品类编组</span>
-                </div>
-                <div class="ysp-daily-panel__catalog" data-role="categories"></div>
-              </div>
-            </div>
-            <div class="ysp-daily-panel__side">
-              <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
-                <span class="ysp-daily-panel__label">日期</span>
-                <div class="ysp-daily-panel__date-grid">
-                  <label class="ysp-daily-panel__date-field" for="ysp-daily-start-date">
-                    <span class="ysp-daily-panel__date-caption">开始</span>
-                    <input id="ysp-daily-start-date" class="ysp-daily-panel__date" type="date" />
-                  </label>
-                  <label class="ysp-daily-panel__date-field" for="ysp-daily-end-date">
-                    <span class="ysp-daily-panel__date-caption">结束</span>
-                    <input id="ysp-daily-end-date" class="ysp-daily-panel__date" type="date" />
-                  </label>
-                </div>
-              </div>
-              <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
-                <div class="ysp-daily-panel__actions">
-                  <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start">开始采集</button>
-                  <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清除数据</button>
-                </div>
-              </div>
-              <div class="ysp-daily-panel__status" data-role="status"></div>
-              <div class="ysp-daily-panel__section ysp-daily-panel__section--compact">
-                <div class="ysp-daily-panel__toolbar">
-                  <span class="ysp-daily-panel__label">下载中心</span>
-                </div>
-                <div class="ysp-daily-panel__report" data-role="report"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button>
-      `;
-      document.body.appendChild(root);
-      this.panel = root;
-
-      this.refs.backdrop = root.querySelector('.ysp-daily-panel__backdrop');
-      this.refs.surface = root.querySelector('.ysp-daily-panel');
-      this.refs.startDate = root.querySelector('#ysp-daily-start-date');
-      this.refs.endDate = root.querySelector('#ysp-daily-end-date');
-      this.refs.categories = root.querySelector('[data-role="categories"]');
-      this.refs.report = root.querySelector('[data-role="report"]');
-      this.refs.start = root.querySelector('[data-role="start"]');
-      this.refs.clearData = root.querySelector('[data-role="clear-data"]');
-      this.refs.status = root.querySelector('[data-role="status"]');
-      this.refs.minimize = root.querySelector('[data-role="minimize"]');
-      this.refs.dock = root.querySelector('[data-role="dock"]');
-
-      this.renderCategories();
-      this.refs.startDate.setAttribute('inputmode', 'none');
-      this.refs.endDate.setAttribute('inputmode', 'none');
-      this.refs.startDate.value = this.savedSettings.startDate || '';
-      this.refs.endDate.value = this.savedSettings.endDate || '';
-      this.syncDateInputBounds();
-      this.normalizeDateInputs();
-      this.bindPanelEvents();
-      this.render();
-    }
-
-    destroy() {
-      if (this.handleOutsideInteraction) {
-        document.removeEventListener('pointerdown', this.handleOutsideInteraction, true);
-        document.removeEventListener('mousedown', this.handleOutsideInteraction, true);
-        document.removeEventListener('touchstart', this.handleOutsideInteraction, true);
-        this.handleOutsideInteraction = null;
-      }
-      if (this.panel && this.panel.isConnected) {
-        this.panel.remove();
-      }
-      this.panel = null;
-      this.refs = {};
-    }
-
-    renderCategories() {
-      const selected = new Set(this.savedSettings.groupIds);
-      this.refs.categories.innerHTML = SUBGROUP_ENTRIES.map((subgroup) => {
-        const selectedClass = selected.has(subgroup.id) ? ' is-selected' : '';
-        return `
-          <section
-            class="ysp-daily-panel__group${selectedClass}"
-            data-theme="${escapeXml(subgroup.theme)}"
-            data-group-card="${escapeXml(subgroup.id)}"
-            role="button"
-            tabindex="${this.runtime.running ? '-1' : '0'}"
-            aria-pressed="${selected.has(subgroup.id) ? 'true' : 'false'}"
-          >
-            <div class="ysp-daily-panel__group-header">
-              <h3 class="ysp-daily-panel__group-title">${escapeXml(subgroup.label)}</h3>
-            </div>
-          </section>
-        `;
-      }).join('');
-    }
-
-    bindPanelEvents() {
-      if (this.handleOutsideInteraction) {
-        document.removeEventListener('pointerdown', this.handleOutsideInteraction, true);
-        document.removeEventListener('mousedown', this.handleOutsideInteraction, true);
-        document.removeEventListener('touchstart', this.handleOutsideInteraction, true);
-      }
-      this.handleOutsideInteraction = (event) => {
-        if (this.runtime.minimized) {
-          return;
-        }
-        // 采集流程会脚本化点击页面控件，这类事件不应触发面板收起。
-        if (event.isTrusted === false) {
-          return;
-        }
-        const target = event.target;
-        if (!(target instanceof Node)) {
-          return;
-        }
-        if (this.refs.surface && this.refs.surface.contains(target)) {
-          return;
-        }
-        this.setMinimized(true);
-      };
-      document.addEventListener('pointerdown', this.handleOutsideInteraction, true);
-      document.addEventListener('mousedown', this.handleOutsideInteraction, true);
-      document.addEventListener('touchstart', this.handleOutsideInteraction, true);
-      this.refs.start.addEventListener('click', () => {
-        this.startNewJob().catch((error) => this.failJob(error));
-      });
-      this.refs.clearData.addEventListener('click', () => {
-        this.clearAllCachedData().catch((error) => {
-          const message = error && error.message ? error.message : String(error);
-          this.runtime.statusText = `清除失败：${message}`;
-          this.pushLog(`清除失败：${message}`);
-          this.render();
-        });
-      });
-      this.refs.backdrop.addEventListener('click', () => {
-        if (!this.runtime.minimized) {
-          this.setMinimized(true);
-        }
-      });
-      this.refs.minimize.addEventListener('click', () => this.setMinimized(true));
-      this.refs.dock.addEventListener('click', () => this.setMinimized(false));
-      this.bindDateInput(this.refs.startDate);
-      this.bindDateInput(this.refs.endDate);
-      this.refs.categories.addEventListener('click', (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return;
-        }
-        const groupCard = target.closest('[data-group-card]');
-        if (!groupCard || this.runtime.running) {
-          return;
-        }
-        const groupId = groupCard.getAttribute('data-group-card');
-        if (!groupId) {
-          return;
-        }
-        this.setSelectedGroupIds(this.savedSettings.groupIds.includes(groupId) ? [] : [groupId]);
-        this.render();
-      });
-      this.refs.categories.addEventListener('keydown', (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement) || this.runtime.running) {
-          return;
-        }
-        if (event.key !== 'Enter' && event.key !== ' ') {
-          return;
-        }
-        const groupCard = target.closest('[data-group-card]');
-        if (!groupCard) {
-          return;
-        }
-        event.preventDefault();
-        const groupId = groupCard.getAttribute('data-group-card');
-        if (!groupId) {
-          return;
-        }
-        this.setSelectedGroupIds(this.savedSettings.groupIds.includes(groupId) ? [] : [groupId]);
-        this.render();
-      });
-      this.refs.report.addEventListener('click', (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return;
-        }
-        const downloadButton = target.closest('[data-role="download"]');
-        if (downloadButton) {
-          this.exportLastReport();
-        }
-      });
-      const refreshFocus = () => {
-        if (this.runtime.minimized) {
-          this.panel.classList.remove('is-focused');
-          return;
-        }
-        const surface = this.refs.surface;
-        const keepActive = surface.matches(':hover') || surface.contains(document.activeElement);
-        this.panel.classList.toggle('is-focused', keepActive);
-      };
-      this.refs.surface.addEventListener('mouseenter', refreshFocus);
-      this.refs.surface.addEventListener('mouseleave', () => window.setTimeout(refreshFocus, 0));
-      this.refs.surface.addEventListener('focusin', refreshFocus);
-      this.refs.surface.addEventListener('focusout', () => window.setTimeout(refreshFocus, 0));
-      this.panel.classList.add('is-focused');
-    }
-
-    setMinimized(nextValue) {
-      this.runtime.minimized = Boolean(nextValue);
-      if (this.runtime.minimized) {
-        this.panel.classList.remove('is-focused');
-      } else {
-        this.panel.classList.add('is-focused');
-      }
-      this.render();
-    }
-
-    bindDateInput(input) {
-      input.addEventListener('click', () => this.openDatePicker(input));
-      input.addEventListener('focus', () => {
-        window.setTimeout(() => this.openDatePicker(input), 0);
-      });
-      input.addEventListener('keydown', (event) => {
-        if (event.key === 'Tab') {
-          return;
-        }
-        event.preventDefault();
-        if (event.key === 'Enter' || event.key === ' ') {
-          this.openDatePicker(input);
-        }
-      });
-      input.addEventListener('beforeinput', (event) => {
-        event.preventDefault();
-      });
-      input.addEventListener('paste', (event) => {
-        event.preventDefault();
-      });
-      input.addEventListener('drop', (event) => {
-        event.preventDefault();
-      });
-      input.addEventListener('wheel', (event) => {
-        event.preventDefault();
-      }, { passive: false });
-      input.addEventListener('change', () => {
-        this.normalizeDateInputs();
-        this.persistDraft().catch(() => undefined);
-        this.render();
-      });
-    }
-
-    syncDateInputBounds() {
-      const maxDate = getYesterdayDateString();
-      this.refs.startDate.max = maxDate;
-      this.refs.endDate.max = maxDate;
-      this.refs.endDate.min = this.refs.startDate.value || '';
-    }
-
-    normalizeDateInputs() {
-      this.syncDateInputBounds();
-      if (this.refs.startDate.value && this.refs.startDate.value > this.refs.startDate.max) {
-        this.refs.startDate.value = this.refs.startDate.max;
-      }
-      if (!this.refs.startDate.value) {
-        this.refs.endDate.value = '';
-      }
-      if (this.refs.endDate.value && this.refs.endDate.value > this.refs.endDate.max) {
-        this.refs.endDate.value = this.refs.endDate.max;
-      }
-      if (this.refs.endDate.value && this.refs.startDate.value && this.refs.endDate.value < this.refs.startDate.value) {
-        this.refs.endDate.value = '';
-      }
-      this.savedSettings.startDate = this.refs.startDate.value;
-      this.savedSettings.endDate = this.refs.endDate.value;
-    }
-
-    openDatePicker(input) {
-      if (!input || input.disabled) {
-        return;
-      }
-      if (typeof input.showPicker === 'function') {
-        try {
-          input.showPicker();
-          return;
-        } catch (error) {
-          // ignore and fall through to native focus behavior
-        }
-      }
-      input.focus();
-    }
-
-    setSelectedGroupIds(groupIds) {
-      this.savedSettings.groupIds = normalizeSelectedGroupIds(groupIds);
-      this.persistDraft().catch(() => undefined);
-    }
-
-    getSelectedGroupEntries() {
-      return getSubgroupEntriesByIds(this.savedSettings.groupIds);
-    }
-
-    getSelectedEntries() {
-      return getEntriesByGroupIds(this.savedSettings.groupIds);
-    }
-
-    getCheckpointItems(checkpoint) {
-      return getEntriesByKeys(checkpoint && checkpoint.itemKeys);
-    }
-
-    async persistDraft() {
-      this.normalizeDateInputs();
-      await this.persistSettings(this.refs.startDate.value, this.refs.endDate.value, this.savedSettings.groupIds);
-    }
-
-    describeItem(item) {
-      return item.exportLabel;
-    }
-
-    renderSelectionSummary() {
-      return;
-    }
-
-    renderReport() {
-      if (!this.runtime.lastReport) {
-        this.refs.report.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无结果</div>';
-        return;
-      }
-      this.refs.report.innerHTML = `
-        <div class="ysp-daily-panel__report-top">
-          <div>
-            <h3 class="ysp-daily-panel__report-title">日报结果已生成</h3>
-            <div class="ysp-daily-panel__report-meta">${escapeXml(formatReportPeriod(this.runtime.lastReport))}</div>
-          </div>
-          <button type="button" class="ysp-daily-panel__download" data-role="download">下载结果</button>
-        </div>
-      `;
-    }
-
-    pushLog(message) {
-      const entry = `[${formatClock()}] ${message}`;
-      this.runtime.logs.unshift(entry);
-      this.runtime.logs = this.runtime.logs.slice(0, MAX_LOGS);
-      if (this.runtime.currentCheckpoint) {
-        this.runtime.currentCheckpoint.logs = this.runtime.logs.slice();
-      }
-      this.render();
-    }
-
-    render() {
-      this.panel.classList.toggle('is-minimized', this.runtime.minimized);
-      this.syncDateInputBounds();
-      this.refs.startDate.disabled = this.runtime.running;
-      this.refs.endDate.disabled = this.runtime.running;
-      this.refs.start.disabled = this.runtime.running;
-      this.refs.clearData.disabled = this.runtime.running;
-      this.refs.start.textContent = this.runtime.running ? '采集中' : '开始采集';
-      this.refs.status.textContent = this.runtime.statusText || '等待开始';
-      this.refs.minimize.disabled = false;
-      for (const groupCard of this.refs.categories.querySelectorAll('[data-group-card]')) {
-        const groupId = groupCard.getAttribute('data-group-card');
-        const selected = this.savedSettings.groupIds.includes(groupId);
-        groupCard.classList.toggle('is-selected', selected);
-        groupCard.setAttribute('aria-pressed', selected ? 'true' : 'false');
-        groupCard.setAttribute('tabindex', this.runtime.running ? '-1' : '0');
-      }
-      this.renderSelectionSummary();
-      this.renderReport();
-    }
-
-    async persistSettings(startDate, endDate, groupIds) {
-      this.savedSettings = {
-        startDate,
-        endDate,
-        groupIds: normalizeSelectedGroupIds(groupIds)
-      };
-      await storageSetCached({
-        [STORAGE_KEYS.settings]: {
-          startDate,
-          endDate,
-          groupIds: this.savedSettings.groupIds.slice()
-        }
-      });
-    }
-
-    async saveCheckpoint() {
-      if (!this.runtime.currentCheckpoint) {
-        return;
-      }
-      this.runtime.currentCheckpoint.updatedAt = new Date().toISOString();
-      await storageSetCached({
-        [this.runtime.activeSessionKey]: this.runtime.currentCheckpoint
-      });
-    }
-
-    async clearCheckpoint() {
-      await storageRemove(this.runtime.activeSessionKey);
-      this.runtime.currentCheckpoint = null;
-    }
-
-    async clearLastCollectedData() {
-      this.runtime.lastReport = null;
-    }
-
-    async clearAllCachedData() {
-      if (this.runtime.running) {
-        return;
-      }
-      const confirmed = window.confirm('这会清除已保存内容，当前界面保持不变。确认清除吗？');
-      if (!confirmed) {
-        return;
-      }
-      await storageRemove([
-        STORAGE_KEYS.settings,
-        STORAGE_KEYS.report,
-        STORAGE_KEYS.resultCache,
-        this.runtime.activeSessionKey
-      ]);
-      window.sessionStorage.removeItem(SESSION_KEY);
-      this.runtime.activeSessionKey = getCheckpointStorageKey();
-      this.runtime.running = false;
-      this.runtime.stopping = false;
-      this.runtime.currentCheckpoint = null;
-      this.runtime.resultCache = {};
-      this.runtime.statusText = '已清除已保存内容，当前界面保持不变';
-      this.pushLog('已清除已保存内容');
-      this.render();
-    }
-
-    getCachedResult(date, item) {
-      const cachedDayResults = this.runtime.resultCache && this.runtime.resultCache[date];
-      if (!cachedDayResults || !cachedDayResults[item.key]) {
-        return null;
-      }
-      const normalized = normalizeStoredResultRow({
-        ...cachedDayResults[item.key],
-        key: item.key
-      });
-      return isReusableCachedResult(normalized) ? normalized : null;
-    }
-
-    async cacheResult(date, item, result) {
-      if (!this.runtime.resultCache[date]) {
-        this.runtime.resultCache[date] = {};
-      }
-      this.runtime.resultCache[date][item.key] = normalizeStoredResultRow({
-        ...result,
-        key: item.key
-      });
-      await storageSetCached({
-        [STORAGE_KEYS.resultCache]: this.runtime.resultCache
-      });
-    }
-
-    ensureNotStopped() {
-      if (this.runtime.stopping) {
-        throw new Error('采集已结束');
-      }
-    }
-
-    updateCheckpointStatus(text, summaryText) {
-      if (!this.runtime.currentCheckpoint) {
-        return;
-      }
-      this.runtime.statusText = text;
-      this.runtime.currentCheckpoint.statusText = text;
-      this.runtime.currentCheckpoint.summaryText = summaryText || this.runtime.currentCheckpoint.summaryText || '';
-      this.render();
-    }
-
-    async clearProgress() {
-      this.runtime.stopping = true;
-      this.runtime.running = false;
-      await this.clearCheckpoint();
-      this.runtime.statusText = '已清除当前进度';
-      this.pushLog('已清除当前进度');
-      this.render();
-    }
-
-    stopCurrentJob() {
-      if (!this.runtime.running) {
-        return;
-      }
-      this.runtime.stopping = true;
-      this.runtime.statusText = '正在结束本次采集';
-      this.pushLog('正在结束本次采集');
-      this.render();
-    }
-
-    async startNewJob() {
-      if (this.runtime.running) {
-        return;
-      }
-      this.normalizeDateInputs();
-      const startDate = this.refs.startDate.value;
-      const rawEndDate = this.refs.endDate.value;
-      const endDate = rawEndDate || startDate;
-      const maxDate = getYesterdayDateString();
-      const groupIds = this.savedSettings.groupIds.slice();
-      const groups = this.getSelectedGroupEntries();
-      const items = this.getSelectedEntries();
-      if (!startDate) {
-        throw new Error('请先选择开始日期');
-      }
-      if (startDate > maxDate || (rawEndDate && rawEndDate > maxDate)) {
-        throw new Error('日期只能选择昨天及以前');
-      }
-      if (rawEndDate && rawEndDate < startDate) {
-        throw new Error('结束日期需大于等于开始日期');
-      }
-      if (!groups.length) {
-        throw new Error('请至少选择一个编组');
-      }
-      const dateList = buildDateList(startDate, endDate);
-      if (!dateList.length) {
-        throw new Error('日期范围无效');
-      }
-
-      await this.clearLastCollectedData();
-      await this.persistSettings(startDate, rawEndDate, groupIds);
-      this.runtime.stopping = false;
-      this.runtime.running = true;
-      this.runtime.logs = [];
-      this.runtime.statusText = '正在准备采集';
-      this.runtime.currentCheckpoint = {
-        version: 4,
-        status: 'running',
-        startDate,
-        endDate,
-        dateList,
-        groupIds,
-        itemKeys: items.map((item) => item.key),
-        currentDateIndex: 0,
-        currentItemIndex: 0,
-        phase: 'std',
-        results: {},
-        logs: [],
-        startedAt: new Date().toISOString(),
-        statusText: '正在准备采集',
-        summaryText: ''
-      };
-      this.render();
-      await this.saveCheckpoint();
-      this.pushLog(`开始采集：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，共 ${dateList.length} 天，覆盖 ${items.length} 个子品类`);
-      await this.runFromCheckpoint();
-    }
-
-    async tryResume() {
-      if (!this.runtime.currentCheckpoint || this.runtime.currentCheckpoint.status !== 'running') {
-        this.render();
-        return;
-      }
-      this.runtime.running = true;
-      this.runtime.stopping = false;
-      this.pushLog('检测到未完成内容，正在继续');
-      await this.runFromCheckpoint();
-    }
-
-    async runFromCheckpoint() {
-      await waitForPageReady();
-
-      const checkpoint = this.runtime.currentCheckpoint;
-      if (!checkpoint || checkpoint.status !== 'running') {
-        this.runtime.running = false;
-        this.render();
-        return;
-      }
-      const dateList = Array.isArray(checkpoint.dateList) && checkpoint.dateList.length
-        ? checkpoint.dateList
-        : buildDateList(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
-      checkpoint.dateList = dateList;
-      const items = this.getCheckpointItems(checkpoint);
-      if (!items.length) {
-        throw new Error('当前选择下没有可采集内容');
-      }
-      if (!dateList.length) {
-        throw new Error('当前日期范围没有可采集内容');
-      }
-
-      if (checkpoint.phase === 'resume-qc') {
-        const currentDate = dateList[checkpoint.currentDateIndex];
-        const item = items[checkpoint.currentItemIndex];
-        if (currentDate && item) {
-          const cachedResult = this.getCachedResult(currentDate, item);
-          if (cachedResult) {
-            checkpoint.results[currentDate] = checkpoint.results[currentDate] || {};
-            checkpoint.results[currentDate][item.key] = cachedResult;
-            this.pushLog(`${currentDate} ${this.describeItem(item)}：已使用已保存结果`);
-            checkpoint.currentItemIndex += 1;
-            if (checkpoint.currentItemIndex >= items.length) {
-              checkpoint.currentDateIndex += 1;
-              checkpoint.currentItemIndex = 0;
-            }
-            checkpoint.phase = 'std';
-            await this.saveCheckpoint();
-            return this.runFromCheckpoint();
-          }
-          checkpoint.summaryText = `${currentDate} ${this.describeItem(item)}：质检`;
-          this.updateCheckpointStatus(`正在继续 ${item.exportLabel}`, `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 质检`);
-          await this.runQualityCheckForItem(currentDate, item);
-          checkpoint.currentItemIndex += 1;
-          if (checkpoint.currentItemIndex >= items.length) {
-            checkpoint.currentDateIndex += 1;
-            checkpoint.currentItemIndex = 0;
-          }
-          checkpoint.phase = 'std';
-          await this.saveCheckpoint();
-        }
-      }
-
-      while (checkpoint.currentDateIndex < dateList.length) {
-        this.ensureNotStopped();
-        if (checkpoint.currentItemIndex >= items.length) {
-          checkpoint.currentDateIndex += 1;
-          checkpoint.currentItemIndex = 0;
-          continue;
-        }
-        const currentDate = dateList[checkpoint.currentDateIndex];
-        const item = items[checkpoint.currentItemIndex];
-        if (!checkpoint.results[currentDate]) {
-          checkpoint.results[currentDate] = {};
-        }
-        if (!checkpoint.results[currentDate][item.key]) {
-          checkpoint.results[currentDate][item.key] = createEmptyResult(item);
-        }
-        const cachedResult = this.getCachedResult(currentDate, item);
-        if (cachedResult) {
-          checkpoint.results[currentDate][item.key] = cachedResult;
-          this.pushLog(`${currentDate} ${this.describeItem(item)}：已使用已保存结果`);
-          checkpoint.currentItemIndex += 1;
-          if (checkpoint.currentItemIndex >= items.length) {
-            checkpoint.currentDateIndex += 1;
-            checkpoint.currentItemIndex = 0;
-          }
-          checkpoint.phase = 'std';
-          await this.saveCheckpoint();
-          continue;
-        }
-        checkpoint.phase = 'std';
-        checkpoint.summaryText = `${currentDate} ${this.describeItem(item)}：标准化`;
-        this.updateCheckpointStatus(`正在采集 ${item.exportLabel}`, `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 标准化`);
-        await this.saveCheckpoint();
-        await this.runStandardizationForItem(currentDate, item);
-
-        checkpoint.phase = 'resume-qc';
-        checkpoint.summaryText = `${currentDate} ${this.describeItem(item)}：准备继续质检`;
-        this.updateCheckpointStatus(`正在继续 ${item.exportLabel}`, `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 下一步`);
-        await this.saveCheckpoint();
-        this.pushLog(`${currentDate} ${this.describeItem(item)}：标准化已完成，正在继续质检`);
-        window.location.reload();
-        return;
-      }
-
-      await this.completeJob();
-    }
-
-    async runStandardizationForItem(date, item) {
-      this.ensureNotStopped();
-      const checkpoint = this.runtime.currentCheckpoint;
-      if (!checkpoint.results[date]) {
-        checkpoint.results[date] = {};
-      }
-      const dayResults = checkpoint.results[date] || {};
-      const result = dayResults[item.key] || createEmptyResult(item);
-      const range = buildDateRange(date);
-
-      await clickResetButton();
-      await this.applyCategory(item);
-      await setDateRange('创建时间', range.start, range.end);
-
-      this.pushLog(`${date} ${this.describeItem(item)}：读取入库量`);
-      result.inboundCount = await clickQueryAndReadCount();
-      this.pushLog(`${date} ${this.describeItem(item)}：入库量 ${result.inboundCount}`);
-
-      await this.applySelectByLabel('标准化状态', '标准化通过');
-      result.stdPassCount = await clickQueryAndReadCount();
-      this.pushLog(`${date} ${this.describeItem(item)}：标准化通过 ${result.stdPassCount}`);
-
-      await this.applySelectByLabel('标准化状态', '标准化拒绝');
-      result.stdRejectCount = await clickQueryAndReadCount();
-      result.stdTotalCount = result.stdPassCount + result.stdRejectCount;
-      result.stdRejectRate = calculateRatio(result.stdRejectCount, result.stdTotalCount);
-      this.pushLog(`${date} ${this.describeItem(item)}：标准化拒绝 ${result.stdRejectCount}`);
-
-      checkpoint.results[date][item.key] = {
-        ...result,
-        key: item.key,
-        category: item.exportLabel,
-        label: item.exportLabel,
-        groupLabel: item.groupLabel,
-        subgroupLabel: item.subgroupLabel,
-        theme: item.theme,
-        collectionCompleted: false
-      };
-      await this.saveCheckpoint();
-    }
-
-    async runQualityCheckForItem(date, item) {
-      this.ensureNotStopped();
-      const checkpoint = this.runtime.currentCheckpoint;
-      if (!checkpoint.results[date]) {
-        checkpoint.results[date] = {};
-      }
-      const dayResults = checkpoint.results[date] || {};
-      const result = dayResults[item.key] || createEmptyResult(item);
-      const range = buildDateRange(date);
-
-      await clickResetButton();
-      await this.applyCategory(item);
-      await setDateRange('修改时间', range.start, range.end);
-
-      await this.applySelectByLabel('质检状态', '质检通过');
-      result.qcPassCount = await clickQueryAndReadCount();
-      this.pushLog(`${date} ${this.describeItem(item)}：质检通过 ${result.qcPassCount}`);
-
-      await this.applySelectByLabel('质检状态', '质检拒绝');
-      result.qcRejectCount = await clickQueryAndReadCount();
-      result.qcTotalCount = result.qcPassCount + result.qcRejectCount;
-      result.qcRejectRate = calculateRatio(result.qcRejectCount, result.qcTotalCount);
-      this.pushLog(`${date} ${this.describeItem(item)}：质检拒绝 ${result.qcRejectCount}`);
-
-      checkpoint.results[date][item.key] = {
-        ...result,
-        key: item.key,
-        category: item.exportLabel,
-        label: item.exportLabel,
-        groupLabel: item.groupLabel,
-        subgroupLabel: item.subgroupLabel,
-        theme: item.theme,
-        collectionCompleted: true
-      };
-      await this.cacheResult(date, item, checkpoint.results[date][item.key]);
-      await this.saveCheckpoint();
-    }
-
-    async applyCategory(item) {
-      const primary = getCategoryWrapper(0);
-      if (!primary) {
-        throw new Error('未找到品类选项');
-      }
-      await selectOption(primary, item.queryLabel);
-      this.pushLog(`已选择品类：${this.describeItem(item)}`);
-    }
-
-    async applySelectByLabel(label, value) {
-      const wrapper = getSelectWrapperByLabel(label, 0);
-      if (!wrapper) {
-        throw new Error(`未找到筛选条件：${label}`);
-      }
-      await selectOption(wrapper, value);
-    }
-
-    async completeJob() {
-      const checkpoint = this.runtime.currentCheckpoint;
-      const items = this.getCheckpointItems(checkpoint);
-      const dateList = Array.isArray(checkpoint.dateList) && checkpoint.dateList.length
-        ? checkpoint.dateList
-        : buildDateList(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
-      checkpoint.status = 'done';
-      checkpoint.statusText = '采集完成，可以下载结果了';
-      checkpoint.summaryText = `共完成 ${dateList.length} 天`;
-      await this.saveCheckpoint();
-
-      const report = {
-        date: checkpoint.startDate,
-        startDate: checkpoint.startDate,
-        endDate: checkpoint.endDate || checkpoint.startDate,
-        itemKeys: items.map((item) => item.key),
-        columns: buildReportColumns(items),
-        rows: buildDailyReportRows(dateList, items, checkpoint.results),
-        generatedAt: new Date().toISOString()
-      };
-      this.runtime.lastReport = report;
-      await storageSetCached({
-        [STORAGE_KEYS.report]: report
-      });
-
-      this.pushLog(`采集完成，已生成 ${dateList.length} 天结果`);
-      await this.clearCheckpoint();
-      this.runtime.running = false;
-      this.runtime.stopping = false;
-      this.runtime.statusText = '采集完成，可以下载结果了';
-      this.render();
-    }
-
-    async failJob(error) {
-      const message = error && error.message ? error.message : String(error);
-      this.runtime.running = false;
-      this.runtime.stopping = false;
-      const stopped = message === '采集已结束';
-      if (this.runtime.currentCheckpoint) {
-        this.runtime.currentCheckpoint.status = stopped ? 'stopped' : 'error';
-        this.runtime.currentCheckpoint.statusText = stopped ? '采集已结束，可以重新开始' : `采集遇到问题：${message}`;
-        await this.saveCheckpoint();
-      }
-      this.runtime.statusText = stopped ? '采集已结束，可以重新开始' : `采集遇到问题：${message}`;
-      this.pushLog(stopped ? '采集已结束' : `采集遇到问题：${message}`);
-      this.render();
-    }
-
-    exportLastReport() {
-      if (!this.runtime.lastReport) {
-        this.pushLog('当前没有可导出的结果');
-        return;
-      }
-      downloadReport(this.runtime.lastReport);
-      this.pushLog(`已重新导出 ${formatReportPeriod(this.runtime.lastReport)} 的结果`);
-    }
-  }
-
   function normalizeSecondaryQcDraftRow(row) {
     if (!row || typeof row !== 'object') {
       return null;
@@ -5083,60 +4310,47 @@
   }
 
   function normalizeSecondaryQcItemTargetCounts(value, itemCount, targetCount) {
-    const fallback = buildSecondaryQcItemTargetCounts(itemCount, targetCount);
     if (!Array.isArray(value) || value.length !== itemCount) {
-      return fallback;
+      return [];
     }
     const counts = value.map((count) => Math.max(0, Math.trunc(Number(count) || 0)));
     const total = counts.reduce((sum, count) => sum + count, 0);
-    return total === targetCount ? counts : fallback;
+    return total === targetCount ? counts : [];
   }
 
-  function buildSecondaryQcItemRecordedCountsFromRows(itemKeys, itemTargetCounts, rows) {
-    const counts = new Array(itemKeys.length).fill(0);
-    const keyIndexMap = new Map(itemKeys.map((key, index) => [key, index]));
-    let resolvedCount = 0;
-    for (const row of rows) {
-      const itemKey = normalizeText(row && row.itemKey);
-      const itemIndex = keyIndexMap.get(itemKey);
-      if (typeof itemIndex !== 'number') {
-        continue;
-      }
-      counts[itemIndex] += 1;
-      resolvedCount += 1;
+  function normalizeSecondaryQcItemRecordedCounts(value, itemKeys, itemTargetCounts, rows) {
+    if (!Array.isArray(value) || value.length !== itemKeys.length) {
+      return [];
     }
-    let remaining = Math.max(0, rows.length - resolvedCount);
-    for (let index = 0; index < counts.length && remaining > 0; index += 1) {
-      const maxFill = Math.max(0, (itemTargetCounts[index] || 0) - counts[index]);
-      if (!maxFill) {
-        continue;
-      }
-      const fillCount = Math.min(maxFill, remaining);
-      counts[index] += fillCount;
-      remaining -= fillCount;
+    const counts = value.map((count) => Math.max(0, Math.trunc(Number(count) || 0)));
+    const total = counts.reduce((sum, count) => sum + count, 0);
+    if (total !== rows.length) {
+      return [];
     }
-    if (remaining > 0 && counts.length) {
-      counts[counts.length - 1] += remaining;
+    for (let index = 0; index < counts.length; index += 1) {
+      if (counts[index] > (itemTargetCounts[index] || 0)) {
+        return [];
+      }
     }
     return counts;
   }
 
-  function normalizeSecondaryQcItemRecordedCounts(value, itemKeys, itemTargetCounts, rows) {
-    const fallback = buildSecondaryQcItemRecordedCountsFromRows(itemKeys, itemTargetCounts, rows);
-    if (!Array.isArray(value) || value.length !== itemKeys.length) {
-      return fallback;
-    }
-    const counts = value.map((count) => Math.max(0, Math.trunc(Number(count) || 0)));
-    const total = counts.reduce((sum, count) => sum + count, 0);
-    return total === rows.length ? counts : fallback;
-  }
-
   function normalizeSecondaryQcReport(report) {
-    if (!report || typeof report !== 'object') {
+    if (
+      !report
+      || typeof report !== 'object'
+      || report.version !== 1
+      || !normalizeText(report.startDate)
+      || !normalizeText(report.endDate)
+      || !normalizeText(report.fileName)
+      || !normalizeText(report.generatedAt)
+      || !Number.isInteger(report.targetCount)
+      || !Number.isInteger(report.actualCount)
+    ) {
       return null;
     }
     const startDate = normalizeText(report.startDate);
-    const endDate = normalizeText(report.endDate) || startDate;
+    const endDate = normalizeText(report.endDate);
     const rows = Array.isArray(report.rows)
       ? report.rows
         .map((row) => {
@@ -5157,37 +4371,62 @@
         })
         .filter(Boolean)
       : [];
-    if (!startDate) {
+    if (!startDate || !endDate || report.actualCount !== rows.length) {
+      return null;
+    }
+    if (report.targetCount < report.actualCount) {
       return null;
     }
     return {
       ...report,
+      version: 1,
       startDate,
       endDate,
-      targetCount: normalizePositiveInteger(report.targetCount, Math.max(rows.length, 1), 1, 999),
-      actualCount: Math.max(0, Math.trunc(Number(report.actualCount) || rows.length || 0)),
+      targetCount: report.targetCount,
+      actualCount: report.actualCount,
       fileName: normalizeText(report.fileName),
       rows,
-      generatedAt: report.generatedAt || new Date().toISOString()
+      generatedAt: report.generatedAt
     };
   }
 
   function normalizeSecondaryQcCheckpoint(checkpoint) {
-    if (!checkpoint || typeof checkpoint !== 'object') {
+    if (
+      !checkpoint
+      || typeof checkpoint !== 'object'
+      || checkpoint.version !== 2
+      || !normalizeText(checkpoint.startDate)
+      || !normalizeText(checkpoint.endDate)
+      || !normalizeText(checkpoint.status)
+      || !normalizeText(checkpoint.startedAt)
+      || !normalizeText(checkpoint.updatedAt)
+      || !Number.isInteger(checkpoint.currentItemIndex)
+      || !Number.isInteger(checkpoint.targetCount)
+    ) {
       return null;
     }
     const startDate = normalizeText(checkpoint.startDate);
-    const endDate = normalizeText(checkpoint.endDate) || startDate;
+    const endDate = normalizeText(checkpoint.endDate);
     const groupIds = normalizeSelectedGroupIds(checkpoint.groupIds);
     const itemKeys = normalizeSelectedKeys(checkpoint.itemKeys);
-    const targetCount = normalizePositiveInteger(checkpoint.targetCount, 10, 1, 999);
-    if (!startDate || !groupIds.length || !itemKeys.length) {
+    const targetCount = checkpoint.targetCount;
+    if (!startDate || !endDate || !groupIds.length || !itemKeys.length || targetCount < 1 || targetCount > 999) {
       return null;
     }
     const rows = Array.isArray(checkpoint.rows)
       ? checkpoint.rows.map(normalizeSecondaryQcDraftRow).filter(Boolean)
       : [];
+    if (checkpoint.currentItemIndex < 0 || checkpoint.currentItemIndex > itemKeys.length || rows.length > targetCount) {
+      return null;
+    }
     const itemTargetCounts = normalizeSecondaryQcItemTargetCounts(checkpoint.itemTargetCounts, itemKeys.length, targetCount);
+    const itemRecordedCounts = normalizeSecondaryQcItemRecordedCounts(checkpoint.itemRecordedCounts, itemKeys, itemTargetCounts, rows);
+    if (!itemTargetCounts.length || !itemRecordedCounts.length) {
+      return null;
+    }
+    if (!['running', 'paused', 'stopped', 'error'].includes(normalizeText(checkpoint.status))) {
+      return null;
+    }
     return {
       ...checkpoint,
       version: 2,
@@ -5195,21 +4434,19 @@
       endDate,
       groupIds,
       itemKeys,
-      currentItemIndex: Number.isFinite(Number(checkpoint.currentItemIndex))
-        ? Number(checkpoint.currentItemIndex)
-        : 0,
+      currentItemIndex: checkpoint.currentItemIndex,
       targetCount,
       itemTargetCounts,
-      itemRecordedCounts: normalizeSecondaryQcItemRecordedCounts(checkpoint.itemRecordedCounts, itemKeys, itemTargetCounts, rows),
+      itemRecordedCounts,
       processedTaskIds: uniqueTextList(checkpoint.processedTaskIds),
       rows,
       qcOperator: normalizeText(checkpoint.qcOperator),
-      status: normalizeText(checkpoint.status) || 'running',
+      status: normalizeText(checkpoint.status),
       statusText: normalizeText(checkpoint.statusText),
       summaryText: normalizeText(checkpoint.summaryText),
       logs: Array.isArray(checkpoint.logs) ? checkpoint.logs.slice(0, MAX_LOGS) : [],
-      startedAt: checkpoint.startedAt || new Date().toISOString(),
-      updatedAt: checkpoint.updatedAt || checkpoint.startedAt || new Date().toISOString()
+      startedAt: checkpoint.startedAt,
+      updatedAt: checkpoint.updatedAt
     };
   }
 
@@ -5386,7 +4623,7 @@
         throw new Error('采集已结束');
       }
       const storage = await storageGet([responseKey, progressKey]);
-      const progress = unwrapCacheEnvelope(storage[progressKey]);
+      const progress = storage[progressKey];
       if (progress && typeof progress === 'object') {
         const progressToken = normalizeText(progress.updatedAt) || normalizeText(progress.text);
         if (progressToken && progressToken !== lastProgressToken) {
@@ -5402,7 +4639,7 @@
           }
         }
       }
-      const response = unwrapCacheEnvelope(storage[responseKey]);
+      const response = storage[responseKey];
       if (response && typeof response === 'object') {
         return response;
       }
@@ -5426,7 +4663,7 @@
         throw new Error('采集已结束');
       }
       const storage = await storageGet(responseKey);
-      const response = unwrapCacheEnvelope(storage[responseKey]);
+      const response = storage[responseKey];
       if (response && typeof response === 'object') {
         return response;
       }
@@ -5702,7 +4939,7 @@
     try {
       enforcePageMuted({ pausePlayback: true });
       const requestState = await storageGet(requestKey);
-      const request = unwrapCacheEnvelope(requestState[requestKey]);
+      const request = requestState[requestKey];
       if (!request || typeof request !== 'object') {
         throw new Error('未找到视频地址任务上下文');
       }
@@ -5730,7 +4967,7 @@
       };
     } finally {
       const latestRequestState = await storageGet(requestKey);
-      const latestRequest = unwrapCacheEnvelope(latestRequestState[requestKey]);
+      const latestRequest = latestRequestState[requestKey];
       if (!latestRequest || typeof latestRequest !== 'object') {
         await closeCurrentWorkerPage();
         return;
@@ -5772,7 +5009,7 @@
     try {
       await ensureSecondaryQcWorkerNotStopped(requestId);
       const requestState = await storageGet(requestKey);
-      const request = unwrapCacheEnvelope(requestState[requestKey]);
+      const request = requestState[requestKey];
       if (!request || typeof request !== 'object') {
         throw new Error('未找到二次质检任务上下文');
       }
@@ -6034,6 +5271,7 @@
       this.runtime = {
         minimized: false,
         running: false,
+        openGroupMenu: '',
         jobType: '',
         listJobAbortToken: 0,
         stopping: false,
@@ -6075,7 +5313,7 @@
       ]);
       const cutoffDate = getQuarterCutoffDateString(new Date());
 
-      const nextReport = trimReportByCutoff(unwrapCacheEnvelope(state[STORAGE_KEYS.report]), cutoffDate);
+      const nextReport = trimReportByCutoff(state[STORAGE_KEYS.report], cutoffDate);
       if (nextReport) {
         await storageSetCached({ [STORAGE_KEYS.report]: nextReport });
       } else {
@@ -6083,7 +5321,7 @@
       }
 
       const nextResultCache = trimResultCacheByCutoff(
-        normalizeStoredResultCache(unwrapCacheEnvelope(state[STORAGE_KEYS.resultCache])),
+        normalizeStoredResultCache(state[STORAGE_KEYS.resultCache]),
         cutoffDate
       );
       if (Object.keys(nextResultCache).length) {
@@ -6093,8 +5331,8 @@
       }
 
       const checkpoints = [
-        [STORAGE_KEYS.dailyCheckpoint, unwrapCacheEnvelope(state[STORAGE_KEYS.dailyCheckpoint])],
-        [STORAGE_KEYS.secondaryQcCheckpoint, unwrapCacheEnvelope(state[STORAGE_KEYS.secondaryQcCheckpoint])]
+        [STORAGE_KEYS.dailyCheckpoint, state[STORAGE_KEYS.dailyCheckpoint]],
+        [STORAGE_KEYS.secondaryQcCheckpoint, state[STORAGE_KEYS.secondaryQcCheckpoint]]
       ];
       for (const [key, checkpoint] of checkpoints) {
         const dateValue = checkpoint && normalizeText(checkpoint.updatedAt || checkpoint.startedAt).slice(0, 10);
@@ -6113,13 +5351,14 @@
         STORAGE_KEYS.secondaryQcReport,
         STORAGE_KEYS.secondaryQcCheckpoint
       ]);
-      this.settings = normalizeWorkbenchSettings(unwrapCacheEnvelope(state[STORAGE_KEYS.settings]));
+      this.settings = normalizeWorkbenchSettings(state[STORAGE_KEYS.settings]);
       this.settingsDraft = cloneWorkbenchSettings(this.settings);
-      this.runtime.daily.report = normalizeStoredReport(unwrapCacheEnvelope(state[STORAGE_KEYS.report]));
-      this.runtime.daily.resultCache = normalizeStoredResultCache(unwrapCacheEnvelope(state[STORAGE_KEYS.resultCache]));
-      this.runtime.daily.checkpoint = normalizeStoredCheckpoint(unwrapCacheEnvelope(state[STORAGE_KEYS.dailyCheckpoint]));
-      this.runtime.secondaryQc.report = normalizeSecondaryQcReport(unwrapCacheEnvelope(state[STORAGE_KEYS.secondaryQcReport]));
-      this.runtime.secondaryQc.checkpoint = normalizeSecondaryQcCheckpoint(unwrapCacheEnvelope(state[STORAGE_KEYS.secondaryQcCheckpoint]));
+      this.runtime.minimized = Boolean(this.settings.ui.panelMinimized);
+      this.runtime.daily.report = normalizeStoredReport(state[STORAGE_KEYS.report]);
+      this.runtime.daily.resultCache = normalizeStoredResultCache(state[STORAGE_KEYS.resultCache]);
+      this.runtime.daily.checkpoint = normalizeStoredCheckpoint(state[STORAGE_KEYS.dailyCheckpoint]);
+      this.runtime.secondaryQc.report = normalizeSecondaryQcReport(state[STORAGE_KEYS.secondaryQcReport]);
+      this.runtime.secondaryQc.checkpoint = normalizeSecondaryQcCheckpoint(state[STORAGE_KEYS.secondaryQcCheckpoint]);
       this.runtime.logs = [];
       this.runtime.statusText = '等待开始';
       this.runtime.running = false;
@@ -6152,7 +5391,6 @@
         this.runtime.listJobAbortToken = beginListJobAbortSession();
         this.runtime.logs = Array.isArray(active.checkpoint.logs) ? active.checkpoint.logs.slice(0, MAX_LOGS) : [];
         this.runtime.statusText = active.checkpoint.statusText || '检测到未完成任务，正在准备继续';
-        this.runtime.minimized = false;
         return;
       }
 
@@ -6213,10 +5451,10 @@
                       <input id="ysp-daily-end-date" class="ysp-daily-panel__date" type="date" />
                     </label>
                   </div>
-                  <div class="ysp-daily-panel__toolbar">
+                  <div class="ysp-daily-panel__field">
                     <span class="ysp-daily-panel__label">品类编组</span>
+                    <div data-role="daily-groups"></div>
                   </div>
-                  <div class="ysp-daily-panel__catalog" data-role="daily-groups"></div>
                   <div class="ysp-daily-panel__actions">
                     <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-daily">开始日报</button>
                   </div>
@@ -6245,10 +5483,10 @@
                       <input id="ysp-secondary-qc-target-count" class="ysp-daily-panel__input" type="number" min="1" max="999" step="1" />
                     </label>
                   </div>
-                  <div class="ysp-daily-panel__toolbar">
+                  <div class="ysp-daily-panel__field">
                     <span class="ysp-daily-panel__label">品类编组</span>
+                    <div data-role="secondary-qc-groups"></div>
                   </div>
-                  <div class="ysp-daily-panel__catalog" data-role="secondary-qc-groups"></div>
                   <div class="ysp-daily-panel__actions">
                     <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-secondary-qc">开始质检</button>
                   </div>
@@ -6270,8 +5508,7 @@
                 <div class="ysp-daily-panel__log-list" data-role="logs"></div>
               </div>
               <div class="ysp-daily-panel__actions">
-                <button type="button" class="ysp-daily-panel__button" data-role="pause">暂停任务</button>
-                <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="resume">继续任务</button>
+                <button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button>
                 <button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button>
                 <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清理缓存</button>
               </div>
@@ -6322,8 +5559,7 @@
         secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'),
         secondaryQcGroups: root.querySelector('[data-role="secondary-qc-groups"]'),
         startSecondaryQc: root.querySelector('[data-role="start-secondary-qc"]'),
-        pause: root.querySelector('[data-role="pause"]'),
-        resume: root.querySelector('[data-role="resume"]'),
+        pauseResume: root.querySelector('[data-role="pause-resume"]'),
         stop: root.querySelector('[data-role="stop"]'),
         clearData: root.querySelector('[data-role="clear-data"]'),
         status: root.querySelector('[data-role="status"]'),
@@ -6409,6 +5645,24 @@
 
     getCheckpointItems(checkpoint) {
       return getEntriesByKeys(checkpoint && checkpoint.itemKeys);
+    }
+
+    formatGroupEntryLabel(entry) {
+      if (!entry) {
+        return '';
+      }
+      return `${entry.groupLabel} / ${entry.label}`;
+    }
+
+    getGroupPickerSummary(moduleType) {
+      const entries = this.getSelectedGroupEntries(moduleType);
+      if (!entries.length) {
+        return '请选择品类编组';
+      }
+      if (entries.length === 1) {
+        return this.formatGroupEntryLabel(entries[0]);
+      }
+      return `已选 ${entries.length} 个编组`;
     }
 
     async persistSettings() {
@@ -6539,8 +5793,19 @@
 
       this.refs.dailyGroups.addEventListener('click', (event) => this.handleGroupSelection(event, 'daily'));
       this.refs.secondaryQcGroups.addEventListener('click', (event) => this.handleGroupSelection(event, 'secondaryQc'));
-      this.refs.dailyGroups.addEventListener('keydown', (event) => this.handleGroupSelectionKeydown(event, 'daily'));
-      this.refs.secondaryQcGroups.addEventListener('keydown', (event) => this.handleGroupSelectionKeydown(event, 'secondaryQc'));
+      this.refs.surface.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+        if (target.closest('[data-role="group-picker"]')) {
+          return;
+        }
+        if (this.runtime.openGroupMenu) {
+          this.runtime.openGroupMenu = '';
+          this.render();
+        }
+      });
 
       this.refs.startDaily.addEventListener('click', () => {
         this.startDailyJob().catch((error) => this.failJob(error));
@@ -6548,9 +5813,8 @@
       this.refs.startSecondaryQc.addEventListener('click', () => {
         this.startSecondaryQcJob().catch((error) => this.failJob(error));
       });
-      this.refs.pause.addEventListener('click', () => this.pauseCurrentJob());
-      this.refs.resume.addEventListener('click', () => {
-        this.resumePausedJob().catch((error) => this.failJob(error));
+      this.refs.pauseResume.addEventListener('click', () => {
+        this.handlePauseResumeAction().catch((error) => this.failJob(error));
       });
       this.refs.stop.addEventListener('click', () => {
         this.stopCurrentJob().catch((error) => this.failJob(error));
@@ -6575,14 +5839,26 @@
 
     handleGroupSelection(event, moduleType) {
       const target = event.target;
-      if (!(target instanceof HTMLElement) || this.runtime.running) {
+      if (!(target instanceof HTMLElement)) {
         return;
       }
-      const groupCard = target.closest('[data-group-card]');
-      if (!groupCard) {
+      const trigger = target.closest('[data-role="group-trigger"]');
+      if (trigger) {
+        if (this.runtime.running) {
+          return;
+        }
+        this.runtime.openGroupMenu = this.runtime.openGroupMenu === moduleType ? '' : moduleType;
+        this.render();
         return;
       }
-      const groupId = groupCard.getAttribute('data-group-card');
+      if (this.runtime.running) {
+        return;
+      }
+      const groupOption = target.closest('[data-role="group-option"]');
+      if (!groupOption) {
+        return;
+      }
+      const groupId = groupOption.getAttribute('data-group-id');
       if (!groupId) {
         return;
       }
@@ -6595,22 +5871,6 @@
       this.getModuleSettings(moduleType).groupIds = Array.from(groupIds);
       this.persistSettings().catch(() => undefined);
       this.render();
-    }
-
-    handleGroupSelectionKeydown(event, moduleType) {
-      const target = event.target;
-      if (!(target instanceof HTMLElement) || this.runtime.running) {
-        return;
-      }
-      if (event.key !== 'Enter' && event.key !== ' ') {
-        return;
-      }
-      const groupCard = target.closest('[data-group-card]');
-      if (!groupCard) {
-        return;
-      }
-      event.preventDefault();
-      this.handleGroupSelection(event, moduleType);
     }
 
     openDatePicker(input) {
@@ -6649,12 +5909,18 @@
 
     setMinimized(nextValue) {
       this.runtime.minimized = Boolean(nextValue);
+      this.settings.ui.panelMinimized = this.runtime.minimized;
+      if (this.runtime.minimized) {
+        this.runtime.openGroupMenu = '';
+      }
+      this.persistSettings().catch(() => undefined);
       this.render();
     }
 
     openSettingsModal() {
       this.settingsDraft = cloneWorkbenchSettings(this.settings);
       this.settingsModalOpen = true;
+      this.runtime.openGroupMenu = '';
       this.syncSettingsToInputs();
       this.render();
       this.refs.settingsInput.focus();
@@ -6674,25 +5940,44 @@
       this.pushLog('设置已保存');
     }
 
-    renderGroupCards(container, moduleType) {
+    renderGroupSelector(container, moduleType) {
       const selected = new Set(this.getModuleSettings(moduleType).groupIds);
-      container.innerHTML = SUBGROUP_ENTRIES.map((subgroup) => {
-        const selectedClass = selected.has(subgroup.id) ? ' is-selected' : '';
-        return `
-          <section
-            class="ysp-daily-panel__group${selectedClass}"
-            data-theme="${escapeXml(subgroup.theme)}"
-            data-group-card="${escapeXml(subgroup.id)}"
-            role="button"
-            tabindex="${this.runtime.running ? '-1' : '0'}"
-            aria-pressed="${selected.has(subgroup.id) ? 'true' : 'false'}"
-          >
-            <div class="ysp-daily-panel__group-header">
-              <h3 class="ysp-daily-panel__group-title">${escapeXml(subgroup.label)}</h3>
-            </div>
-          </section>
-        `;
-      }).join('');
+      const selectedEntries = this.getSelectedGroupEntries(moduleType);
+      const selectedSummary = selectedEntries.length
+        ? `已选：${selectedEntries.map((entry) => this.formatGroupEntryLabel(entry)).join('、')}`
+        : '未选择编组';
+      const open = !this.runtime.running && this.runtime.openGroupMenu === moduleType;
+
+      container.innerHTML = `
+        <div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker">
+          <button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" ${this.runtime.running ? 'disabled' : ''}>
+            <span class="ysp-daily-panel__group-trigger-text">${escapeXml(this.getGroupPickerSummary(moduleType))}</span>
+            <span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span>
+          </button>
+          <div class="ysp-daily-panel__group-menu">
+            ${SUBGROUP_ENTRIES.map((subgroup) => {
+              const selectedClass = selected.has(subgroup.id) ? ' is-selected' : '';
+              return `
+                <button
+                  type="button"
+                  class="ysp-daily-panel__group-option${selectedClass}"
+                  data-theme="${escapeXml(subgroup.theme)}"
+                  data-role="group-option"
+                  data-group-id="${escapeXml(subgroup.id)}"
+                  ${this.runtime.running ? 'disabled' : ''}
+                >
+                  <span class="ysp-daily-panel__group-option-copy">
+                    <span class="ysp-daily-panel__group-option-meta">${escapeXml(subgroup.groupLabel)}</span>
+                    <span class="ysp-daily-panel__group-option-label">${escapeXml(subgroup.label)}</span>
+                  </span>
+                  <span class="ysp-daily-panel__group-option-check">${selected.has(subgroup.id) ? '已选' : '选择'}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+          <div class="ysp-daily-panel__group-summary">${escapeXml(selectedSummary)}</div>
+        </div>
+      `;
     }
 
     renderStatus() {
@@ -6758,6 +6043,9 @@
       if (!this.panel) {
         return;
       }
+      if (this.runtime.running && this.runtime.openGroupMenu) {
+        this.runtime.openGroupMenu = '';
+      }
       const listPageActive = isListPage();
       if (this.runtime.running) {
         enforcePageMuted({ pausePlayback: isDetailPage() });
@@ -6767,8 +6055,8 @@
       this.panel.classList.toggle('is-minimized', this.runtime.minimized);
       this.panel.classList.toggle('is-settings-open', this.settingsModalOpen);
       this.syncSettingsToInputs();
-      this.renderGroupCards(this.refs.dailyGroups, 'daily');
-      this.renderGroupCards(this.refs.secondaryQcGroups, 'secondaryQc');
+      this.renderGroupSelector(this.refs.dailyGroups, 'daily');
+      this.renderGroupSelector(this.refs.secondaryQcGroups, 'secondaryQc');
 
       this.refs.dailyModule.classList.toggle('is-collapsed', this.settings.ui.dailyCollapsed);
       this.refs.dailyBody.hidden = this.settings.ui.dailyCollapsed;
@@ -6787,11 +6075,11 @@
       this.refs.startDaily.disabled = disabled || !listPageActive;
       this.refs.startSecondaryQc.disabled = disabled || !listPageActive;
       this.refs.clearData.disabled = disabled;
-      this.refs.pause.disabled = !disabled;
       this.refs.stop.disabled = !disabled;
       const pausedTask = this.getPausedTaskMeta();
-      this.refs.resume.disabled = disabled || !pausedTask || !listPageActive;
-      this.refs.resume.textContent = pausedTask ? `继续${pausedTask.label}` : '继续任务';
+      this.refs.pauseResume.disabled = !disabled && (!pausedTask || !listPageActive);
+      this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? `继续${pausedTask.label}` : '继续任务';
+      this.refs.pauseResume.classList.toggle('ysp-daily-panel__button--primary', !disabled && Boolean(pausedTask));
       this.refs.startDaily.textContent = disabled && this.runtime.jobType === 'daily' ? '日报运行中' : '开始日报';
       this.refs.startSecondaryQc.textContent = disabled && this.runtime.jobType === 'secondaryQc' ? '质检运行中' : '开始质检';
 
@@ -6858,7 +6146,7 @@
         return;
       }
       const activeRequestState = await storageGet(STORAGE_KEYS.secondaryQcWorkerActiveRequest);
-      const activeRequestId = normalizeText(unwrapCacheEnvelope(activeRequestState[STORAGE_KEYS.secondaryQcWorkerActiveRequest]));
+      const activeRequestId = normalizeText(activeRequestState[STORAGE_KEYS.secondaryQcWorkerActiveRequest]);
       const clearKeys = [
         STORAGE_KEYS.report,
         STORAGE_KEYS.resultCache,
@@ -6919,7 +6207,7 @@
       }
       if (jobType === 'secondaryQc') {
         const activeRequestState = await storageGet(STORAGE_KEYS.secondaryQcWorkerActiveRequest);
-        const activeRequestId = normalizeText(unwrapCacheEnvelope(activeRequestState[STORAGE_KEYS.secondaryQcWorkerActiveRequest]));
+        const activeRequestId = normalizeText(activeRequestState[STORAGE_KEYS.secondaryQcWorkerActiveRequest]);
         if (activeRequestId) {
           await requestSecondaryQcWorkerStop(activeRequestId);
         }
@@ -6940,6 +6228,14 @@
       this.runtime.statusText = '正在暂停当前任务';
       this.pushLog('正在暂停当前任务');
       this.render();
+    }
+
+    async handlePauseResumeAction() {
+      if (this.runtime.running) {
+        this.pauseCurrentJob();
+        return;
+      }
+      await this.resumePausedJob();
     }
 
     async resumePausedJob() {
@@ -7262,6 +6558,7 @@
         ? checkpoint.dateList
         : buildDateList(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
       const report = {
+        version: 1,
         date: checkpoint.startDate,
         startDate: checkpoint.startDate,
         endDate: checkpoint.endDate || checkpoint.startDate,
@@ -7368,6 +6665,9 @@
       }
       checkpoint.itemTargetCounts = normalizeSecondaryQcItemTargetCounts(checkpoint.itemTargetCounts, items.length, checkpoint.targetCount);
       checkpoint.itemRecordedCounts = normalizeSecondaryQcItemRecordedCounts(checkpoint.itemRecordedCounts, checkpoint.itemKeys, checkpoint.itemTargetCounts, checkpoint.rows);
+      if (!checkpoint.itemTargetCounts.length || !checkpoint.itemRecordedCounts.length) {
+        throw new Error('二次质检任务进度数据无效，请重新开始');
+      }
 
       while (checkpoint.currentItemIndex < items.length) {
         this.ensureNotStopped();
@@ -7582,6 +6882,7 @@
       const checkpoint = this.runtime.secondaryQc.checkpoint;
       const rows = checkpoint.rows.slice(0, checkpoint.targetCount);
       const report = {
+        version: 1,
         startDate: checkpoint.startDate,
         endDate: checkpoint.endDate || checkpoint.startDate,
         targetCount: checkpoint.targetCount,
