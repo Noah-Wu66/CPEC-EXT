@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.33
+// @version      2.1.34
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -15,9 +15,10 @@
 // @grant        GM_deleteValue
 // @grant        GM_addStyle
 // @grant        GM_info
-// @grant        GM_openInTab
 // @grant        GM_xmlhttpRequest
 // @connect      dashscope.aliyuncs.com
+// @connect      s.yangshipin.cn
+// @connect      playvv.yangshipin.cn
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -1488,7 +1489,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const SECONDARY_QC_VIDEO_ANALYSIS_FPS = 3;
   const SECONDARY_QC_VIDEO_ANALYSIS_MAX_PIXELS = 2073600;
   const DASHSCOPE_CHAT_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+  const YANGSHIPIN_PLAYER_BUNDLE_URL = 'https://s.yangshipin.cn/wc/ysplayer.modern.js';
+  const YANGSHIPIN_VIDEO_INFO_URL = 'https://playvv.yangshipin.cn/playvinfo';
+  const YANGSHIPIN_PLAYER_APP_VERSION = '1.2.3';
+  const YANGSHIPIN_PLAYER_PLATFORM = 4330701;
   const YANGSHIPIN_VIDEO_WORKER_URL = 'https://w.yangshipin.cn/video';
+  let yangshipinCKeyGeneratorPromise = null;
+  let yangshipinGuidCache = '';
 
   function injectPanelStyle() {
     GM_addStyle(PANEL_STYLE);
@@ -4681,6 +4688,199 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     throw new Error('等待视频地址结果超时');
   }
 
+  function createYangshipinGuid() {
+    return `${Date.now().toString(36)}_${Math.random().toString(36).replace(/^0\./, '')}`;
+  }
+
+  function getYangshipinGuid() {
+    if (yangshipinGuidCache) {
+      return yangshipinGuidCache;
+    }
+    yangshipinGuidCache = createYangshipinGuid();
+    return yangshipinGuidCache;
+  }
+
+  function getYangshipinSdtfrom() {
+    const ua = navigator.userAgent.toLowerCase();
+    if (/ipad/i.test(ua)) {
+      return 213;
+    }
+    if (/ios|iphone/i.test(ua)) {
+      return 113;
+    }
+    if (/android/i.test(ua)) {
+      return 313;
+    }
+    return YANGSHIPIN_PLAYER_PLATFORM;
+  }
+
+  function parseYangshipinJsonpResponse(responseText) {
+    const normalized = normalizeText(responseText);
+    if (!normalized) {
+      throw new Error('央视频接口返回为空');
+    }
+    const wrappedJsonMatch = normalized.match(/^\(([\s\S]+)\)$/);
+    const directJson = wrappedJsonMatch ? wrappedJsonMatch[1] : normalized.replace(/;$/, '');
+    return JSON.parse(directJson);
+  }
+
+  async function loadYangshipinCKeyGenerator(cancelCheck) {
+    if (yangshipinCKeyGeneratorPromise) {
+      return yangshipinCKeyGeneratorPromise;
+    }
+    yangshipinCKeyGeneratorPromise = (async () => {
+      const response = await gmXmlhttpRequestPromise({
+        method: 'GET',
+        url: YANGSHIPIN_PLAYER_BUNDLE_URL,
+        cancelCheck
+      });
+      const scriptText = String((response && response.responseText) || '');
+      const startToken = 'UHXV:function(e,t){';
+      const endToken = '},\"UN+X\":function';
+      const startIndex = scriptText.indexOf(startToken);
+      const endIndex = startIndex >= 0 ? scriptText.indexOf(endToken, startIndex) : -1;
+      if (startIndex < 0 || endIndex < 0) {
+        throw new Error('未找到央视频 cKey 生成器');
+      }
+      const moduleBody = scriptText.slice(startIndex + startToken.length, endIndex);
+      const module = { exports: null };
+      const factory = new Function('e', 't', moduleBody);
+      factory(module, module.exports);
+      if (typeof module.exports !== 'function') {
+        throw new Error('央视频 cKey 生成器不可用');
+      }
+      return module.exports;
+    })().catch((error) => {
+      yangshipinCKeyGeneratorPromise = null;
+      throw error;
+    });
+    return yangshipinCKeyGeneratorPromise;
+  }
+
+  async function buildYangshipinVideoInfoParams(videoVid, svrtick, cancelCheck) {
+    const guid = getYangshipinGuid();
+    const cKeyGenerator = await loadYangshipinCKeyGenerator(cancelCheck);
+    const resolvedSvrtick = normalizeText(svrtick) || String(Math.floor(Date.now() / 1000));
+    return {
+      guid,
+      platform: YANGSHIPIN_PLAYER_PLATFORM,
+      vid: videoVid,
+      charge: 0,
+      defaultfmt: 'auto',
+      otype: 'json',
+      defnpayver: 1,
+      appVer: YANGSHIPIN_PLAYER_APP_VERSION,
+      sphttps: 1,
+      sphls: 1,
+      spwm: 4,
+      dtype: 3,
+      defsrc: 2,
+      encryptVer: 8.1,
+      sdtfrom: getYangshipinSdtfrom(),
+      cKey: cKeyGenerator(videoVid, resolvedSvrtick, YANGSHIPIN_PLAYER_APP_VERSION, guid, YANGSHIPIN_PLAYER_PLATFORM)
+    };
+  }
+
+  async function requestYangshipinVideoInfo(videoVid, svrtick, cancelCheck) {
+    const params = await buildYangshipinVideoInfoParams(videoVid, svrtick, cancelCheck);
+    const url = `${YANGSHIPIN_VIDEO_INFO_URL}?${new URLSearchParams(Object.entries(params).map(([key, value]) => [key, String(value)]))}`;
+    const response = await gmXmlhttpRequestPromise({
+      method: 'GET',
+      url,
+      cancelCheck
+    });
+    return parseYangshipinJsonpResponse(response && response.responseText);
+  }
+
+  function collectYangshipinMediaUrls(value, results, seen) {
+    if (!value) {
+      return;
+    }
+    if (typeof value === 'string') {
+      const normalized = normalizeMediaSourceUrl(value);
+      if (normalized && !seen.has(normalized) && (/\.(mp4|m3u8|flv)(\?|$)/i.test(normalized) || /[?&](vkey|ysign|ytime|ytype)=/i.test(normalized))) {
+        seen.add(normalized);
+        results.push(normalized);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item) => collectYangshipinMediaUrls(item, results, seen));
+      return;
+    }
+    if (typeof value === 'object') {
+      Object.values(value).forEach((item) => collectYangshipinMediaUrls(item, results, seen));
+    }
+  }
+
+  function buildYangshipinFallbackMediaUrl(data, videoVid) {
+    const videoInfo = data && data.vl && Array.isArray(data.vl.vi) ? data.vl.vi[0] : null;
+    if (!videoInfo || !videoInfo.ul || !Array.isArray(videoInfo.ul.ui) || !videoInfo.ul.ui.length) {
+      return '';
+    }
+    const firstUi = videoInfo.ul.ui.find((item) => normalizeMediaSourceUrl(item && item.url)) || null;
+    if (!firstUi) {
+      return '';
+    }
+    const baseUrl = normalizeMediaSourceUrl(firstUi.url);
+    if (!baseUrl) {
+      return '';
+    }
+    if (firstUi.hls && normalizeText(firstUi.hls.pt)) {
+      return `${baseUrl}${normalizeText(firstUi.hls.pt)}`;
+    }
+    let resolvedUrl = baseUrl;
+    const linkId = normalizeText(videoInfo.lnk || videoVid);
+    const fileName = normalizeText(videoInfo.fn);
+    if (fileName && linkId && !new RegExp(`${linkId}\\.(?:mp4|flv)(?:\\?|$)`, 'i').test(resolvedUrl)) {
+      const dotIndex = fileName.indexOf('.');
+      if (dotIndex >= 0) {
+        resolvedUrl += fileName.slice(dotIndex);
+      }
+    }
+    const separator = resolvedUrl.includes('?') ? '&' : '?';
+    if (!/[?&]sdtfrom=/i.test(resolvedUrl)) {
+      resolvedUrl += `${separator}sdtfrom=${encodeURIComponent(String(getYangshipinSdtfrom()))}`;
+    }
+    if (!/[?&]guid=/i.test(resolvedUrl)) {
+      resolvedUrl += `${resolvedUrl.includes('?') ? '&' : '?'}guid=${encodeURIComponent(getYangshipinGuid())}`;
+    }
+    if (!/[?&]vkey=/i.test(resolvedUrl) && normalizeText(videoInfo.fvkey)) {
+      resolvedUrl += `${resolvedUrl.includes('?') ? '&' : '?'}vkey=${encodeURIComponent(normalizeText(videoInfo.fvkey))}`;
+    }
+    return resolvedUrl;
+  }
+
+  function extractYangshipinVideoUrlFromInfo(data, videoVid) {
+    const candidates = [];
+    const seen = new Set();
+    collectYangshipinMediaUrls(data, candidates, seen);
+    if (candidates.length) {
+      return candidates[0];
+    }
+    return buildYangshipinFallbackMediaUrl(data, videoVid);
+  }
+
+  async function fetchYangshipinVideoUrlDirectly(videoVid, cancelCheck) {
+    let currentSvrtick = '';
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await requestYangshipinVideoInfo(videoVid, currentSvrtick, cancelCheck);
+      if (response && Number(response.em) === 85 && Number(response.type) === -3 && normalizeText(response.curTime)) {
+        currentSvrtick = normalizeText(response.curTime);
+        lastError = new Error('央视频 cKey 已刷新，准备重试');
+        continue;
+      }
+      const videoUrl = extractYangshipinVideoUrlFromInfo(response, videoVid);
+      if (videoUrl) {
+        return videoUrl;
+      }
+      lastError = new Error(`央视频未返回完整视频地址（em=${normalizeText(response && response.em) || 'unknown'}）`);
+      break;
+    }
+    throw lastError || new Error('央视频未返回完整视频地址');
+  }
+
   function normalizeMediaSourceUrl(value) {
     const normalized = normalizeText(String(value || '')).replace(/&amp;/gi, '&');
     return /^https?:\/\//i.test(normalized) ? normalized : '';
@@ -4746,81 +4946,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }, DETAIL_PAGE_TIMEOUT, '未获取到视频地址', { cancelCheck });
   }
 
-  function openBackgroundWorkerPage(url) {
-    if (!url) {
-      return null;
-    }
-    if (typeof GM_openInTab !== 'function') {
-      throw new Error('当前油猴环境不支持后台打开标签页');
-    }
-    try {
-      const tab = GM_openInTab(url, {
-        active: false,
-        insert: true,
-        setParent: true
-      });
-      if (tab) {
-        return {
-          kind: 'gm_tab',
-          handle: tab
-        };
-      }
-    } catch (error) {
-      throw new Error(error && error.message ? error.message : '后台打开央视频页面失败');
-    }
-    throw new Error('后台打开央视频页面失败');
-  }
-
-  function closeBackgroundWorkerPage(workerPage) {
-    if (!workerPage || !workerPage.handle) {
-      return;
-    }
-    const handle = workerPage.handle;
-    if (workerPage.kind === 'gm_tab' && typeof handle.close === 'function') {
-      try {
-        handle.close();
-      } catch (error) {
-        // ignore
-      }
-    }
-  }
-
   async function fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck) {
-    const requestId = createRuntimeToken('ysp-media');
-    const requestKey = buildSecondaryQcMediaWorkerRequestKey(requestId);
-    const responseKey = buildSecondaryQcMediaWorkerResponseKey(requestId);
-    const mediaUrl = `${YANGSHIPIN_VIDEO_WORKER_URL}?type=0&vid=${encodeURIComponent(videoVid)}&ysp_media_request=${encodeURIComponent(requestId)}`;
-
-    await storageRemove(responseKey);
-    await storageSetCached({
-      [requestKey]: {
-        requestId,
-        videoVid,
-        createdAt: new Date().toISOString()
-      }
-    });
-
-    const workerPage = openBackgroundWorkerPage(mediaUrl);
-
-    let response = null;
-    try {
-      response = await waitForSecondaryQcMediaWorkerResponse(requestId, MEDIA_WORKER_RESPONSE_TIMEOUT, cancelCheck);
-    } finally {
-      closeBackgroundWorkerPage(workerPage);
-      await storageRemove([requestKey, responseKey]);
-    }
-
-    if (!response) {
-      throw new Error('未收到视频地址结果');
-    }
-    if (response.status === 'error') {
-      throw new Error(response.error || '获取视频地址失败');
-    }
-    const videoUrl = normalizeText(response.videoUrl);
-    if (!videoUrl) {
-      throw new Error('视频地址为空');
-    }
-    return videoUrl;
+    return fetchYangshipinVideoUrlDirectly(videoVid, cancelCheck);
   }
 
   function getListBodyScrollElement() {
