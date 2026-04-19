@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.36
+// @version      2.1.37
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
 // @match        https://std.video.cloud.cctv.com/*
+// @match        https://yangshipin.cn/*
+// @match        https://www.yangshipin.cn/*
 // @match        https://m.yangshipin.cn/*
 // @match        https://w.yangshipin.cn/*
 // @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp-dev/ysp-daily-report.user.js
@@ -1495,7 +1497,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const YANGSHIPIN_VIDEO_INFO_URL = 'https://playvv.yangshipin.cn/playvinfo';
   const YANGSHIPIN_PLAYER_APP_VERSION = '1.2.3';
   const YANGSHIPIN_PLAYER_PLATFORM = 4330701;
-  const YANGSHIPIN_VIDEO_WORKER_URL = 'https://w.yangshipin.cn/video';
+  const YANGSHIPIN_VIDEO_WORKER_URL = 'https://yangshipin.cn/video/home';
   let yangshipinCKeyGeneratorPromise = null;
   let yangshipinGuidCache = '';
 
@@ -2097,7 +2099,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   }
 
   function isYangshipinMediaWorkerPage() {
-    return ['m.yangshipin.cn', 'w.yangshipin.cn'].includes(location.hostname)
+    return ['yangshipin.cn', 'www.yangshipin.cn', 'm.yangshipin.cn', 'w.yangshipin.cn'].includes(location.hostname)
       && location.pathname.startsWith('/video')
       && Boolean(getSecondaryQcMediaWorkerRequestIdFromLocation());
   }
@@ -5022,7 +5024,46 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   }
 
   async function fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck) {
-    return fetchYangshipinVideoUrlDirectly(videoVid, cancelCheck);
+    const normalizedVid = normalizeText(videoVid);
+    if (!normalizedVid) {
+      throw new Error('未提供视频 VID');
+    }
+    const requestId = createRuntimeToken('media');
+    const requestKey = buildSecondaryQcMediaWorkerRequestKey(requestId);
+    const responseKey = buildSecondaryQcMediaWorkerResponseKey(requestId);
+    const workerUrl = `${YANGSHIPIN_VIDEO_WORKER_URL}?vid=${encodeURIComponent(normalizedVid)}&ysp_media_request=${encodeURIComponent(requestId)}`;
+    try {
+      await storageRemove(responseKey);
+      await storageSetCached({
+        [requestKey]: {
+          requestId,
+          videoVid: normalizedVid,
+          createdAt: new Date().toISOString()
+        }
+      });
+      const openedWindow = window.open(workerUrl, '_blank');
+      if (!openedWindow) {
+        const anchor = document.createElement('a');
+        anchor.href = workerUrl;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        anchor.click();
+      }
+      const response = await waitForSecondaryQcMediaWorkerResponse(requestId, MEDIA_WORKER_RESPONSE_TIMEOUT, cancelCheck);
+      if (!response || typeof response !== 'object') {
+        throw new Error('未收到央视频页面返回结果');
+      }
+      if (response.status === 'error') {
+        throw new Error(normalizeText(response.error) || '央视频页面返回错误');
+      }
+      const videoUrl = normalizeMediaSourceUrl(response.videoUrl);
+      if (!videoUrl) {
+        throw new Error('央视频页面未读取到完整视频地址');
+      }
+      return videoUrl;
+    } finally {
+      await storageRemove([requestKey, responseKey]);
+    }
   }
 
   function getListBodyScrollElement() {
@@ -5181,7 +5222,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const responseKey = buildSecondaryQcMediaWorkerResponseKey(requestId);
     let responsePayload = null;
     try {
-      enforcePageMuted({ pausePlayback: true });
+      enforcePageMuted({ pausePlayback: false });
       const requestState = await storageGet(requestKey);
       const request = requestState[requestKey];
       if (!request || typeof request !== 'object') {
