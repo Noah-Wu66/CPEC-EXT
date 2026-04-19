@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.48
+// @version      2.1.49
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -3507,6 +3507,28 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     throw new Error('模型 JSON 不完整');
   }
 
+  function buildModelOutputPreview(text) {
+    const normalized = normalizeText(text);
+    if (!normalized) {
+      return '空';
+    }
+    if (normalized.length <= 320) {
+      return normalized;
+    }
+    return `${normalized.slice(0, 160)} ... ${normalized.slice(-160)}`;
+  }
+
+  function parseModelJsonObject(text, sceneLabel) {
+    try {
+      return JSON.parse(extractFirstJsonObject(text));
+    } catch (error) {
+      const label = normalizeText(sceneLabel) || '模型';
+      const message = error && error.message ? error.message : String(error);
+      const preview = buildModelOutputPreview(text);
+      throw new Error(`${label}返回解析失败：${message}；原始片段：${preview}`);
+    }
+  }
+
   function extractMessageTextFromOpenAIContent(content) {
     if (typeof content === 'string') {
       return content;
@@ -5323,12 +5345,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       '请只返回 JSON，不要输出其他文字。',
       '必须覆盖：',
       '1. overall_theme：视频整体主题，必须简洁明确。',
-      '2. timeline：按时间顺序列出关键片段，time 用 00:00-00:20 这类格式，summary 写该片段发生了什么。',
+      '2. timeline：按时间顺序列出关键片段，最多 5 条，time 用 00:00-00:20 这类格式，summary 尽量控制在 18 个字以内。',
       '3. title_clues：标题里能直接支撑打标的关键词或主题线索。',
-      '4. repeated_signals：视频里反复出现、多次提及、或持续围绕展开的核心信息。',
-      '5. strong_evidence：真正能支撑补打重要标签的强证据，必须谨慎。',
-      '6. uncertain_points：不确定、无法确认、证据不足的信息。',
+      '4. repeated_signals：视频里反复出现、多次提及、或持续围绕展开的核心信息，最多 4 条。',
+      '5. strong_evidence：真正能支撑补打重要标签的强证据，最多 4 条，必须谨慎。',
+      '6. uncertain_points：不确定、无法确认、证据不足的信息，最多 3 条。',
       '如果某个信息不确定，必须写入 uncertain_points，不要臆断。',
+      '所有数组都尽量短，不要解释，不要补充 JSON 以外的文字。',
       '',
       '输出格式：',
       '{"overall_theme":"","timeline":[{"time":"","summary":""}],"title_clues":[],"repeated_signals":[],"strong_evidence":[],"uncertain_points":[]}'
@@ -5635,7 +5658,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           );
         }
       );
-      const videoAnalysis = normalizeOmniVideoAnalysis(JSON.parse(extractFirstJsonObject(videoSummaryRaw)));
+      const videoAnalysis = normalizeOmniVideoAnalysis(parseModelJsonObject(videoSummaryRaw, '视频理解'));
       const videoSummary = formatOmniVideoAnalysisForPrompt(videoAnalysis);
       const baseEvidenceSummary = [
         videoAnalysis.overallTheme ? `整体主题：${videoAnalysis.overallTheme}` : '',
@@ -5655,7 +5678,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       await reportProgress('正在分析成品标签', { stageLabel: '候选分析' });
       const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags), cancelCheck);
-      const firstJudge = JSON.parse(extractFirstJsonObject(firstJudgeRaw));
+      const firstJudge = parseModelJsonObject(firstJudgeRaw, '第一轮标签判断');
       const wrongTags = normalizeTagArray(firstJudge.wrong_tags);
       const searchCandidates = normalizeTagSearchCandidateArray(firstJudge.search_candidates);
       const missingCandidates = searchCandidates.map((item) => item.keyword);
@@ -5726,7 +5749,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         ),
         cancelCheck
       );
-      const finalJudge = JSON.parse(extractFirstJsonObject(finalJudgeRaw));
+      const finalJudge = parseModelJsonObject(finalJudgeRaw, '最终结论');
       const needRecord = normalizeBooleanFlag(finalJudge.need_record);
       const missingTagsActionable = normalizeTagArray(finalJudge.missing_tags_actionable);
       const finalWrongTags = normalizeTagArray(finalJudge.wrong_tags);
