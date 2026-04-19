@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.44
+// @version      2.1.45
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -5202,7 +5202,29 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   function normalizeMediaSourceUrl(value) {
     const normalized = normalizeText(String(value || '')).replace(/&amp;/gi, '&');
-    return /^https?:\/\//i.test(normalized) ? normalized : '';
+    if (!/^https?:\/\//i.test(normalized)) {
+      return '';
+    }
+    try {
+      const parsedUrl = new URL(normalized);
+      const hostname = normalizeText(parsedUrl.hostname).toLowerCase();
+      const pathname = normalizeText(parsedUrl.pathname).toLowerCase();
+      if (
+        ['yangshipin.cn', 'www.yangshipin.cn', 'm.yangshipin.cn', 'w.yangshipin.cn'].includes(hostname)
+        && pathname === '/video/home'
+      ) {
+        return '';
+      }
+      if (/\.(mp4|m3u8|flv)(?:$|\?)/i.test(normalized)) {
+        return normalized;
+      }
+      if (/[?&](vkey|fvkey|ysign|ytime|ytype)=/i.test(normalized)) {
+        return normalized;
+      }
+      return '';
+    } catch (error) {
+      return '';
+    }
   }
 
   function getMediaSourceUrl(element) {
