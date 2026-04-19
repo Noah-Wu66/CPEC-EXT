@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.43
+// @version      2.1.44
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -19,6 +19,10 @@
 // @grant        GM_info
 // @grant        GM_xmlhttpRequest
 // @connect      dashscope.aliyuncs.com
+// @connect      yangshipin.cn
+// @connect      www.yangshipin.cn
+// @connect      m.yangshipin.cn
+// @connect      w.yangshipin.cn
 // @connect      mp4playcloud-cdn.ysp.cctv.cn
 // @connect      s.yangshipin.cn
 // @connect      playvv.yangshipin.cn
