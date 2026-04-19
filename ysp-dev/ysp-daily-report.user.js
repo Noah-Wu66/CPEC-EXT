@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.42
+// @version      2.1.43
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -3687,6 +3687,81 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return `data:${normalizeText(mimeType) || 'video/mp4'};base64,${btoa(binary)}`;
   }
 
+  function formatByteSize(bytes) {
+    const size = Number(bytes) || 0;
+    if (!size) {
+      return '0 B';
+    }
+    if (size < 1024) {
+      return `${size} B`;
+    }
+    if (size < 1024 * 1024) {
+      return `${(size / 1024).toFixed(1)} KB`;
+    }
+    return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  function decodeAsciiBytes(bytes, start, length) {
+    const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(0);
+    const normalizedStart = Math.max(0, start || 0);
+    const normalizedEnd = Math.min(source.length, normalizedStart + Math.max(0, length || 0));
+    let text = '';
+    for (let index = normalizedStart; index < normalizedEnd; index += 1) {
+      const code = source[index];
+      text += code >= 32 && code <= 126 ? String.fromCharCode(code) : '.';
+    }
+    return text;
+  }
+
+  function sniffVideoContainer(bytes) {
+    const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(0);
+    if (source.length >= 12) {
+      const boxName = decodeAsciiBytes(source, 4, 4);
+      const brand = decodeAsciiBytes(source, 8, 4);
+      if (boxName === 'ftyp') {
+        return `mp4/${brand || 'unknown'}`;
+      }
+    }
+    if (source.length >= 3 && decodeAsciiBytes(source, 0, 3) === 'ID3') {
+      return 'mp3/id3';
+    }
+    if (source.length >= 8 && decodeAsciiBytes(source, 0, 8) === '#EXTM3U.') {
+      return 'm3u8';
+    }
+    return decodeAsciiBytes(source, 0, Math.min(12, source.length)) || 'unknown';
+  }
+
+  async function inspectVideoUrl(videoUrl, cancelCheck) {
+    const response = await gmXmlhttpRequestPromise({
+      method: 'GET',
+      url: videoUrl,
+      responseType: 'arraybuffer',
+      timeout: DASHSCOPE_REQUEST_TIMEOUT,
+      cancelCheck
+    });
+    if (!response || response.status >= 400) {
+      throw new Error(`视频探测失败：${response ? response.status : '未知状态'}`);
+    }
+    const buffer = response.response;
+    const bytes = buffer instanceof ArrayBuffer
+      ? new Uint8Array(buffer)
+      : buffer instanceof Uint8Array
+        ? buffer
+        : new Uint8Array(0);
+    const contentType = getResponseHeaderValue(response, 'content-type') || '';
+    const contentLength = Number(getResponseHeaderValue(response, 'content-length')) || bytes.byteLength || 0;
+    const parsedUrl = new URL(videoUrl);
+    return {
+      status: Number(response.status) || 0,
+      host: normalizeText(parsedUrl.host),
+      fileName: normalizeText(parsedUrl.pathname.split('/').pop()),
+      contentType,
+      contentLength,
+      contentLengthText: formatByteSize(contentLength),
+      container: sniffVideoContainer(bytes)
+    };
+  }
+
   async function convertVideoUrlToBase64DataUrl(videoUrl, cancelCheck) {
     const response = await gmXmlhttpRequestPromise({
       method: 'GET',
@@ -5583,6 +5658,19 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await reportProgress('正在获取视频地址', { stageLabel: '获取视频地址' });
       const videoUrl = await fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck);
       await ensureSecondaryQcWorkerNotStopped(requestId);
+      await reportProgress(`视频地址已获取：${videoUrl}`, { stageLabel: '获取视频地址' });
+      try {
+        const videoInspect = await inspectVideoUrl(videoUrl, cancelCheck);
+        await reportProgress(
+          `视频探测：host=${videoInspect.host} file=${videoInspect.fileName} status=${videoInspect.status} type=${videoInspect.contentType || 'unknown'} size=${videoInspect.contentLengthText} box=${videoInspect.container}`,
+          { stageLabel: '获取视频地址' }
+        );
+      } catch (inspectError) {
+        await reportProgress(
+          `视频探测失败：${inspectError && inspectError.message ? inspectError.message : String(inspectError)}`,
+          { stageLabel: '获取视频地址' }
+        );
+      }
 
       await reportProgress('正在理解视频内容', { stageLabel: '视频理解' });
       const videoSummaryRaw = await requestOmniVideoSummaryByMode(
