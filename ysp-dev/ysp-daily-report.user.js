@@ -4700,6 +4700,60 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return yangshipinGuidCache;
   }
 
+  function createYangshipinCKeyRuntime() {
+    const href = 'https://www.yangshipin.cn/#/video/home';
+    const locationObject = {
+      href,
+      host: 'www.yangshipin.cn',
+      hostname: 'www.yangshipin.cn',
+      protocol: 'https:',
+      pathname: '/',
+      hash: '#/video/home',
+      search: '',
+      port: ''
+    };
+    const navigatorObject = {
+      appName: 'Netscape',
+      appCodeName: 'Mozilla',
+      platform: 'Win32',
+      userAgent: navigator.userAgent
+    };
+    const documentObject = {
+      URL: href,
+      referrer: '',
+      currentScript: {
+        src: 'https://www.yangshipin.cn/js/app.4160532d.js'
+      },
+      createElement() {
+        return {
+          setAttribute() {},
+          pathname: '/',
+          href,
+          hostname: 'www.yangshipin.cn',
+          hash: '#/video/home',
+          host: 'www.yangshipin.cn',
+          search: '',
+          port: '',
+          protocol: 'https:'
+        };
+      }
+    };
+    const windowObject = {
+      location: locationObject,
+      navigator: navigatorObject,
+      document: documentObject,
+      yspLogin: {
+        default: {}
+      }
+    };
+    return {
+      windowObject,
+      documentObject,
+      navigatorObject,
+      locationObject
+    };
+  }
+
   function getYangshipinSdtfrom() {
     const ua = navigator.userAgent.toLowerCase();
     if (/ipad/i.test(ua)) {
@@ -4744,8 +4798,26 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       }
       const moduleBody = scriptText.slice(startIndex + startToken.length, endIndex);
       const module = { exports: null };
-      const factory = new Function('e', 't', moduleBody);
-      factory(module, module.exports);
+      const runtime = createYangshipinCKeyRuntime();
+      const factory = new Function(
+        'e',
+        't',
+        'window',
+        'document',
+        'navigator',
+        'location',
+        'opener',
+        moduleBody
+      );
+      factory(
+        module,
+        module.exports,
+        runtime.windowObject,
+        runtime.documentObject,
+        runtime.navigatorObject,
+        runtime.locationObject,
+        null
+      );
       if (typeof module.exports !== 'function') {
         throw new Error('央视频 cKey 生成器不可用');
       }
