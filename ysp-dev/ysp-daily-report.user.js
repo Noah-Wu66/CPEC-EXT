@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.37
+// @version      2.1.40
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1493,6 +1493,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const SECONDARY_QC_VIDEO_ANALYSIS_FPS = 3;
   const SECONDARY_QC_VIDEO_ANALYSIS_MAX_PIXELS = 2073600;
   const DASHSCOPE_CHAT_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+  const OMNI_VIDEO_PRIMARY_MODEL = 'qwen3.5-omni-flash';
+  const OMNI_VIDEO_FALLBACK_MODEL = 'qwen3.5-omni-plus';
+  const OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS = 150;
   const YANGSHIPIN_PLAYER_BUNDLE_URL = 'https://s.yangshipin.cn/wc/ysplayer.modern.js';
   const YANGSHIPIN_VIDEO_INFO_URL = 'https://playvv.yangshipin.cn/playvinfo';
   const YANGSHIPIN_PLAYER_APP_VERSION = '1.2.3';
@@ -2807,7 +2810,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         startDate: '',
         endDate: '',
         groupIds: [],
-        targetCount: 10
+        targetCount: 10,
+        modelMode: 'adaptive',
+        categoryKey: ''
       },
       secrets: {
         dashscopeApiKey: ''
@@ -2837,6 +2842,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   function normalizeActiveModule(value) {
     return value === 'daily' ? 'daily' : 'secondaryQc';
+  }
+
+  function normalizeSecondaryQcModelMode(value) {
+    if (value === 'flash' || value === 'plus') {
+      return value;
+    }
+    return 'adaptive';
   }
 
   function normalizeWorkbenchSettings(rawSettings) {
@@ -2889,12 +2901,16 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         startDate: qcStartDate,
         endDate: qcEndDate,
         groupIds: normalizeSelectedGroupIds(source.secondaryQc && source.secondaryQc.groupIds),
+        categoryKey: normalizeSelectedKeys([
+          source.secondaryQc && source.secondaryQc.categoryKey
+        ])[0] || '',
         targetCount: normalizePositiveInteger(
           source.secondaryQc && source.secondaryQc.targetCount,
           defaults.secondaryQc.targetCount,
           1,
           999
-        )
+        ),
+        modelMode: normalizeSecondaryQcModelMode(source.secondaryQc && source.secondaryQc.modelMode)
       },
       secrets: {
         dashscopeApiKey: normalizeText(source.secrets && source.secrets.dashscopeApiKey)
@@ -3621,6 +3637,23 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     });
   }
 
+  function extractDashscopeErrorMessage(responseText) {
+    const normalized = normalizeText(responseText);
+    if (!normalized) {
+      return '';
+    }
+    try {
+      const parsed = JSON.parse(normalized);
+      return normalizeText(
+        (parsed && parsed.error && parsed.error.message)
+        || (parsed && parsed.message)
+        || (parsed && parsed.error && parsed.error.code)
+      );
+    } catch (error) {
+      return normalized;
+    }
+  }
+
   async function requestDashscopeText(apiKey, payload, isStream, cancelCheck) {
     const response = await gmXmlhttpRequestPromise({
       method: 'POST',
@@ -3634,16 +3667,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       cancelCheck
     });
     if (!response || response.status >= 400) {
-      throw new Error(`模型请求失败：${response ? response.status : '未知状态'}`);
+      const detail = extractDashscopeErrorMessage(response && response.responseText);
+      throw new Error(detail || `模型请求失败：${response ? response.status : '未知状态'}`);
     }
     return isStream
       ? extractTextFromDashscopeStream(response.responseText || '')
       : extractTextFromDashscopeJson(response.responseText || '');
   }
 
-  async function requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck) {
+  async function requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck, modelName) {
     const payload = {
-      model: 'qwen3.5-omni-flash',
+      model: normalizeText(modelName) || OMNI_VIDEO_PRIMARY_MODEL,
       messages: [
         {
           role: 'user',
@@ -3670,6 +3704,71 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       modalities: ['text']
     };
     return requestDashscopeText(apiKey, payload, true, cancelCheck);
+  }
+
+  function shouldRetryOmniVideoSummaryWithFallback(error) {
+    const message = normalizeText(error && error.message).toLowerCase();
+    if (!message) {
+      return false;
+    }
+    return [
+      'invalid video file',
+      'the video file is too long',
+      'failed to download multimodal content',
+      'unable to download the media resource',
+      'download the media resource timed out',
+      'failed to find the requested media resource',
+      'don\'t have authorization to access the media resource',
+      'url error'
+    ].some((keyword) => message.includes(keyword));
+  }
+
+  function getSecondaryQcModelModeLabel(value) {
+    const mode = normalizeSecondaryQcModelMode(value);
+    if (mode === 'flash') {
+      return '快速';
+    }
+    if (mode === 'plus') {
+      return '专业';
+    }
+    return '自适应';
+  }
+
+  async function requestOmniVideoSummaryWithFallback(apiKey, videoUrl, promptText, durationSeconds, cancelCheck, onFallback) {
+    const models = durationSeconds > OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS
+      ? [OMNI_VIDEO_FALLBACK_MODEL]
+      : [OMNI_VIDEO_PRIMARY_MODEL, OMNI_VIDEO_FALLBACK_MODEL];
+    let lastError = null;
+    for (let index = 0; index < models.length; index += 1) {
+      const modelName = models[index];
+      const isFallback = index > 0;
+      const shouldNotifyFallback = modelName === OMNI_VIDEO_FALLBACK_MODEL
+        && (isFallback || durationSeconds > OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS);
+      if (shouldNotifyFallback && typeof onFallback === 'function') {
+        await onFallback(modelName);
+      }
+      try {
+        return await requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck, modelName);
+      } catch (error) {
+        lastError = error;
+        if (!isFallback && index < models.length - 1 && shouldRetryOmniVideoSummaryWithFallback(error)) {
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError || new Error('视频理解失败');
+  }
+
+  async function requestOmniVideoSummaryByMode(apiKey, videoUrl, promptText, durationSeconds, modelMode, cancelCheck, onFallback) {
+    const normalizedMode = normalizeSecondaryQcModelMode(modelMode);
+    if (normalizedMode === 'flash') {
+      return requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck, OMNI_VIDEO_PRIMARY_MODEL);
+    }
+    if (normalizedMode === 'plus') {
+      return requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck, OMNI_VIDEO_FALLBACK_MODEL);
+    }
+    return requestOmniVideoSummaryWithFallback(apiKey, videoUrl, promptText, durationSeconds, cancelCheck, onFallback);
   }
 
   async function requestTagJudge(apiKey, promptText, cancelCheck) {
@@ -5298,6 +5397,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (!request || typeof request !== 'object') {
         throw new Error('未找到二次质检任务上下文');
       }
+      const modelMode = normalizeSecondaryQcModelMode(request.modelMode);
 
       const listVid = normalizeText(request.taskId || getDetailPageTaskId());
       applyBadgeState({ taskId: listVid });
@@ -5323,6 +5423,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           : '已读取视频信息，未获取到时长，将继续分析',
         { stageLabel: '时长判断' }
       );
+
+      await reportProgress(`当前模型模式：${getSecondaryQcModelModeLabel(modelMode)}`, { stageLabel: '时长判断' });
 
       if (durationSeconds > MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS) {
         const finalReason = `视频时长 ${formatDurationSeconds(durationSeconds)}，超过 ${formatDurationSeconds(MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS)}，按规则跳过`;
@@ -5365,6 +5467,47 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         return;
       }
 
+      if (modelMode === 'flash' && durationSeconds > OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS) {
+        const finalReason = `快速模式仅处理 ${formatDurationSeconds(OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS)} 以内视频，当前时长 ${formatDurationSeconds(durationSeconds)}，按规则跳过`;
+        await reportProgress('快速模式下视频超过 150 秒，直接跳过', {
+          stageLabel: '时长判断',
+          finalReason,
+          skipReason: 'flash_model_limit',
+          evidenceSummary: '当前选择快速模式，视频超过 150 秒，不进入视频理解模型。',
+          problemText: '',
+          wrongTags: [],
+          missingCandidates: [],
+          validatedCandidates: [],
+          rejectedCandidates: []
+        });
+        responsePayload = {
+          status: 'completed',
+          requestId,
+          taskId: listVid,
+          videoVid,
+          videoUrl: '',
+          needRecord: false,
+          problemText: '',
+          missingTagsActionable: [],
+          wrongTags: [],
+          selectedTags,
+          searchResults: [],
+          summary: '',
+          durationSeconds,
+          titleText,
+          videoSummary: '',
+          evidenceSummary: '当前选择快速模式，视频超过 150 秒，不进入视频理解模型。',
+          validatedCandidates: [],
+          rejectedCandidates: [],
+          finalReason,
+          skipped: true,
+          skipReason: 'flash_model_limit',
+          completedAt: new Date().toISOString()
+        };
+        await reportProgress('快速模式跳过完成，正在返回结果', { stageLabel: '已完成' });
+        return;
+      }
+
       const apiKey = normalizeText(request.apiKey);
       if (!apiKey) {
         throw new Error('未配置 DASHSCOPE_API_KEY');
@@ -5378,7 +5521,22 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await ensureSecondaryQcWorkerNotStopped(requestId);
 
       await reportProgress('正在理解视频内容', { stageLabel: '视频理解' });
-      const videoSummaryRaw = await requestOmniVideoSummary(apiKey, videoUrl, buildOmniVideoSummaryPrompt(titleText), cancelCheck);
+      const videoSummaryRaw = await requestOmniVideoSummaryByMode(
+        apiKey,
+        videoUrl,
+        buildOmniVideoSummaryPrompt(titleText),
+        durationSeconds,
+        modelMode,
+        cancelCheck,
+        async (modelName) => {
+          await reportProgress(
+            modelName === OMNI_VIDEO_FALLBACK_MODEL
+              ? '当前视频不适合快速模型，切换增强理解模型'
+              : '正在切换视频理解模型',
+            { stageLabel: '视频理解' }
+          );
+        }
+      );
       const videoAnalysis = normalizeOmniVideoAnalysis(JSON.parse(extractFirstJsonObject(videoSummaryRaw)));
       const videoSummary = formatOmniVideoAnalysisForPrompt(videoAnalysis);
       const baseEvidenceSummary = [
@@ -5759,9 +5917,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
                       <span class="ysp-daily-panel__date-caption">质检条数</span>
                       <input id="ysp-secondary-qc-target-count" class="ysp-daily-panel__input" type="number" min="1" max="999" step="1" />
                     </label>
+                    <label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-model-mode">
+                      <span class="ysp-daily-panel__date-caption">模型切换</span>
+                      <select id="ysp-secondary-qc-model-mode" class="ysp-daily-panel__input">
+                        <option value="adaptive">自适应</option>
+                        <option value="flash">快速</option>
+                        <option value="plus">专业</option>
+                      </select>
+                    </label>
                   </div>
                   <div class="ysp-daily-panel__field">
-                    <span class="ysp-daily-panel__label">品类编组</span>
+                    <span class="ysp-daily-panel__label">质检品类</span>
                     <div data-role="secondary-qc-groups"></div>
                   </div>
                   <div class="ysp-daily-panel__actions">
@@ -5834,6 +6000,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         secondaryQcStartDate: root.querySelector('#ysp-secondary-qc-start-date'),
         secondaryQcEndDate: root.querySelector('#ysp-secondary-qc-end-date'),
         secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'),
+        secondaryQcModelMode: root.querySelector('#ysp-secondary-qc-model-mode'),
         secondaryQcGroups: root.querySelector('[data-role="secondary-qc-groups"]'),
         startSecondaryQc: root.querySelector('[data-role="start-secondary-qc"]'),
         pauseResume: root.querySelector('[data-role="pause-resume"]'),
@@ -5913,10 +6080,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     getSelectedGroupEntries(moduleType) {
+      if (moduleType === 'secondaryQc') {
+        return [];
+      }
       return getSubgroupEntriesByIds(this.getModuleSettings(moduleType).groupIds);
     }
 
     getSelectedEntries(moduleType) {
+      if (moduleType === 'secondaryQc') {
+        const categoryKey = normalizeText(this.settings.secondaryQc.categoryKey);
+        return categoryKey ? getEntriesByKeys([categoryKey]) : [];
+      }
       return getEntriesByGroupIds(this.getModuleSettings(moduleType).groupIds);
     }
 
@@ -5932,6 +6106,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     getGroupPickerSummary(moduleType) {
+      if (moduleType === 'secondaryQc') {
+        const entry = getCategoryEntry(this.settings.secondaryQc.categoryKey);
+        return entry ? `${entry.groupLabel} / ${entry.exportLabel}` : '请选择质检品类';
+      }
       const entries = this.getSelectedGroupEntries(moduleType);
       if (!entries.length) {
         return '请选择品类编组';
@@ -5966,6 +6144,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.refs.secondaryQcStartDate.value = secondaryQc.startDate || '';
       this.refs.secondaryQcEndDate.value = secondaryQc.endDate || '';
       this.refs.secondaryQcTargetCount.value = String(secondaryQc.targetCount || 10);
+      this.refs.secondaryQcModelMode.value = normalizeSecondaryQcModelMode(secondaryQc.modelMode);
       this.refs.settingsInput.value = this.settingsDraft.secrets.dashscopeApiKey || '';
     }
 
@@ -6056,6 +6235,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         this.persistSettings().catch(() => undefined);
         this.render();
       });
+      this.refs.secondaryQcModelMode.addEventListener('change', () => {
+        this.settings.secondaryQc.modelMode = normalizeSecondaryQcModelMode(this.refs.secondaryQcModelMode.value);
+        this.persistSettings().catch(() => undefined);
+        this.render();
+      });
 
       this.refs.dailyTab.addEventListener('click', () => this.setActiveModule('daily'));
       this.refs.secondaryQcTab.addEventListener('click', () => this.setActiveModule('secondaryQc'));
@@ -6121,6 +6305,20 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         return;
       }
       if (this.runtime.running) {
+        return;
+      }
+      if (moduleType === 'secondaryQc') {
+        const categoryOption = target.closest('[data-role="category-option"]');
+        if (!categoryOption) {
+          return;
+        }
+        const categoryKey = normalizeText(categoryOption.getAttribute('data-category-key'));
+        if (!categoryKey) {
+          return;
+        }
+        this.settings.secondaryQc.categoryKey = this.settings.secondaryQc.categoryKey === categoryKey ? '' : categoryKey;
+        this.persistSettings().catch(() => undefined);
+        this.render();
         return;
       }
       const groupOption = target.closest('[data-role="group-option"]');
@@ -6221,6 +6419,33 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     renderGroupSelector(container, moduleType) {
+      if (moduleType === 'secondaryQc') {
+        const selectedKey = normalizeText(this.settings.secondaryQc.categoryKey);
+        container.innerHTML = `
+          <div class="ysp-daily-panel__group-grid" role="listbox" aria-label="质检品类选项">
+            ${CATEGORY_ENTRIES.map((entry) => {
+              const selectedClass = selectedKey === entry.key ? ' is-selected' : '';
+              return `
+                <button
+                  type="button"
+                  class="ysp-daily-panel__group-option${selectedClass}"
+                  data-theme="${escapeXml(entry.theme)}"
+                  data-role="category-option"
+                  data-category-key="${escapeXml(entry.key)}"
+                  ${this.runtime.running ? 'disabled' : ''}
+                >
+                  <span class="ysp-daily-panel__group-option-copy">
+                    <span class="ysp-daily-panel__group-option-meta">${escapeXml(`${entry.groupLabel} / ${entry.subgroupLabel}`)}</span>
+                    <span class="ysp-daily-panel__group-option-label">${escapeXml(entry.exportLabel)}</span>
+                  </span>
+                  <span class="ysp-daily-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        `;
+        return;
+      }
       const selected = new Set(this.getModuleSettings(moduleType).groupIds);
       const open = !this.runtime.running && this.runtime.openGroupMenu === moduleType;
       const triggerSummary = this.getGroupPickerSummary(moduleType);
@@ -6313,6 +6538,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.refs.logs.innerHTML = this.runtime.logs
         .map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(log)}</div>`)
         .join('');
+      this.refs.logs.scrollTop = this.refs.logs.scrollHeight;
     }
 
     render() {
@@ -6348,6 +6574,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.refs.secondaryQcStartDate.disabled = disabled;
       this.refs.secondaryQcEndDate.disabled = disabled;
       this.refs.secondaryQcTargetCount.disabled = disabled;
+      this.refs.secondaryQcModelMode.disabled = disabled;
       this.refs.startDaily.disabled = disabled || !listPageActive;
       this.refs.startSecondaryQc.disabled = disabled || !listPageActive;
       this.refs.clearData.disabled = disabled;
@@ -6366,8 +6593,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
     pushLog(message) {
       const entry = `[${formatClock()}] ${message}`;
-      this.runtime.logs.unshift(entry);
-      this.runtime.logs = this.runtime.logs.slice(0, MAX_LOGS);
+      this.runtime.logs.push(entry);
+      this.runtime.logs = this.runtime.logs.slice(-MAX_LOGS);
       const checkpoint = this.getActiveCheckpoint();
       if (checkpoint) {
         checkpoint.logs = this.runtime.logs.slice();
@@ -6868,8 +7095,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const endDate = normalizeText(this.settings.secondaryQc.endDate);
       const targetCount = normalizePositiveInteger(this.settings.secondaryQc.targetCount, 10, 1, 999);
       const maxDate = getTodayDateString();
-      const groupIds = this.settings.secondaryQc.groupIds.slice();
-      const groups = this.getSelectedGroupEntries('secondaryQc');
+      const categoryKey = normalizeText(this.settings.secondaryQc.categoryKey);
       const items = this.getSelectedEntries('secondaryQc');
       const apiKey = normalizeText(this.settings.secrets.dashscopeApiKey);
       if (!startDate) {
@@ -6884,8 +7110,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (endDate < startDate) {
         throw new Error('结束周期不能早于开始周期');
       }
-      if (!groups.length) {
-        throw new Error('请至少选择一个二次质检编组');
+      if (!categoryKey || !items.length) {
+        throw new Error('请先选择一个质检品类');
       }
       if (!apiKey) {
         throw new Error('请先在设置里填写 DASHSCOPE_API_KEY');
@@ -6903,10 +7129,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         status: 'running',
         startDate,
         endDate,
-        groupIds,
+        groupIds: [],
         itemKeys: items.map((item) => item.key),
         targetCount,
-        itemTargetCounts: buildSecondaryQcItemTargetCounts(items.length, targetCount),
+        itemTargetCounts: [targetCount],
         itemRecordedCounts: new Array(items.length).fill(0),
         currentItemIndex: 0,
         processedTaskIds: [],
@@ -6920,7 +7146,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.render();
       await this.saveCheckpoint('secondaryQc');
       this.pushLog(
-        `开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，目标 ${targetCount} 条，${items.length} 个品类按顺序分配 ${this.runtime.secondaryQc.checkpoint.itemTargetCounts.join(' / ')} 条`
+        `开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，品类 ${items[0].exportLabel}，目标 ${targetCount} 条，模型 ${getSecondaryQcModelModeLabel(this.settings.secondaryQc.modelMode)}`
       );
       await this.runSecondaryQcFromCheckpoint();
     }
@@ -7059,6 +7285,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const checkpoint = this.runtime.secondaryQc.checkpoint;
       const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
       const apiKey = normalizeText(this.settings.secrets.dashscopeApiKey);
+      const modelMode = normalizeSecondaryQcModelMode(this.settings.secondaryQc.modelMode);
       const requestId = createRuntimeToken('qc');
       const requestKey = buildSecondaryQcWorkerRequestKey(requestId);
       const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
@@ -7072,6 +7299,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           [requestKey]: {
             requestId,
             apiKey,
+            modelMode,
             taskId: row.taskId,
             standardOperator: row.standardOperator,
             qcOperator: checkpoint.qcOperator,
@@ -7126,6 +7354,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (response.skipped && response.skipReason === 'long_video') {
         this.pushLog(
           `${row.taskId}：长视频跳过${response.durationSeconds ? `（${formatDurationSeconds(response.durationSeconds)}）` : ''}`
+        );
+        return;
+      }
+      if (response.skipped && response.skipReason === 'flash_model_limit') {
+        this.pushLog(
+          `${row.taskId}：快速模式跳过${response.durationSeconds ? `（${formatDurationSeconds(response.durationSeconds)}）` : ''}`
         );
         return;
       }
