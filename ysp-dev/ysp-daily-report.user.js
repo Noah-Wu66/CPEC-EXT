@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.40
+// @version      2.1.41
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -6317,6 +6317,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           return;
         }
         this.settings.secondaryQc.categoryKey = this.settings.secondaryQc.categoryKey === categoryKey ? '' : categoryKey;
+        this.runtime.openGroupMenu = '';
         this.persistSettings().catch(() => undefined);
         this.render();
         return;
@@ -6421,27 +6422,35 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     renderGroupSelector(container, moduleType) {
       if (moduleType === 'secondaryQc') {
         const selectedKey = normalizeText(this.settings.secondaryQc.categoryKey);
+        const open = !this.runtime.running && this.runtime.openGroupMenu === moduleType;
+        const triggerSummary = this.getGroupPickerSummary(moduleType);
         container.innerHTML = `
-          <div class="ysp-daily-panel__group-grid" role="listbox" aria-label="质检品类选项">
-            ${CATEGORY_ENTRIES.map((entry) => {
-              const selectedClass = selectedKey === entry.key ? ' is-selected' : '';
-              return `
-                <button
-                  type="button"
-                  class="ysp-daily-panel__group-option${selectedClass}"
-                  data-theme="${escapeXml(entry.theme)}"
-                  data-role="category-option"
-                  data-category-key="${escapeXml(entry.key)}"
-                  ${this.runtime.running ? 'disabled' : ''}
-                >
-                  <span class="ysp-daily-panel__group-option-copy">
-                    <span class="ysp-daily-panel__group-option-meta">${escapeXml(`${entry.groupLabel} / ${entry.subgroupLabel}`)}</span>
-                    <span class="ysp-daily-panel__group-option-label">${escapeXml(entry.exportLabel)}</span>
-                  </span>
-                  <span class="ysp-daily-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span>
-                </button>
-              `;
-            }).join('')}
+          <div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker">
+            <button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}>
+              <span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span>
+              <span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span>
+            </button>
+            <div class="ysp-daily-panel__group-menu" role="listbox" aria-label="质检品类选项">
+              ${CATEGORY_ENTRIES.map((entry) => {
+                const selectedClass = selectedKey === entry.key ? ' is-selected' : '';
+                return `
+                  <button
+                    type="button"
+                    class="ysp-daily-panel__group-option${selectedClass}"
+                    data-theme="${escapeXml(entry.theme)}"
+                    data-role="category-option"
+                    data-category-key="${escapeXml(entry.key)}"
+                    ${this.runtime.running ? 'disabled' : ''}
+                  >
+                    <span class="ysp-daily-panel__group-option-copy">
+                      <span class="ysp-daily-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span>
+                      <span class="ysp-daily-panel__group-option-label">${escapeXml(entry.exportLabel)}</span>
+                    </span>
+                    <span class="ysp-daily-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
           </div>
         `;
         return;
