@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.34
+// @version      2.1.36
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1065,6 +1065,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 .ysp-daily-panel__modal {
   width: min(440px, 100%);
   pointer-events: auto;
+  display: grid;
+  gap: 14px;
   padding: 20px;
   border-radius: 22px;
   background: linear-gradient(180deg, rgba(252, 248, 241, 0.98), rgba(244, 249, 255, 0.98));
@@ -2869,6 +2871,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     return {
+      version: defaults.version,
       ui: {
         panelMinimized: source.ui && source.ui.panelMinimized !== undefined
           ? Boolean(source.ui.panelMinimized)
