@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.45
+// @version      2.1.48
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1501,7 +1501,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const OMNI_VIDEO_PRIMARY_MODEL = 'qwen3.5-omni-flash';
   const OMNI_VIDEO_FALLBACK_MODEL = 'qwen3.5-omni-plus';
   const OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS = 150;
-  const OMNI_VIDEO_BASE64_MAX_BYTES = 7 * 1024 * 1024;
   const YANGSHIPIN_PLAYER_BUNDLE_URL = 'https://s.yangshipin.cn/wc/ysplayer.modern.js';
   const YANGSHIPIN_VIDEO_INFO_URL = 'https://playvv.yangshipin.cn/playvinfo';
   const YANGSHIPIN_PLAYER_APP_VERSION = '1.2.3';
@@ -3680,17 +3679,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return '';
   }
 
-  function arrayBufferToBase64DataUrl(buffer, mimeType) {
-    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer || 0);
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-      const chunk = bytes.subarray(offset, Math.min(bytes.length, offset + chunkSize));
-      binary += String.fromCharCode(...chunk);
-    }
-    return `data:${normalizeText(mimeType) || 'video/mp4'};base64,${btoa(binary)}`;
-  }
-
   function formatByteSize(bytes) {
     const size = Number(bytes) || 0;
     if (!size) {
@@ -3766,33 +3754,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     };
   }
 
-  async function convertVideoUrlToBase64DataUrl(videoUrl, cancelCheck) {
-    const response = await gmXmlhttpRequestPromise({
-      method: 'GET',
-      url: videoUrl,
-      responseType: 'arraybuffer',
-      timeout: DASHSCOPE_REQUEST_TIMEOUT,
-      cancelCheck
-    });
-    if (!response || response.status >= 400) {
-      throw new Error(`视频下载失败：${response ? response.status : '未知状态'}`);
-    }
-    const buffer = response.response;
-    const bytes = buffer instanceof ArrayBuffer
-      ? new Uint8Array(buffer)
-      : buffer instanceof Uint8Array
-        ? buffer
-        : null;
-    if (!bytes || !bytes.byteLength) {
-      throw new Error('视频下载结果为空');
-    }
-    if (bytes.byteLength > OMNI_VIDEO_BASE64_MAX_BYTES) {
-      throw new Error(`视频文件过大，无法转为 Base64（${bytes.byteLength} 字节）`);
-    }
-    const contentType = getResponseHeaderValue(response, 'content-type') || 'video/mp4';
-    return arrayBufferToBase64DataUrl(bytes, contentType);
-  }
-
   async function requestDashscopeText(apiKey, payload, isStream, cancelCheck) {
     const response = await gmXmlhttpRequestPromise({
       method: 'POST',
@@ -3845,23 +3806,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return requestDashscopeText(apiKey, payload, true, cancelCheck);
   }
 
-  function shouldRetryOmniVideoSummaryWithFallback(error) {
-    const message = normalizeText(error && error.message).toLowerCase();
-    if (!message) {
-      return false;
-    }
-    return [
-      'invalid video file',
-      'the video file is too long',
-      'failed to download multimodal content',
-      'unable to download the media resource',
-      'download the media resource timed out',
-      'failed to find the requested media resource',
-      'don\'t have authorization to access the media resource',
-      'url error'
-    ].some((keyword) => message.includes(keyword));
-  }
-
   function getSecondaryQcModelModeLabel(value) {
     const mode = normalizeSecondaryQcModelMode(value);
     if (mode === 'flash') {
@@ -3873,45 +3817,21 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return '自适应';
   }
 
-  async function requestOmniVideoSummaryWithFallback(apiKey, videoUrl, promptText, durationSeconds, cancelCheck, onFallback) {
-    const models = durationSeconds > OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS
-      ? [OMNI_VIDEO_FALLBACK_MODEL]
-      : [OMNI_VIDEO_PRIMARY_MODEL, OMNI_VIDEO_FALLBACK_MODEL];
-    let lastError = null;
-    for (let index = 0; index < models.length; index += 1) {
-      const modelName = models[index];
-      const isFallback = index > 0;
-      const shouldNotifyFallback = modelName === OMNI_VIDEO_FALLBACK_MODEL
-        && (isFallback || durationSeconds > OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS);
-      if (shouldNotifyFallback && typeof onFallback === 'function') {
-        await onFallback(modelName);
-      }
-      try {
-        const videoSource = modelName === OMNI_VIDEO_FALLBACK_MODEL
-          ? await convertVideoUrlToBase64DataUrl(videoUrl, cancelCheck)
-          : videoUrl;
-        return await requestOmniVideoSummary(apiKey, videoSource, promptText, cancelCheck, modelName);
-      } catch (error) {
-        lastError = error;
-        if (!isFallback && index < models.length - 1 && shouldRetryOmniVideoSummaryWithFallback(error)) {
-          continue;
-        }
-        throw error;
-      }
-    }
-    throw lastError || new Error('视频理解失败');
-  }
-
   async function requestOmniVideoSummaryByMode(apiKey, videoUrl, promptText, durationSeconds, modelMode, cancelCheck, onFallback) {
     const normalizedMode = normalizeSecondaryQcModelMode(modelMode);
     if (normalizedMode === 'flash') {
       return requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck, OMNI_VIDEO_PRIMARY_MODEL);
     }
     if (normalizedMode === 'plus') {
-      const base64VideoUrl = await convertVideoUrlToBase64DataUrl(videoUrl, cancelCheck);
-      return requestOmniVideoSummary(apiKey, base64VideoUrl, promptText, cancelCheck, OMNI_VIDEO_FALLBACK_MODEL);
+      return requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck, OMNI_VIDEO_FALLBACK_MODEL);
     }
-    return requestOmniVideoSummaryWithFallback(apiKey, videoUrl, promptText, durationSeconds, cancelCheck, onFallback);
+    const adaptiveModel = durationSeconds > OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS
+      ? OMNI_VIDEO_FALLBACK_MODEL
+      : OMNI_VIDEO_PRIMARY_MODEL;
+    if (adaptiveModel === OMNI_VIDEO_FALLBACK_MODEL && typeof onFallback === 'function') {
+      await onFallback(adaptiveModel);
+    }
+    return requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck, adaptiveModel);
   }
 
   async function requestTagJudge(apiKey, promptText, cancelCheck) {
@@ -5709,8 +5629,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         async (modelName) => {
           await reportProgress(
             modelName === OMNI_VIDEO_FALLBACK_MODEL
-              ? '当前视频不适合快速模型，切换增强理解模型'
-              : '正在切换视频理解模型',
+              ? '自适应模式选择专业模型'
+              : '自适应模式选择快速模型',
             { stageLabel: '视频理解' }
           );
         }
