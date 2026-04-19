@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.41
+// @version      2.1.42
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -19,6 +19,7 @@
 // @grant        GM_info
 // @grant        GM_xmlhttpRequest
 // @connect      dashscope.aliyuncs.com
+// @connect      mp4playcloud-cdn.ysp.cctv.cn
 // @connect      s.yangshipin.cn
 // @connect      playvv.yangshipin.cn
 // @run-at       document-idle
@@ -1496,6 +1497,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const OMNI_VIDEO_PRIMARY_MODEL = 'qwen3.5-omni-flash';
   const OMNI_VIDEO_FALLBACK_MODEL = 'qwen3.5-omni-plus';
   const OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS = 150;
+  const OMNI_VIDEO_BASE64_MAX_BYTES = 7 * 1024 * 1024;
   const YANGSHIPIN_PLAYER_BUNDLE_URL = 'https://s.yangshipin.cn/wc/ysplayer.modern.js';
   const YANGSHIPIN_VIDEO_INFO_URL = 'https://playvv.yangshipin.cn/playvinfo';
   const YANGSHIPIN_PLAYER_APP_VERSION = '1.2.3';
@@ -3654,6 +3656,64 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
   }
 
+  function getResponseHeaderValue(response, headerName) {
+    const normalizedHeaderName = normalizeText(headerName).toLowerCase();
+    if (!normalizedHeaderName) {
+      return '';
+    }
+    const headersText = String(response && response.responseHeaders || '');
+    const lines = headersText.split(/\r?\n/);
+    for (const line of lines) {
+      const separatorIndex = line.indexOf(':');
+      if (separatorIndex <= 0) {
+        continue;
+      }
+      const name = normalizeText(line.slice(0, separatorIndex)).toLowerCase();
+      if (name === normalizedHeaderName) {
+        return normalizeText(line.slice(separatorIndex + 1));
+      }
+    }
+    return '';
+  }
+
+  function arrayBufferToBase64DataUrl(buffer, mimeType) {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer || 0);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      const chunk = bytes.subarray(offset, Math.min(bytes.length, offset + chunkSize));
+      binary += String.fromCharCode(...chunk);
+    }
+    return `data:${normalizeText(mimeType) || 'video/mp4'};base64,${btoa(binary)}`;
+  }
+
+  async function convertVideoUrlToBase64DataUrl(videoUrl, cancelCheck) {
+    const response = await gmXmlhttpRequestPromise({
+      method: 'GET',
+      url: videoUrl,
+      responseType: 'arraybuffer',
+      timeout: DASHSCOPE_REQUEST_TIMEOUT,
+      cancelCheck
+    });
+    if (!response || response.status >= 400) {
+      throw new Error(`视频下载失败：${response ? response.status : '未知状态'}`);
+    }
+    const buffer = response.response;
+    const bytes = buffer instanceof ArrayBuffer
+      ? new Uint8Array(buffer)
+      : buffer instanceof Uint8Array
+        ? buffer
+        : null;
+    if (!bytes || !bytes.byteLength) {
+      throw new Error('视频下载结果为空');
+    }
+    if (bytes.byteLength > OMNI_VIDEO_BASE64_MAX_BYTES) {
+      throw new Error(`视频文件过大，无法转为 Base64（${bytes.byteLength} 字节）`);
+    }
+    const contentType = getResponseHeaderValue(response, 'content-type') || 'video/mp4';
+    return arrayBufferToBase64DataUrl(bytes, contentType);
+  }
+
   async function requestDashscopeText(apiKey, payload, isStream, cancelCheck) {
     const response = await gmXmlhttpRequestPromise({
       method: 'POST',
@@ -3748,7 +3808,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         await onFallback(modelName);
       }
       try {
-        return await requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck, modelName);
+        const videoSource = modelName === OMNI_VIDEO_FALLBACK_MODEL
+          ? await convertVideoUrlToBase64DataUrl(videoUrl, cancelCheck)
+          : videoUrl;
+        return await requestOmniVideoSummary(apiKey, videoSource, promptText, cancelCheck, modelName);
       } catch (error) {
         lastError = error;
         if (!isFallback && index < models.length - 1 && shouldRetryOmniVideoSummaryWithFallback(error)) {
@@ -3766,7 +3829,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       return requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck, OMNI_VIDEO_PRIMARY_MODEL);
     }
     if (normalizedMode === 'plus') {
-      return requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck, OMNI_VIDEO_FALLBACK_MODEL);
+      const base64VideoUrl = await convertVideoUrlToBase64DataUrl(videoUrl, cancelCheck);
+      return requestOmniVideoSummary(apiKey, base64VideoUrl, promptText, cancelCheck, OMNI_VIDEO_FALLBACK_MODEL);
     }
     return requestOmniVideoSummaryWithFallback(apiKey, videoUrl, promptText, durationSeconds, cancelCheck, onFallback);
   }
