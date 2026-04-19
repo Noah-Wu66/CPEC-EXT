@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.31
+// @version      2.1.33
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -15,6 +15,7 @@
 // @grant        GM_deleteValue
 // @grant        GM_addStyle
 // @grant        GM_info
+// @grant        GM_openInTab
 // @grant        GM_xmlhttpRequest
 // @connect      dashscope.aliyuncs.com
 // @run-at       document-idle
@@ -442,7 +443,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   font-size: 12px;
   line-height: 1.5;
   color: #35516a;
-  box-shadow: 0 8px 18px rgba(22, 51, 78, 0.08);
   flex: 0 0 auto;
 }
 
@@ -710,9 +710,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 }
 
 .ysp-daily-panel__field {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow: visible;
 }
 
 .ysp-daily-panel__input {
@@ -736,7 +738,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 
 .ysp-daily-panel__group-trigger {
@@ -754,11 +756,18 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   box-shadow: inset 0 1px 2px rgba(17, 41, 66, 0.04);
   font-size: 14px;
   cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
 .ysp-daily-panel__group-trigger:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+.ysp-daily-panel__group-picker.is-open .ysp-daily-panel__group-trigger {
+  border-color: rgba(31, 94, 139, 0.32);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 0 0 3px rgba(46, 110, 158, 0.1), inset 0 1px 2px rgba(17, 41, 66, 0.04);
 }
 
 .ysp-daily-panel__group-trigger-text {
@@ -782,7 +791,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   left: 0;
   right: 0;
   z-index: 20;
-  display: none;
+  display: grid;
+  gap: 8px;
   max-height: 280px;
   padding: 10px;
   overflow-y: auto;
@@ -791,11 +801,18 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 18px 36px rgba(23, 56, 84, 0.16);
   backdrop-filter: blur(16px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
 }
 
 .ysp-daily-panel__group-picker.is-open .ysp-daily-panel__group-menu {
-  display: grid;
-  gap: 8px;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .ysp-daily-panel__group-option {
@@ -878,13 +895,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   font-weight: 700;
   color: color-mix(in srgb, var(--accent) 82%, #18344c);
   white-space: nowrap;
-}
-
-.ysp-daily-panel__group-summary {
-  font-size: 12px;
-  line-height: 1.6;
-  color: #5f7284;
-  word-break: break-word;
 }
 
 .ysp-daily-panel__input--secret {
@@ -4736,6 +4746,45 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }, DETAIL_PAGE_TIMEOUT, '未获取到视频地址', { cancelCheck });
   }
 
+  function openBackgroundWorkerPage(url) {
+    if (!url) {
+      return null;
+    }
+    if (typeof GM_openInTab !== 'function') {
+      throw new Error('当前油猴环境不支持后台打开标签页');
+    }
+    try {
+      const tab = GM_openInTab(url, {
+        active: false,
+        insert: true,
+        setParent: true
+      });
+      if (tab) {
+        return {
+          kind: 'gm_tab',
+          handle: tab
+        };
+      }
+    } catch (error) {
+      throw new Error(error && error.message ? error.message : '后台打开央视频页面失败');
+    }
+    throw new Error('后台打开央视频页面失败');
+  }
+
+  function closeBackgroundWorkerPage(workerPage) {
+    if (!workerPage || !workerPage.handle) {
+      return;
+    }
+    const handle = workerPage.handle;
+    if (workerPage.kind === 'gm_tab' && typeof handle.close === 'function') {
+      try {
+        handle.close();
+      } catch (error) {
+        // ignore
+      }
+    }
+  }
+
   async function fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck) {
     const requestId = createRuntimeToken('ysp-media');
     const requestKey = buildSecondaryQcMediaWorkerRequestKey(requestId);
@@ -4751,19 +4800,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       }
     });
 
-    const openedWindow = window.open(mediaUrl, '_blank');
-    if (!openedWindow) {
-      const anchor = document.createElement('a');
-      anchor.href = mediaUrl;
-      anchor.target = '_blank';
-      anchor.rel = 'noopener noreferrer';
-      anchor.click();
-    }
+    const workerPage = openBackgroundWorkerPage(mediaUrl);
 
     let response = null;
     try {
       response = await waitForSecondaryQcMediaWorkerResponse(requestId, MEDIA_WORKER_RESPONSE_TIMEOUT, cancelCheck);
     } finally {
+      closeBackgroundWorkerPage(workerPage);
       await storageRemove([requestKey, responseKey]);
     }
 
@@ -5501,7 +5544,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
               <div class="ysp-daily-panel__actions">
                 <button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button>
                 <button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button>
-                <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清理缓存</button>
               </div>
             </div>
           </div>
@@ -5516,6 +5558,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
               <span class="ysp-daily-panel__date-caption">DASHSCOPE_API_KEY（本地保存）</span>
               <input id="ysp-settings-dashscope-api-key" class="ysp-daily-panel__input" type="password" placeholder="请输入阿里云模型 Key" />
             </label>
+            <div class="ysp-daily-panel__actions">
+              <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清理缓存</button>
+            </div>
             <div class="ysp-daily-panel__actions">
               <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="save-settings">保存设置</button>
               <button type="button" class="ysp-daily-panel__button" data-role="close-settings">关闭</button>
@@ -5934,19 +5979,16 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
     renderGroupSelector(container, moduleType) {
       const selected = new Set(this.getModuleSettings(moduleType).groupIds);
-      const selectedEntries = this.getSelectedGroupEntries(moduleType);
-      const selectedSummary = selectedEntries.length
-        ? `已选：${selectedEntries.map((entry) => this.formatGroupEntryLabel(entry)).join('、')}`
-        : '未选择编组';
       const open = !this.runtime.running && this.runtime.openGroupMenu === moduleType;
+      const triggerSummary = this.getGroupPickerSummary(moduleType);
 
       container.innerHTML = `
         <div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker">
-          <button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" ${this.runtime.running ? 'disabled' : ''}>
-            <span class="ysp-daily-panel__group-trigger-text">${escapeXml(this.getGroupPickerSummary(moduleType))}</span>
+          <button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}>
+            <span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span>
             <span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span>
           </button>
-          <div class="ysp-daily-panel__group-menu">
+          <div class="ysp-daily-panel__group-menu" role="listbox" aria-label="品类编组选项">
             ${SUBGROUP_ENTRIES.map((subgroup) => {
               const selectedClass = selected.has(subgroup.id) ? ' is-selected' : '';
               return `
@@ -5967,7 +6009,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
               `;
             }).join('')}
           </div>
-          <div class="ysp-daily-panel__group-summary">${escapeXml(selectedSummary)}</div>
         </div>
       `;
     }
