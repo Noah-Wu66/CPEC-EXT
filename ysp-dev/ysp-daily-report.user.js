@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.51
+// @version      2.1.52
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -747,6 +747,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   gap: 0;
 }
 
+.ysp-daily-panel__popup-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.ysp-daily-panel__popup-layer > * {
+  pointer-events: auto;
+}
+
 .ysp-daily-panel__group-trigger {
   display: flex;
   align-items: center;
@@ -792,33 +803,35 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 }
 
 .ysp-daily-panel__group-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  z-index: 20;
+  position: fixed;
+  left: var(--menu-left, 12px);
+  width: var(--menu-width, 360px);
+  max-width: calc(100vw - 24px);
+  z-index: 1;
   display: grid;
   gap: 8px;
-  max-height: 280px;
+  max-height: var(--menu-max-height, 360px);
   padding: 10px;
   overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid rgba(24, 52, 76, 0.12);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 18px 36px rgba(23, 56, 84, 0.16);
   backdrop-filter: blur(16px);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translateY(-6px);
-  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+  transform-origin: top left;
+  animation: ysp-daily-panel__group-menu-in 0.18s ease;
 }
 
-.ysp-daily-panel__group-picker.is-open .ysp-daily-panel__group-menu {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateY(0);
+@keyframes ysp-daily-panel__group-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .ysp-daily-panel__group-option {
@@ -5861,6 +5874,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       root.id = 'ysp-daily-panel-root';
       root.innerHTML = `
         <div class="ysp-daily-panel__backdrop"></div>
+        <div class="ysp-daily-panel__popup-layer" data-role="popup-layer"></div>
         <div class="ysp-daily-panel">
           <div class="ysp-daily-panel__header">
             <div class="ysp-daily-panel__header-top">
@@ -5981,6 +5995,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.panel = root;
       this.refs = {
         backdrop: root.querySelector('.ysp-daily-panel__backdrop'),
+        popupLayer: root.querySelector('[data-role="popup-layer"]'),
         surface: root.querySelector('.ysp-daily-panel'),
         dock: root.querySelector('[data-role="dock"]'),
         minimize: root.querySelector('[data-role="minimize"]'),
@@ -6023,6 +6038,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         document.removeEventListener('mousedown', this.handleOutsideInteraction, true);
         document.removeEventListener('touchstart', this.handleOutsideInteraction, true);
         this.handleOutsideInteraction = null;
+      }
+      if (this.handleViewportChange) {
+        window.removeEventListener('resize', this.handleViewportChange);
+        this.handleViewportChange = null;
       }
       releasePageMuted();
       if (this.panel && this.panel.isConnected) {
@@ -6121,6 +6140,136 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       return `已选 ${entries.length} 个编组`;
     }
 
+    getGroupPickerHost(moduleType) {
+      return moduleType === 'secondaryQc' ? this.refs.secondaryQcGroups : this.refs.dailyGroups;
+    }
+
+    getGroupTriggerElement(moduleType) {
+      const host = this.getGroupPickerHost(moduleType);
+      return host ? host.querySelector('[data-role="group-trigger"]') : null;
+    }
+
+    getGroupMenuLayout(moduleType) {
+      const trigger = this.getGroupTriggerElement(moduleType);
+      if (!trigger) {
+        return null;
+      }
+      const rect = trigger.getBoundingClientRect();
+      const viewportPadding = 12;
+      const gap = 8;
+      const width = Math.min(
+        Math.max(Math.round(rect.width), 360),
+        Math.max(320, window.innerWidth - viewportPadding * 2)
+      );
+      const left = Math.min(
+        Math.max(viewportPadding, Math.round(rect.left)),
+        Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
+      );
+      const preferredHeight = 360;
+      const belowSpace = Math.max(160, Math.floor(window.innerHeight - rect.bottom - gap - viewportPadding));
+      const aboveSpace = Math.max(160, Math.floor(rect.top - gap - viewportPadding));
+      const openUpward = belowSpace < 220 && aboveSpace > belowSpace;
+
+      return {
+        left,
+        width,
+        maxHeight: Math.min(preferredHeight, openUpward ? aboveSpace : belowSpace),
+        top: openUpward ? null : Math.round(rect.bottom + gap),
+        bottom: openUpward ? Math.round(window.innerHeight - rect.top + gap) : null
+      };
+    }
+
+    renderFloatingGroupMenu() {
+      if (!this.refs.popupLayer) {
+        return;
+      }
+      const moduleType = this.runtime.openGroupMenu;
+      if (!moduleType || this.runtime.running || this.runtime.minimized) {
+        this.refs.popupLayer.innerHTML = '';
+        return;
+      }
+      const layout = this.getGroupMenuLayout(moduleType);
+      if (!layout) {
+        this.refs.popupLayer.innerHTML = '';
+        return;
+      }
+
+      const styleTokens = [
+        `--menu-left:${layout.left}px`,
+        `--menu-width:${layout.width}px`,
+        `--menu-max-height:${layout.maxHeight}px`,
+        layout.top === null ? 'top:auto' : `top:${layout.top}px`,
+        layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`
+      ];
+
+      if (moduleType === 'secondaryQc') {
+        const selectedKey = normalizeText(this.settings.secondaryQc.categoryKey);
+        this.refs.popupLayer.innerHTML = `
+          <div
+            class="ysp-daily-panel__group-menu"
+            data-role="group-menu"
+            data-module-type="secondaryQc"
+            role="listbox"
+            aria-label="质检品类选项"
+            style="${styleTokens.join(';')}"
+          >
+            ${CATEGORY_ENTRIES.map((entry) => {
+              const selectedClass = selectedKey === entry.key ? ' is-selected' : '';
+              return `
+                <button
+                  type="button"
+                  class="ysp-daily-panel__group-option${selectedClass}"
+                  data-theme="${escapeXml(entry.theme)}"
+                  data-role="category-option"
+                  data-category-key="${escapeXml(entry.key)}"
+                  ${this.runtime.running ? 'disabled' : ''}
+                >
+                  <span class="ysp-daily-panel__group-option-copy">
+                    <span class="ysp-daily-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span>
+                    <span class="ysp-daily-panel__group-option-label">${escapeXml(entry.exportLabel)}</span>
+                  </span>
+                  <span class="ysp-daily-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        `;
+        return;
+      }
+
+      const selected = new Set(this.getModuleSettings(moduleType).groupIds);
+      this.refs.popupLayer.innerHTML = `
+        <div
+          class="ysp-daily-panel__group-menu"
+          data-role="group-menu"
+          data-module-type="${escapeXml(moduleType)}"
+          role="listbox"
+          aria-label="品类编组选项"
+          style="${styleTokens.join(';')}"
+        >
+          ${SUBGROUP_ENTRIES.map((subgroup) => {
+            const selectedClass = selected.has(subgroup.id) ? ' is-selected' : '';
+            return `
+              <button
+                type="button"
+                class="ysp-daily-panel__group-option${selectedClass}"
+                data-theme="${escapeXml(subgroup.theme)}"
+                data-role="group-option"
+                data-group-id="${escapeXml(subgroup.id)}"
+                ${this.runtime.running ? 'disabled' : ''}
+              >
+                <span class="ysp-daily-panel__group-option-copy">
+                  <span class="ysp-daily-panel__group-option-meta">${escapeXml(subgroup.groupLabel)}</span>
+                  <span class="ysp-daily-panel__group-option-label">${escapeXml(subgroup.label)}</span>
+                </span>
+                <span class="ysp-daily-panel__group-option-check">${selected.has(subgroup.id) ? '已选' : '选择'}</span>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
     async persistSettings() {
       await storageSetCached({
         [STORAGE_KEYS.settings]: cloneWorkbenchSettings(this.settings)
@@ -6189,6 +6338,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         if (this.refs.surface && this.refs.surface.contains(target)) {
           return;
         }
+        if (this.refs.popupLayer && this.refs.popupLayer.contains(target)) {
+          return;
+        }
         if (this.refs.settingsMask && this.refs.settingsMask.contains(target)) {
           return;
         }
@@ -6247,6 +6399,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       this.refs.dailyGroups.addEventListener('click', (event) => this.handleGroupSelection(event, 'daily'));
       this.refs.secondaryQcGroups.addEventListener('click', (event) => this.handleGroupSelection(event, 'secondaryQc'));
+      this.refs.popupLayer.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+        const moduleType = normalizeText(target.closest('[data-role="group-menu"]')?.getAttribute('data-module-type'));
+        if (moduleType !== 'daily' && moduleType !== 'secondaryQc') {
+          return;
+        }
+        this.handleGroupSelection(event, moduleType);
+      });
       this.refs.surface.addEventListener('click', (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) {
@@ -6260,6 +6423,20 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           this.render();
         }
       });
+      this.refs.surface.addEventListener('scroll', () => {
+        if (this.runtime.openGroupMenu) {
+          this.render();
+        }
+      }, true);
+      if (this.handleViewportChange) {
+        window.removeEventListener('resize', this.handleViewportChange);
+      }
+      this.handleViewportChange = () => {
+        if (this.runtime.openGroupMenu) {
+          this.render();
+        }
+      };
+      window.addEventListener('resize', this.handleViewportChange);
 
       this.refs.startDaily.addEventListener('click', () => {
         this.startDailyJob().catch((error) => this.failJob(error));
@@ -6421,42 +6598,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     renderGroupSelector(container, moduleType) {
-      if (moduleType === 'secondaryQc') {
-        const selectedKey = normalizeText(this.settings.secondaryQc.categoryKey);
-        const open = !this.runtime.running && this.runtime.openGroupMenu === moduleType;
-        const triggerSummary = this.getGroupPickerSummary(moduleType);
-        container.innerHTML = `
-          <div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker">
-            <button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}>
-              <span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span>
-              <span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span>
-            </button>
-            <div class="ysp-daily-panel__group-menu" role="listbox" aria-label="质检品类选项">
-              ${CATEGORY_ENTRIES.map((entry) => {
-                const selectedClass = selectedKey === entry.key ? ' is-selected' : '';
-                return `
-                  <button
-                    type="button"
-                    class="ysp-daily-panel__group-option${selectedClass}"
-                    data-theme="${escapeXml(entry.theme)}"
-                    data-role="category-option"
-                    data-category-key="${escapeXml(entry.key)}"
-                    ${this.runtime.running ? 'disabled' : ''}
-                  >
-                    <span class="ysp-daily-panel__group-option-copy">
-                      <span class="ysp-daily-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span>
-                      <span class="ysp-daily-panel__group-option-label">${escapeXml(entry.exportLabel)}</span>
-                    </span>
-                    <span class="ysp-daily-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span>
-                  </button>
-                `;
-              }).join('')}
-            </div>
-          </div>
-        `;
-        return;
-      }
-      const selected = new Set(this.getModuleSettings(moduleType).groupIds);
       const open = !this.runtime.running && this.runtime.openGroupMenu === moduleType;
       const triggerSummary = this.getGroupPickerSummary(moduleType);
 
@@ -6466,27 +6607,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             <span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span>
             <span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span>
           </button>
-          <div class="ysp-daily-panel__group-menu" role="listbox" aria-label="品类编组选项">
-            ${SUBGROUP_ENTRIES.map((subgroup) => {
-              const selectedClass = selected.has(subgroup.id) ? ' is-selected' : '';
-              return `
-                <button
-                  type="button"
-                  class="ysp-daily-panel__group-option${selectedClass}"
-                  data-theme="${escapeXml(subgroup.theme)}"
-                  data-role="group-option"
-                  data-group-id="${escapeXml(subgroup.id)}"
-                  ${this.runtime.running ? 'disabled' : ''}
-                >
-                  <span class="ysp-daily-panel__group-option-copy">
-                    <span class="ysp-daily-panel__group-option-meta">${escapeXml(subgroup.groupLabel)}</span>
-                    <span class="ysp-daily-panel__group-option-label">${escapeXml(subgroup.label)}</span>
-                  </span>
-                  <span class="ysp-daily-panel__group-option-check">${selected.has(subgroup.id) ? '已选' : '选择'}</span>
-                </button>
-              `;
-            }).join('')}
-          </div>
         </div>
       `;
     }
@@ -6570,6 +6690,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.syncSettingsToInputs();
       this.renderGroupSelector(this.refs.dailyGroups, 'daily');
       this.renderGroupSelector(this.refs.secondaryQcGroups, 'secondaryQc');
+      this.renderFloatingGroupMenu();
 
       const activeModule = normalizeActiveModule(this.settings.ui.activeModule);
       this.refs.dailyModule.hidden = activeModule !== 'daily';
