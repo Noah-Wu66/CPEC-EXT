@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.53
+// @version      2.1.55
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -3748,101 +3748,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
   }
 
-  function getResponseHeaderValue(response, headerName) {
-    const normalizedHeaderName = normalizeText(headerName).toLowerCase();
-    if (!normalizedHeaderName) {
-      return '';
-    }
-    const headersText = String(response && response.responseHeaders || '');
-    const lines = headersText.split(/\r?\n/);
-    for (const line of lines) {
-      const separatorIndex = line.indexOf(':');
-      if (separatorIndex <= 0) {
-        continue;
-      }
-      const name = normalizeText(line.slice(0, separatorIndex)).toLowerCase();
-      if (name === normalizedHeaderName) {
-        return normalizeText(line.slice(separatorIndex + 1));
-      }
-    }
-    return '';
-  }
-
-  function formatByteSize(bytes) {
-    const size = Number(bytes) || 0;
-    if (!size) {
-      return '0 B';
-    }
-    if (size < 1024) {
-      return `${size} B`;
-    }
-    if (size < 1024 * 1024) {
-      return `${(size / 1024).toFixed(1)} KB`;
-    }
-    return `${(size / (1024 * 1024)).toFixed(2)} MB`;
-  }
-
-  function decodeAsciiBytes(bytes, start, length) {
-    const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(0);
-    const normalizedStart = Math.max(0, start || 0);
-    const normalizedEnd = Math.min(source.length, normalizedStart + Math.max(0, length || 0));
-    let text = '';
-    for (let index = normalizedStart; index < normalizedEnd; index += 1) {
-      const code = source[index];
-      text += code >= 32 && code <= 126 ? String.fromCharCode(code) : '.';
-    }
-    return text;
-  }
-
-  function sniffVideoContainer(bytes) {
-    const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(0);
-    if (source.length >= 12) {
-      const boxName = decodeAsciiBytes(source, 4, 4);
-      const brand = decodeAsciiBytes(source, 8, 4);
-      if (boxName === 'ftyp') {
-        return `mp4/${brand || 'unknown'}`;
-      }
-    }
-    if (source.length >= 3 && decodeAsciiBytes(source, 0, 3) === 'ID3') {
-      return 'mp3/id3';
-    }
-    if (source.length >= 8 && decodeAsciiBytes(source, 0, 8) === '#EXTM3U.') {
-      return 'm3u8';
-    }
-    return decodeAsciiBytes(source, 0, Math.min(12, source.length)) || 'unknown';
-  }
-
-  async function inspectVideoUrl(videoUrl, cancelCheck) {
-    const response = await gmXmlhttpRequestPromise({
-      method: 'GET',
-      url: videoUrl,
-      responseType: 'arraybuffer',
-      timeout: DASHSCOPE_REQUEST_TIMEOUT,
-      cancelCheck
-    });
-    if (!response || response.status >= 400) {
-      throw new Error(`视频探测失败：${response ? response.status : '未知状态'}`);
-    }
-    const buffer = response.response;
-    const bytes = buffer instanceof ArrayBuffer
-      ? new Uint8Array(buffer)
-      : buffer instanceof Uint8Array
-        ? buffer
-        : new Uint8Array(0);
-    const contentType = getResponseHeaderValue(response, 'content-type') || '';
-    const contentLength = Number(getResponseHeaderValue(response, 'content-length')) || bytes.byteLength || 0;
-    const parsedUrl = new URL(videoUrl);
-    return {
-      status: Number(response.status) || 0,
-      host: normalizeText(parsedUrl.host),
-      fileName: normalizeText(parsedUrl.pathname.split('/').pop()),
-      contentType,
-      contentLength,
-      contentLengthText: formatByteSize(contentLength),
-      container: sniffVideoContainer(bytes)
-    };
-  }
-
   async function requestDashscopeText(apiKey, payload, isStream, cancelCheck) {
     const response = await gmXmlhttpRequestPromise({
       method: 'POST',
@@ -4349,7 +4254,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       missingCandidates: [],
       validatedCandidates: [],
       rejectedCandidates: [],
-      wrongTags: [],
       finalReason: '',
       problemText: '',
       skipReason: '',
@@ -4388,9 +4292,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'rejectedCandidates')) {
       target.rejectedCandidates = Array.isArray(patch.rejectedCandidates) ? patch.rejectedCandidates : [];
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, 'wrongTags')) {
-      target.wrongTags = normalizeTagArray(patch.wrongTags);
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'timeline')) {
       target.timeline = Array.isArray(patch.timeline) ? patch.timeline.slice(0, 8) : [];
@@ -4529,11 +4430,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             <div class="ysp-daily-worker-badge__final-value">${escapeXml(
               state.skipReason === 'long_video'
                 ? `长视频跳过（超过 ${formatDurationSeconds(MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS)}）`
-                : state.problemText || state.finalReason || '当前不需要落表'
+                : state.problemText || state.finalReason || '当前不需要补打'
             )}</div>
           </div>
           <div class="ysp-daily-worker-badge__text" style="margin-top: 10px;">${escapeXml(state.finalReason || '暂无最终说明')}</div>
-          <div class="ysp-daily-worker-badge__text" style="margin-top: 8px;">错打标签：${escapeXml(state.wrongTags.join('、') || '无')}</div>
         </section>
       </div>
     `;
@@ -5182,41 +5082,39 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return [
       '你是央视频标准化系统的二次质检助手。',
       '这是一条已经过多次校对后的最终查缺补漏任务，你的主要目标是补打真正重要且缺失的标签，不要为了凑结果而补。',
-      '请根据“标题”“视频理解结果”和“当前已选成品标签完整信息”，判断现有成品标签是否明显错打，以及哪些标签值得真的去系统搜索框里输入验证。',
+      '请根据“标题”“视频理解结果”和“当前已选成品标签完整信息”，判断哪些标签值得真的去系统搜索框里输入验证，目标只有补打，不做错打筛查。',
       '规则：',
-      '1. wrong_tags 默认从严，只有现有标签和视频核心事实明显冲突时才允许输出；大多数情况下应为空。',
-      '2. search_candidates 只保留真正值得去系统搜索框输入验证的关键词，每个候选都要给 keyword 和 reason。',
-      '3. search_candidates 里的 keyword 必须简短、可直接搜索，不要写成长句。',
-      '4. 单次擦边出现、弱相关、泛泛概念、可有可无的标签，一律不要给。',
-      '5. 不要推荐已经在当前已选成品标签里的同名标签。',
-      '6. summary 用一句中文总结判断原因。',
-      '7. 只能返回 JSON，不要返回其他文字。',
+      '1. search_candidates 只保留真正值得去系统搜索框输入验证的关键词，每个候选都要给 keyword 和 reason。',
+      '2. search_candidates 里的 keyword 必须简短、可直接搜索，不要写成长句。',
+      '3. 单次擦边出现、弱相关、泛泛概念、可有可无的标签，一律不要给。',
+      '4. 不要推荐已经在当前已选成品标签里的同名标签。',
+      '5. summary 用一句中文总结判断原因。',
+      '6. 只能返回 JSON，不要返回其他文字。',
       '',
       `标题：${normalizeText(titleText) || '无'}`,
       `当前已选成品标签完整信息：${JSON.stringify(normalizeTagDetailArray(selectedTags || []))}`,
       `视频理解结果：${videoSummary}`,
       '',
       '输出格式：',
-      '{"wrong_tags":[],"search_candidates":[{"keyword":"","reason":""}],"summary":""}'
+      '{"search_candidates":[{"keyword":"","reason":""}],"summary":""}'
     ].join('\n');
   }
 
   function buildFinalTagJudgePrompt(titleText, videoSummary, selectedTags, firstJudge, searchResults) {
     return [
       '你是央视频标准化系统的最终二次质检裁定助手。',
-      '这一步是最后落表结论，请严格执行“补打优先、错打极严”的标准。',
+      '这一步是最后落表结论，本次任务只做补打，不做错打筛查。',
       '你现在拿到了标题、视频理解结果、当前已选成品标签完整信息、第一轮搜索计划，以及候选标签在系统中的真实搜索结果。',
       '规则：',
       '1. need_record 必须由你独立判断。只有真正需要落到二次质检表里时才返回 true，否则 false。',
       '2. missing_tags_actionable 只保留“页面真实搜得到”且“确实应该补打”的重要标签。',
-      '3. wrong_tags 只保留证据非常强、与视频核心事实明显冲突的错打标签；大多数情况应为空。',
-      '4. candidate_decisions 必须覆盖每一个已搜索的候选标签，每个候选只出现一次，accepted 表示最终是否采纳，reason 必须说明原因。',
-      '5. 如果 accepted 为 true，请尽量在 candidate_decisions 里补充 matched_option_id、matched_option_name、matched_option_type、matched_option_remark，指出你最终采纳的是哪一个搜索结果。',
-      '6. evidence_summary 要概括真正支持结论的强证据，重点看标题、主题、反复出现的信息、画面与口播共同支持的点。',
-      '7. final_reason 用一句中文说明为什么最终落到这个结论。',
-      '8. problem_text 只有在 need_record 为 true 时才输出；默认只输出“补打XX、YY”，只有 wrong_tags 非空时才追加“错打AA、BB”；如果不需要记录，返回空字符串。',
-      '9. 单次擦边出现、弱相关、没有反复支撑、不是主题核心的标签，一律不要补。',
-      '10. 只能返回 JSON，不要返回其他文字。',
+      '3. candidate_decisions 必须覆盖每一个已搜索的候选标签，每个候选只出现一次，accepted 表示最终是否采纳，reason 必须说明原因。',
+      '4. 如果 accepted 为 true，请尽量在 candidate_decisions 里补充 matched_option_id、matched_option_name、matched_option_type、matched_option_remark，指出你最终采纳的是哪一个搜索结果。',
+      '5. evidence_summary 要概括真正支持结论的强证据，重点看标题、主题、反复出现的信息、画面与口播共同支持的点。',
+      '6. final_reason 用一句中文说明为什么最终落到这个结论。',
+      '7. problem_text 只有在 need_record 为 true 时才输出，格式只允许是“补打XX、YY”；如果不需要记录，返回空字符串。',
+      '8. 单次擦边出现、弱相关、没有反复支撑、不是主题核心的标签，一律不要补。',
+      '9. 只能返回 JSON，不要返回其他文字。',
       '',
       `标题：${normalizeText(titleText) || '无'}`,
       `视频理解结果：${videoSummary}`,
@@ -5225,7 +5123,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       `候选标签真实搜索结果：${JSON.stringify(searchResults || [])}`,
       '',
       '输出格式：',
-      '{"need_record":false,"missing_tags_actionable":[],"wrong_tags":[],"candidate_decisions":[{"keyword":"","accepted":false,"reason":"","matched_option_id":"","matched_option_name":"","matched_option_type":"","matched_option_remark":""}],"evidence_summary":"","final_reason":"","problem_text":""}'
+      '{"need_record":false,"missing_tags_actionable":[],"candidate_decisions":[{"keyword":"","accepted":false,"reason":"","matched_option_id":"","matched_option_name":"","matched_option_type":"","matched_option_remark":""}],"evidence_summary":"","final_reason":"","problem_text":""}'
     ].join('\n');
   }
 
@@ -5381,7 +5279,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           skipReason: 'long_video',
           evidenceSummary: '当前视频超过 5 分钟，按质检规则直接跳过，不进入视频理解模型。',
           problemText: '',
-          wrongTags: [],
           missingCandidates: [],
           validatedCandidates: [],
           rejectedCandidates: [],
@@ -5399,7 +5296,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           needRecord: false,
           problemText: '',
           missingTagsActionable: [],
-          wrongTags: [],
           selectedTags,
           searchResults: [],
           summary: '',
@@ -5426,7 +5322,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           skipReason: 'flash_model_limit',
           evidenceSummary: '当前选择快速模式，视频超过 150 秒，不进入视频理解模型。',
           problemText: '',
-          wrongTags: [],
           missingCandidates: [],
           validatedCandidates: [],
           rejectedCandidates: [],
@@ -5444,7 +5339,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           needRecord: false,
           problemText: '',
           missingTagsActionable: [],
-          wrongTags: [],
           selectedTags,
           searchResults: [],
           summary: '',
@@ -5475,18 +5369,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const videoUrl = await fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck);
       await ensureSecondaryQcWorkerNotStopped(requestId);
       await reportProgress(`视频地址已获取：${videoUrl}`, { stageLabel: '获取视频地址' });
-      try {
-        const videoInspect = await inspectVideoUrl(videoUrl, cancelCheck);
-        await reportProgress(
-          `视频探测：host=${videoInspect.host} file=${videoInspect.fileName} status=${videoInspect.status} type=${videoInspect.contentType || 'unknown'} size=${videoInspect.contentLengthText} box=${videoInspect.container}`,
-          { stageLabel: '获取视频地址' }
-        );
-      } catch (inspectError) {
-        await reportProgress(
-          `视频探测失败：${inspectError && inspectError.message ? inspectError.message : String(inspectError)}`,
-          { stageLabel: '获取视频地址' }
-        );
-      }
 
       await reportProgress('正在理解视频内容', { stageLabel: '视频理解' });
       const videoSummaryRaw = await requestOmniVideoSummaryByMode(
@@ -5539,13 +5421,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await reportProgress('正在分析成品标签', { stageLabel: '候选分析' });
       const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags), cancelCheck);
       const firstJudge = parseModelJsonObject(firstJudgeRaw, '第一轮标签判断');
-      const wrongTags = normalizeTagArray(firstJudge.wrong_tags);
       const searchCandidates = normalizeTagSearchCandidateArray(firstJudge.search_candidates);
       const missingCandidates = searchCandidates.map((item) => item.keyword);
       const firstSummary = normalizeText(firstJudge.summary);
       applyBadgeState({
         missingCandidates,
-        wrongTags,
         evidenceSummary: [firstSummary ? `候选判断：${firstSummary}` : '', baseEvidenceSummary].filter(Boolean).join('\n')
       });
       await ensureSecondaryQcWorkerNotStopped(requestId);
@@ -5558,7 +5438,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           stageLabel: '搜索验证',
           logLines: [
             firstSummary ? `候选判断：${firstSummary}` : '',
-            wrongTags.length ? `初判错打标签：${wrongTags.join('、')}` : '初判错打标签：无',
             missingCandidates.length ? `候选补打标签：${missingCandidates.join('、')}` : '候选补打标签：无'
           ],
           validatedCandidates: searchCandidates.map((item) => ({
@@ -5613,7 +5492,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           videoSummary,
           selectedTags,
           {
-            wrong_tags: wrongTags,
             search_candidates: searchCandidates,
             summary: firstSummary
           },
@@ -5624,7 +5502,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const finalJudge = parseModelJsonObject(finalJudgeRaw, '最终结论');
       const needRecord = normalizeBooleanFlag(finalJudge.need_record);
       const missingTagsActionable = normalizeTagArray(finalJudge.missing_tags_actionable);
-      const finalWrongTags = normalizeTagArray(finalJudge.wrong_tags);
       const candidateDecisions = normalizeCandidateDecisionArray(finalJudge.candidate_decisions);
       const validatedCandidates = buildValidatedCandidates(searchResults, candidateDecisions);
       const rejectedCandidates = validatedCandidates
@@ -5639,7 +5516,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       applyBadgeState({
         validatedCandidates,
         rejectedCandidates,
-        wrongTags: finalWrongTags,
         evidenceSummary,
         finalReason,
         problemText,
@@ -5665,7 +5541,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           rejectedCandidates.length
             ? `放弃候选：${rejectedCandidates.map((item) => `${item.keyword}（${item.reason || '暂无说明'}）`).join('；')}`
             : '放弃候选：无',
-          finalWrongTags.length ? `最终错打标签：${finalWrongTags.join('、')}` : '最终错打标签：无',
           missingTagsActionable.length ? `最终补打标签：${missingTagsActionable.join('、')}` : '最终补打标签：无',
           problemText ? `落表问题：${problemText}` : '落表问题：无',
           finalReason ? `最终说明：${finalReason}` : ''
@@ -5681,7 +5556,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         needRecord,
         problemText,
         missingTagsActionable,
-        wrongTags: finalWrongTags,
+        wrongTags: [],
         selectedTags,
         searchResults,
         summary: firstSummary,
@@ -7592,7 +7467,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const needRecord = normalizeBooleanFlag(response.needRecord);
       const problemText = normalizeText(response.problemText);
       if (!needRecord) {
-        this.pushLog(`${row.taskId}：未发现问题`);
+        this.pushLog(`${row.taskId}：不需要补打`);
         return;
       }
       if (!problemText) {
