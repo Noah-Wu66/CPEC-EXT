@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.50
+// @version      2.1.51
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -24,8 +24,6 @@
 // @connect      m.yangshipin.cn
 // @connect      w.yangshipin.cn
 // @connect      mp4playcloud-cdn.ysp.cctv.cn
-// @connect      s.yangshipin.cn
-// @connect      playvv.yangshipin.cn
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -1501,13 +1499,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const OMNI_VIDEO_PRIMARY_MODEL = 'qwen3.5-omni-flash';
   const OMNI_VIDEO_FALLBACK_MODEL = 'qwen3.5-omni-plus';
   const OMNI_VIDEO_PRIMARY_MAX_DURATION_SECONDS = 150;
-  const YANGSHIPIN_PLAYER_BUNDLE_URL = 'https://s.yangshipin.cn/wc/ysplayer.modern.js';
-  const YANGSHIPIN_VIDEO_INFO_URL = 'https://playvv.yangshipin.cn/playvinfo';
-  const YANGSHIPIN_PLAYER_APP_VERSION = '1.2.3';
-  const YANGSHIPIN_PLAYER_PLATFORM = 4330701;
   const YANGSHIPIN_VIDEO_WORKER_URL = 'https://yangshipin.cn/video/home';
-  let yangshipinCKeyGeneratorPromise = null;
-  let yangshipinGuidCache = '';
 
   function injectPanelStyle() {
     GM_addStyle(PANEL_STYLE);
@@ -2788,14 +2780,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return zip.build();
   }
 
-  function downloadReport(report) {
-    const blob = buildXlsxBlob(report);
+  function triggerBlobDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `${getReportFileToken(report)}.xlsx`;
+    anchor.download = filename;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadReport(report) {
+    triggerBlobDownload(buildXlsxBlob(report), `${getReportFileToken(report)}.xlsx`);
   }
 
   function createDefaultWorkbenchSettings() {
@@ -3020,17 +3015,27 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   }
 
   function downloadFlatTableReport(definition, filename) {
-    const blob = buildFlatTableXlsxBlob(definition);
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${sanitizeFilenamePart(filename || '结果') || '结果'}.xlsx`;
-    anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    triggerBlobDownload(
+      buildFlatTableXlsxBlob(definition),
+      `${sanitizeFilenamePart(filename || '结果') || '结果'}.xlsx`
+    );
   }
 
   function createRuntimeToken(prefix) {
     return `${prefix || 'ysp'}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  }
+
+  function openUrlInNewTab(url) {
+    const openedWindow = window.open(url, '_blank');
+    if (openedWindow) {
+      return openedWindow;
+    }
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.click();
+    return null;
   }
 
   function buildSecondaryQcWorkerRequestKey(requestId) {
@@ -3071,6 +3076,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return Array.isArray(lines)
       ? lines.map((line) => normalizeText(line)).filter(Boolean)
       : [];
+  }
+
+  function getResponseProgressToken(progress) {
+    return normalizeText(progress && progress.updatedAt) || normalizeText(progress && progress.text);
   }
 
   async function updateSecondaryQcWorkerProgress(requestId, progressOrText) {
@@ -3351,19 +3360,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       result.push(text);
     }
     return result;
-  }
-
-  function formatProblemText(missingTags, wrongTags) {
-    const parts = [];
-    const missing = uniqueTextList(missingTags).map(normalizeTagDisplayName);
-    const wrong = uniqueTextList(wrongTags).map(normalizeTagDisplayName);
-    if (missing.length) {
-      parts.push(`补打${missing.join('、')}`);
-    }
-    if (wrong.length) {
-      parts.push(`错打${wrong.join('、')}`);
-    }
-    return parts.join(' ');
   }
 
   function formatDurationSeconds(seconds) {
@@ -4827,9 +4823,23 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       : `${normalizedTaskId}：${normalizedMessage}`;
   }
 
-  async function waitForSecondaryQcWorkerResponse(requestId, timeoutMs, onProgress, cancelCheck) {
-    const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
-    const progressKey = buildSecondaryQcWorkerProgressKey(requestId);
+  async function waitForStorageObjectResponse(options) {
+    const config = options && typeof options === 'object' ? options : {};
+    const responseKey = normalizeText(config.responseKey);
+    const progressKey = normalizeText(config.progressKey);
+    const timeoutMs = Math.max(1, Math.trunc(Number(config.timeoutMs) || 0));
+    const pollIntervalMs = Math.max(100, Math.trunc(Number(config.pollIntervalMs) || 400));
+    const startTimeoutMs = Math.max(0, Math.trunc(Number(config.startTimeoutMs) || 0));
+    const stallTimeoutMs = Math.max(0, Math.trunc(Number(config.stallTimeoutMs) || 0));
+    const cancelCheck = typeof config.cancelCheck === 'function' ? config.cancelCheck : null;
+    const onProgress = typeof config.onProgress === 'function' ? config.onProgress : null;
+    const timeoutMessage = normalizeText(config.timeoutMessage) || '等待结果超时';
+    const startTimeoutMessage = normalizeText(config.startTimeoutMessage) || timeoutMessage;
+    const stallTimeoutMessage = normalizeText(config.stallTimeoutMessage) || timeoutMessage;
+    if (!responseKey || !timeoutMs) {
+      throw new Error('等待结果配置无效');
+    }
+
     const startedAt = Date.now();
     let lastProgressToken = '';
     let lastActiveAt = startedAt;
@@ -4838,19 +4848,21 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (cancelCheck && cancelCheck()) {
         throw new Error('采集已结束');
       }
-      const storage = await storageGet([responseKey, progressKey]);
-      const progress = storage[progressKey];
-      if (progress && typeof progress === 'object') {
-        const progressToken = normalizeText(progress.updatedAt) || normalizeText(progress.text);
-        if (progressToken && progressToken !== lastProgressToken) {
-          lastProgressToken = progressToken;
-          hasProgress = true;
-          lastActiveAt = Date.now();
-          if (typeof onProgress === 'function') {
-            try {
-              onProgress(progress);
-            } catch (error) {
-              // ignore progress callback errors
+      const storage = await storageGet(progressKey ? [responseKey, progressKey] : responseKey);
+      if (progressKey) {
+        const progress = storage[progressKey];
+        if (progress && typeof progress === 'object') {
+          const progressToken = getResponseProgressToken(progress);
+          if (progressToken && progressToken !== lastProgressToken) {
+            lastProgressToken = progressToken;
+            hasProgress = true;
+            lastActiveAt = Date.now();
+            if (onProgress) {
+              try {
+                onProgress(progress);
+              } catch (error) {
+                // ignore progress callback errors
+              }
             }
           }
         }
@@ -4860,297 +4872,41 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         return response;
       }
       const now = Date.now();
-      if (!hasProgress && now - startedAt >= WORKER_START_TIMEOUT) {
-        throw new Error('详情页未启动，可能被浏览器拦截或新标签页没有打开');
+      if (startTimeoutMs && !hasProgress && now - startedAt >= startTimeoutMs) {
+        throw new Error(startTimeoutMessage);
       }
-      if (hasProgress && now - lastActiveAt >= WORKER_PROGRESS_STALL_TIMEOUT) {
-        throw new Error('详情页处理卡住，已超时跳过');
+      if (stallTimeoutMs && hasProgress && now - lastActiveAt >= stallTimeoutMs) {
+        throw new Error(stallTimeoutMessage);
       }
-      await sleep(800);
+      await sleep(pollIntervalMs);
     }
-    throw new Error('等待详情页结果超时');
+    throw new Error(timeoutMessage);
+  }
+
+  async function waitForSecondaryQcWorkerResponse(requestId, timeoutMs, onProgress, cancelCheck) {
+    return waitForStorageObjectResponse({
+      responseKey: buildSecondaryQcWorkerResponseKey(requestId),
+      progressKey: buildSecondaryQcWorkerProgressKey(requestId),
+      timeoutMs,
+      pollIntervalMs: 800,
+      startTimeoutMs: WORKER_START_TIMEOUT,
+      stallTimeoutMs: WORKER_PROGRESS_STALL_TIMEOUT,
+      startTimeoutMessage: '详情页未启动，可能被浏览器拦截或新标签页没有打开',
+      stallTimeoutMessage: '详情页处理卡住，已超时跳过',
+      timeoutMessage: '等待详情页结果超时',
+      onProgress,
+      cancelCheck
+    });
   }
 
   async function waitForSecondaryQcMediaWorkerResponse(requestId, timeoutMs, cancelCheck) {
-    const responseKey = buildSecondaryQcMediaWorkerResponseKey(requestId);
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < timeoutMs) {
-      if (cancelCheck && cancelCheck()) {
-        throw new Error('采集已结束');
-      }
-      const storage = await storageGet(responseKey);
-      const response = storage[responseKey];
-      if (response && typeof response === 'object') {
-        return response;
-      }
-      await sleep(400);
-    }
-    throw new Error('等待视频地址结果超时');
-  }
-
-  function createYangshipinGuid() {
-    return `${Date.now().toString(36)}_${Math.random().toString(36).replace(/^0\./, '')}`;
-  }
-
-  function getYangshipinGuid() {
-    if (yangshipinGuidCache) {
-      return yangshipinGuidCache;
-    }
-    yangshipinGuidCache = createYangshipinGuid();
-    return yangshipinGuidCache;
-  }
-
-  function createYangshipinCKeyRuntime() {
-    const href = 'https://www.yangshipin.cn/#/video/home';
-    const locationObject = {
-      href,
-      host: 'www.yangshipin.cn',
-      hostname: 'www.yangshipin.cn',
-      protocol: 'https:',
-      pathname: '/',
-      hash: '#/video/home',
-      search: '',
-      port: ''
-    };
-    const navigatorObject = {
-      appName: 'Netscape',
-      appCodeName: 'Mozilla',
-      platform: 'Win32',
-      userAgent: navigator.userAgent
-    };
-    const documentObject = {
-      URL: href,
-      referrer: '',
-      currentScript: {
-        src: 'https://www.yangshipin.cn/js/app.4160532d.js'
-      },
-      createElement() {
-        return {
-          setAttribute() {},
-          pathname: '/',
-          href,
-          hostname: 'www.yangshipin.cn',
-          hash: '#/video/home',
-          host: 'www.yangshipin.cn',
-          search: '',
-          port: '',
-          protocol: 'https:'
-        };
-      }
-    };
-    const windowObject = {
-      location: locationObject,
-      navigator: navigatorObject,
-      document: documentObject,
-      yspLogin: {
-        default: {}
-      }
-    };
-    return {
-      windowObject,
-      documentObject,
-      navigatorObject,
-      locationObject
-    };
-  }
-
-  function getYangshipinSdtfrom() {
-    const ua = navigator.userAgent.toLowerCase();
-    if (/ipad/i.test(ua)) {
-      return 213;
-    }
-    if (/ios|iphone/i.test(ua)) {
-      return 113;
-    }
-    if (/android/i.test(ua)) {
-      return 313;
-    }
-    return YANGSHIPIN_PLAYER_PLATFORM;
-  }
-
-  function parseYangshipinJsonpResponse(responseText) {
-    const normalized = normalizeText(responseText);
-    if (!normalized) {
-      throw new Error('央视频接口返回为空');
-    }
-    const wrappedJsonMatch = normalized.match(/^\(([\s\S]+)\)$/);
-    const directJson = wrappedJsonMatch ? wrappedJsonMatch[1] : normalized.replace(/;$/, '');
-    return JSON.parse(directJson);
-  }
-
-  async function loadYangshipinCKeyGenerator(cancelCheck) {
-    if (yangshipinCKeyGeneratorPromise) {
-      return yangshipinCKeyGeneratorPromise;
-    }
-    yangshipinCKeyGeneratorPromise = (async () => {
-      const response = await gmXmlhttpRequestPromise({
-        method: 'GET',
-        url: YANGSHIPIN_PLAYER_BUNDLE_URL,
-        cancelCheck
-      });
-      const scriptText = String((response && response.responseText) || '');
-      const startToken = 'UHXV:function(e,t){';
-      const endToken = '},\"UN+X\":function';
-      const startIndex = scriptText.indexOf(startToken);
-      const endIndex = startIndex >= 0 ? scriptText.indexOf(endToken, startIndex) : -1;
-      if (startIndex < 0 || endIndex < 0) {
-        throw new Error('未找到央视频 cKey 生成器');
-      }
-      const moduleBody = scriptText.slice(startIndex + startToken.length, endIndex);
-      const module = { exports: null };
-      const runtime = createYangshipinCKeyRuntime();
-      const factory = new Function(
-        'e',
-        't',
-        'window',
-        'document',
-        'navigator',
-        'location',
-        'opener',
-        moduleBody
-      );
-      factory(
-        module,
-        module.exports,
-        runtime.windowObject,
-        runtime.documentObject,
-        runtime.navigatorObject,
-        runtime.locationObject,
-        null
-      );
-      if (typeof module.exports !== 'function') {
-        throw new Error('央视频 cKey 生成器不可用');
-      }
-      return module.exports;
-    })().catch((error) => {
-      yangshipinCKeyGeneratorPromise = null;
-      throw error;
-    });
-    return yangshipinCKeyGeneratorPromise;
-  }
-
-  async function buildYangshipinVideoInfoParams(videoVid, svrtick, cancelCheck) {
-    const guid = getYangshipinGuid();
-    const cKeyGenerator = await loadYangshipinCKeyGenerator(cancelCheck);
-    const resolvedSvrtick = normalizeText(svrtick) || String(Math.floor(Date.now() / 1000));
-    return {
-      guid,
-      platform: YANGSHIPIN_PLAYER_PLATFORM,
-      vid: videoVid,
-      charge: 0,
-      defaultfmt: 'auto',
-      otype: 'json',
-      defnpayver: 1,
-      appVer: YANGSHIPIN_PLAYER_APP_VERSION,
-      sphttps: 1,
-      sphls: 1,
-      spwm: 4,
-      dtype: 3,
-      defsrc: 2,
-      encryptVer: 8.1,
-      sdtfrom: getYangshipinSdtfrom(),
-      cKey: cKeyGenerator(videoVid, resolvedSvrtick, YANGSHIPIN_PLAYER_APP_VERSION, guid, YANGSHIPIN_PLAYER_PLATFORM)
-    };
-  }
-
-  async function requestYangshipinVideoInfo(videoVid, svrtick, cancelCheck) {
-    const params = await buildYangshipinVideoInfoParams(videoVid, svrtick, cancelCheck);
-    const url = `${YANGSHIPIN_VIDEO_INFO_URL}?${new URLSearchParams(Object.entries(params).map(([key, value]) => [key, String(value)]))}`;
-    const response = await gmXmlhttpRequestPromise({
-      method: 'GET',
-      url,
+    return waitForStorageObjectResponse({
+      responseKey: buildSecondaryQcMediaWorkerResponseKey(requestId),
+      timeoutMs,
+      pollIntervalMs: 400,
+      timeoutMessage: '等待视频地址结果超时',
       cancelCheck
     });
-    return parseYangshipinJsonpResponse(response && response.responseText);
-  }
-
-  function collectYangshipinMediaUrls(value, results, seen) {
-    if (!value) {
-      return;
-    }
-    if (typeof value === 'string') {
-      const normalized = normalizeMediaSourceUrl(value);
-      if (normalized && !seen.has(normalized) && (/\.(mp4|m3u8|flv)(\?|$)/i.test(normalized) || /[?&](vkey|ysign|ytime|ytype)=/i.test(normalized))) {
-        seen.add(normalized);
-        results.push(normalized);
-      }
-      return;
-    }
-    if (Array.isArray(value)) {
-      value.forEach((item) => collectYangshipinMediaUrls(item, results, seen));
-      return;
-    }
-    if (typeof value === 'object') {
-      Object.values(value).forEach((item) => collectYangshipinMediaUrls(item, results, seen));
-    }
-  }
-
-  function buildYangshipinFallbackMediaUrl(data, videoVid) {
-    const videoInfo = data && data.vl && Array.isArray(data.vl.vi) ? data.vl.vi[0] : null;
-    if (!videoInfo || !videoInfo.ul || !Array.isArray(videoInfo.ul.ui) || !videoInfo.ul.ui.length) {
-      return '';
-    }
-    const firstUi = videoInfo.ul.ui.find((item) => normalizeMediaSourceUrl(item && item.url)) || null;
-    if (!firstUi) {
-      return '';
-    }
-    const baseUrl = normalizeMediaSourceUrl(firstUi.url);
-    if (!baseUrl) {
-      return '';
-    }
-    if (firstUi.hls && normalizeText(firstUi.hls.pt)) {
-      return `${baseUrl}${normalizeText(firstUi.hls.pt)}`;
-    }
-    let resolvedUrl = baseUrl;
-    const linkId = normalizeText(videoInfo.lnk || videoVid);
-    const fileName = normalizeText(videoInfo.fn);
-    if (fileName && linkId && !new RegExp(`${linkId}\\.(?:mp4|flv)(?:\\?|$)`, 'i').test(resolvedUrl)) {
-      const dotIndex = fileName.indexOf('.');
-      if (dotIndex >= 0) {
-        resolvedUrl += fileName.slice(dotIndex);
-      }
-    }
-    const separator = resolvedUrl.includes('?') ? '&' : '?';
-    if (!/[?&]sdtfrom=/i.test(resolvedUrl)) {
-      resolvedUrl += `${separator}sdtfrom=${encodeURIComponent(String(getYangshipinSdtfrom()))}`;
-    }
-    if (!/[?&]guid=/i.test(resolvedUrl)) {
-      resolvedUrl += `${resolvedUrl.includes('?') ? '&' : '?'}guid=${encodeURIComponent(getYangshipinGuid())}`;
-    }
-    if (!/[?&]vkey=/i.test(resolvedUrl) && normalizeText(videoInfo.fvkey)) {
-      resolvedUrl += `${resolvedUrl.includes('?') ? '&' : '?'}vkey=${encodeURIComponent(normalizeText(videoInfo.fvkey))}`;
-    }
-    return resolvedUrl;
-  }
-
-  function extractYangshipinVideoUrlFromInfo(data, videoVid) {
-    const candidates = [];
-    const seen = new Set();
-    collectYangshipinMediaUrls(data, candidates, seen);
-    if (candidates.length) {
-      return candidates[0];
-    }
-    return buildYangshipinFallbackMediaUrl(data, videoVid);
-  }
-
-  async function fetchYangshipinVideoUrlDirectly(videoVid, cancelCheck) {
-    let currentSvrtick = '';
-    let lastError = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const response = await requestYangshipinVideoInfo(videoVid, currentSvrtick, cancelCheck);
-      if (response && Number(response.em) === 85 && Number(response.type) === -3 && normalizeText(response.curTime)) {
-        currentSvrtick = normalizeText(response.curTime);
-        lastError = new Error('央视频 cKey 已刷新，准备重试');
-        continue;
-      }
-      const videoUrl = extractYangshipinVideoUrlFromInfo(response, videoVid);
-      if (videoUrl) {
-        return videoUrl;
-      }
-      lastError = new Error(`央视频未返回完整视频地址（em=${normalizeText(response && response.em) || 'unknown'}）`);
-      break;
-    }
-    throw lastError || new Error('央视频未返回完整视频地址');
   }
 
   function normalizeMediaSourceUrl(value) {
@@ -5258,14 +5014,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           createdAt: new Date().toISOString()
         }
       });
-      const openedWindow = window.open(workerUrl, '_blank');
-      if (!openedWindow) {
-        const anchor = document.createElement('a');
-        anchor.href = workerUrl;
-        anchor.target = '_blank';
-        anchor.rel = 'noopener noreferrer';
-        anchor.click();
-      }
+      openUrlInNewTab(workerUrl);
       const response = await waitForSecondaryQcMediaWorkerResponse(requestId, MEDIA_WORKER_RESPONSE_TIMEOUT, cancelCheck);
       if (!response || typeof response !== 'object') {
         throw new Error('未收到央视频页面返回结果');
@@ -5903,6 +5652,55 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       }
       unmountWorkerBadge();
       await closeCurrentWorkerPage();
+    }
+  }
+
+  function advanceDailyCheckpointCursor(checkpoint, itemCount) {
+    if (!checkpoint) {
+      return;
+    }
+    checkpoint.currentItemIndex += 1;
+    if (checkpoint.currentItemIndex >= itemCount) {
+      checkpoint.currentDateIndex += 1;
+      checkpoint.currentItemIndex = 0;
+    }
+  }
+
+  async function applyCategorySelection(item, cancelCheck, onSelected) {
+    const primary = getCategoryWrapper(0);
+    if (!primary) {
+      throw new Error('未找到品类选项');
+    }
+    await selectOption(primary, item.queryLabel, cancelCheck);
+    if (typeof onSelected === 'function') {
+      onSelected(item);
+    }
+  }
+
+  async function applySelectFilter(label, value, cancelCheck) {
+    const wrapper = getSelectWrapperByLabel(label, 0);
+    if (!wrapper) {
+      throw new Error(`未找到筛选条件：${label}`);
+    }
+    await selectOption(wrapper, value, cancelCheck);
+  }
+
+  async function prepareListQueryFilters(item, options) {
+    const config = options && typeof options === 'object' ? options : {};
+    const cancelCheck = typeof config.cancelCheck === 'function' ? config.cancelCheck : null;
+    const dateLabel = normalizeText(config.dateLabel);
+    const range = config.range && typeof config.range === 'object' ? config.range : null;
+    const filters = Array.isArray(config.filters) ? config.filters : [];
+    await clickResetButton();
+    await applyCategorySelection(item, cancelCheck, config.onCategorySelected);
+    if (dateLabel && range && range.start instanceof Date && range.end instanceof Date) {
+      await setDateRange(dateLabel, range.start, range.end, cancelCheck);
+    }
+    for (const filter of filters) {
+      if (!filter || !normalizeText(filter.label) || !normalizeText(filter.value)) {
+        continue;
+      }
+      await applySelectFilter(filter.label, filter.value, cancelCheck);
     }
   }
 
@@ -7122,11 +6920,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             checkpoint.results[currentDate] = checkpoint.results[currentDate] || {};
             checkpoint.results[currentDate][item.key] = cachedResult;
             this.pushLog(`${currentDate} ${this.describeItem(item)}：已使用已保存结果`);
-            checkpoint.currentItemIndex += 1;
-            if (checkpoint.currentItemIndex >= items.length) {
-              checkpoint.currentDateIndex += 1;
-              checkpoint.currentItemIndex = 0;
-            }
+            advanceDailyCheckpointCursor(checkpoint, items.length);
             checkpoint.phase = 'std';
             await this.saveCheckpoint('daily');
             return this.runDailyFromCheckpoint(activeCancelCheck);
@@ -7136,11 +6930,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 质检`
           );
           await this.runDailyQualityCheckForItem(currentDate, item, activeCancelCheck);
-          checkpoint.currentItemIndex += 1;
-          if (checkpoint.currentItemIndex >= items.length) {
-            checkpoint.currentDateIndex += 1;
-            checkpoint.currentItemIndex = 0;
-          }
+          advanceDailyCheckpointCursor(checkpoint, items.length);
           checkpoint.phase = 'std';
           await this.saveCheckpoint('daily');
         }
@@ -7162,11 +6952,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         if (cachedResult) {
           checkpoint.results[currentDate][item.key] = cachedResult;
           this.pushLog(`${currentDate} ${this.describeItem(item)}：已使用已保存结果`);
-          checkpoint.currentItemIndex += 1;
-          if (checkpoint.currentItemIndex >= items.length) {
-            checkpoint.currentDateIndex += 1;
-            checkpoint.currentItemIndex = 0;
-          }
+          advanceDailyCheckpointCursor(checkpoint, items.length);
           checkpoint.phase = 'std';
           await this.saveCheckpoint('daily');
           continue;
@@ -7201,19 +6987,24 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const result = checkpoint.results[date][item.key] || createEmptyResult(item);
       const range = buildDateRange(date);
 
-      await clickResetButton();
-      await this.applyCategory(item, activeCancelCheck);
-      await setDateRange('创建时间', range.start, range.end, activeCancelCheck);
+      await prepareListQueryFilters(item, {
+        cancelCheck: activeCancelCheck,
+        dateLabel: '创建时间',
+        range,
+        onCategorySelected: () => {
+          this.pushLog(`已选择品类：${this.describeItem(item)}`);
+        }
+      });
 
       this.pushLog(`${date} ${this.describeItem(item)}：读取入库量`);
       result.inboundCount = await clickQueryAndReadCount(activeCancelCheck);
       this.pushLog(`${date} ${this.describeItem(item)}：入库量 ${result.inboundCount}`);
 
-      await this.applySelectByLabel('标准化状态', '标准化通过', activeCancelCheck);
+      await applySelectFilter('标准化状态', '标准化通过', activeCancelCheck);
       result.stdPassCount = await clickQueryAndReadCount(activeCancelCheck);
       this.pushLog(`${date} ${this.describeItem(item)}：标准化通过 ${result.stdPassCount}`);
 
-      await this.applySelectByLabel('标准化状态', '标准化拒绝', activeCancelCheck);
+      await applySelectFilter('标准化状态', '标准化拒绝', activeCancelCheck);
       result.stdRejectCount = await clickQueryAndReadCount(activeCancelCheck);
       result.stdTotalCount = result.stdPassCount + result.stdRejectCount;
       result.stdRejectRate = calculateRatio(result.stdRejectCount, result.stdTotalCount);
@@ -7239,15 +7030,20 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const result = checkpoint.results[date][item.key] || createEmptyResult(item);
       const range = buildDateRange(date);
 
-      await clickResetButton();
-      await this.applyCategory(item, activeCancelCheck);
-      await setDateRange('修改时间', range.start, range.end, activeCancelCheck);
+      await prepareListQueryFilters(item, {
+        cancelCheck: activeCancelCheck,
+        dateLabel: '修改时间',
+        range,
+        onCategorySelected: () => {
+          this.pushLog(`已选择品类：${this.describeItem(item)}`);
+        }
+      });
 
-      await this.applySelectByLabel('质检状态', '质检通过', activeCancelCheck);
+      await applySelectFilter('质检状态', '质检通过', activeCancelCheck);
       result.qcPassCount = await clickQueryAndReadCount(activeCancelCheck);
       this.pushLog(`${date} ${this.describeItem(item)}：质检通过 ${result.qcPassCount}`);
 
-      await this.applySelectByLabel('质检状态', '质检拒绝', activeCancelCheck);
+      await applySelectFilter('质检状态', '质检拒绝', activeCancelCheck);
       result.qcRejectCount = await clickQueryAndReadCount(activeCancelCheck);
       result.qcTotalCount = result.qcPassCount + result.qcRejectCount;
       result.qcRejectRate = calculateRatio(result.qcRejectCount, result.qcTotalCount);
@@ -7342,10 +7138,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         status: 'running',
         startDate,
         endDate,
-        groupIds: [],
+        groupIds: this.settings.secondaryQc.groupIds.slice(),
         itemKeys: items.map((item) => item.key),
         targetCount,
-        itemTargetCounts: [targetCount],
+        itemTargetCounts: buildSecondaryQcItemTargetCounts(items.length, targetCount),
         itemRecordedCounts: new Array(items.length).fill(0),
         currentItemIndex: 0,
         processedTaskIds: [],
@@ -7424,10 +7220,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         return;
       }
 
-      await clickResetButton();
-      await this.applyCategory(item, activeCancelCheck);
-      await setDateRange('创建时间', range.start, range.end, activeCancelCheck);
-      await this.applySelectByLabel('标准化状态', '标准化通过', activeCancelCheck);
+      await prepareListQueryFilters(item, {
+        cancelCheck: activeCancelCheck,
+        dateLabel: '创建时间',
+        range,
+        filters: [
+          { label: '标准化状态', value: '标准化通过' }
+        ],
+        onCategorySelected: () => {
+          this.pushLog(`已选择品类：${this.describeItem(item)}`);
+        }
+      });
 
       const queryCount = await clickQueryAndReadCount(activeCancelCheck);
       if (!queryCount) {
@@ -7523,14 +7326,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
         this.ensureNotStopped();
         this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页处理 ${row.taskId}`);
-        const openedWindow = window.open(detailUrl, '_blank');
-        if (!openedWindow) {
-          const anchor = document.createElement('a');
-          anchor.href = detailUrl;
-          anchor.target = '_blank';
-          anchor.rel = 'noopener noreferrer';
-          anchor.click();
-        }
+        openUrlInNewTab(detailUrl);
 
         let lastProgressText = '';
         response = await waitForSecondaryQcWorkerResponse(
@@ -7635,25 +7431,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.runtime.statusText = `二次质检完成，目标 ${checkpoint.targetCount} 条，实际 ${rows.length} 条`;
       this.pushLog(`二次质检完成，目标 ${checkpoint.targetCount} 条，实际 ${rows.length} 条`);
       this.render();
-    }
-
-    async applyCategory(item, cancelCheck) {
-      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
-      const primary = getCategoryWrapper(0);
-      if (!primary) {
-        throw new Error('未找到品类选项');
-      }
-      await selectOption(primary, item.queryLabel, activeCancelCheck);
-      this.pushLog(`已选择品类：${this.describeItem(item)}`);
-    }
-
-    async applySelectByLabel(label, value, cancelCheck) {
-      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
-      const wrapper = getSelectWrapperByLabel(label, 0);
-      if (!wrapper) {
-        throw new Error(`未找到筛选条件：${label}`);
-      }
-      await selectOption(wrapper, value, activeCancelCheck);
     }
 
     async failJob(error) {
