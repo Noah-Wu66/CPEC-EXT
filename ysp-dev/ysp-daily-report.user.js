@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.52
+// @version      2.1.53
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -3091,6 +3091,53 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       : [];
   }
 
+  function createLogEntry(message) {
+    return `[${formatClock()}] ${normalizeText(message)}`;
+  }
+
+  function getLogEntryMessage(entry) {
+    const normalized = normalizeText(entry);
+    if (!normalized) {
+      return '';
+    }
+    const match = normalized.match(/^\[\d{2}:\d{2}:\d{2}\]\s*(.*)$/);
+    return normalizeText(match ? match[1] : normalized);
+  }
+
+  function mergeLogEntries(existingLogs, messages) {
+    const nextLogs = Array.isArray(existingLogs) ? existingLogs.slice(-MAX_LOGS) : [];
+    const incomingMessages = Array.isArray(messages)
+      ? messages.map((message) => normalizeText(message)).filter(Boolean)
+      : [];
+    for (const message of incomingMessages) {
+      if (getLogEntryMessage(nextLogs[nextLogs.length - 1]) === message) {
+        continue;
+      }
+      nextLogs.push(createLogEntry(message));
+    }
+    return nextLogs.slice(-MAX_LOGS);
+  }
+
+  async function syncSecondaryQcCheckpointProgress(progressText, progressLogLines) {
+    const text = normalizeText(progressText);
+    const logLines = normalizeProgressLogLines(progressLogLines);
+    const mergedLines = [text, ...logLines].filter(Boolean).filter((line, index, array) => array.indexOf(line) === index);
+    if (!mergedLines.length) {
+      return;
+    }
+    const state = await storageGet(STORAGE_KEYS.secondaryQcCheckpoint);
+    const checkpoint = normalizeSecondaryQcCheckpoint(state[STORAGE_KEYS.secondaryQcCheckpoint]);
+    if (!checkpoint || checkpoint.status !== 'running') {
+      return;
+    }
+    checkpoint.statusText = text || checkpoint.statusText || '详情页处理中';
+    checkpoint.logs = mergeLogEntries(checkpoint.logs, mergedLines);
+    checkpoint.updatedAt = new Date().toISOString();
+    await storageSetCached({
+      [STORAGE_KEYS.secondaryQcCheckpoint]: checkpoint
+    });
+  }
+
   function getResponseProgressToken(progress) {
     return normalizeText(progress && progress.updatedAt) || normalizeText(progress && progress.text);
   }
@@ -5270,6 +5317,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       } catch (error) {
         // ignore progress sync errors
       }
+      try {
+        await syncSecondaryQcCheckpointProgress(text, logLines);
+      } catch (error) {
+        // ignore checkpoint sync errors
+      }
+      if (app && typeof app.applySecondaryQcWorkerProgress === 'function') {
+        app.applySecondaryQcWorkerProgress(text, logLines);
+      }
     };
     startSecondaryQcWorkerAbortWatcher(requestId);
     enforcePageMuted({ pausePlayback: true });
@@ -6051,6 +6106,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.refs = {};
     }
 
+    persistActiveCheckpoint() {
+      const checkpoint = this.getActiveCheckpoint();
+      if (!checkpoint || !this.runtime.jobType) {
+        return Promise.resolve();
+      }
+      return this.saveCheckpoint(this.runtime.jobType);
+    }
+
     getActiveCheckpoint() {
       if (this.runtime.jobType === 'daily') {
         return this.runtime.daily.checkpoint;
@@ -6723,15 +6786,37 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.renderLogs();
     }
 
+    applySecondaryQcWorkerProgress(text, progressLogLines) {
+      const progressText = normalizeText(text);
+      const logLines = normalizeProgressLogLines(progressLogLines);
+      const mergedLines = [progressText, ...logLines].filter(Boolean).filter((line, index, array) => array.indexOf(line) === index);
+      if (!progressText && !mergedLines.length) {
+        return;
+      }
+      this.runtime.running = true;
+      this.runtime.jobType = 'secondaryQc';
+      if (progressText) {
+        this.runtime.statusText = progressText;
+      }
+      this.runtime.logs = mergeLogEntries(this.runtime.logs, mergedLines);
+      if (this.runtime.secondaryQc.checkpoint) {
+        if (progressText) {
+          this.runtime.secondaryQc.checkpoint.statusText = progressText;
+        }
+        this.runtime.secondaryQc.checkpoint.logs = this.runtime.logs.slice();
+      }
+      this.render();
+      void this.persistActiveCheckpoint().catch(() => {});
+    }
+
     pushLog(message) {
-      const entry = `[${formatClock()}] ${message}`;
-      this.runtime.logs.push(entry);
-      this.runtime.logs = this.runtime.logs.slice(-MAX_LOGS);
+      this.runtime.logs = mergeLogEntries(this.runtime.logs, [message]);
       const checkpoint = this.getActiveCheckpoint();
       if (checkpoint) {
         checkpoint.logs = this.runtime.logs.slice();
       }
       this.renderLogs();
+      void this.persistActiveCheckpoint().catch(() => {});
     }
 
     ensureNotStopped() {
@@ -6754,6 +6839,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         checkpoint.summaryText = summaryText || checkpoint.summaryText || '';
       }
       this.renderStatus();
+      void this.persistActiveCheckpoint().catch(() => {});
     }
 
     async saveCheckpoint(jobType) {
