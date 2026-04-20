@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.49
+// @version      2.1.50
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1485,7 +1485,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     secondaryQcMediaWorkerRequestPrefix: 'yspWorkbenchSecondaryQcMediaWorkerRequestV2:',
     secondaryQcMediaWorkerResponsePrefix: 'yspWorkbenchSecondaryQcMediaWorkerResponseV2:'
   };
-  const MAX_LOGS = 50;
+  const MAX_LOGS = 200;
   const QUERY_TIMEOUT = 90000;
   const PAGE_READY_TIMEOUT = 60000;
   const DETAIL_PAGE_TIMEOUT = 60000;
@@ -3067,16 +3067,27 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return normalizeText(params.get('ysp_media_request'));
   }
 
-  async function updateSecondaryQcWorkerProgress(requestId, text) {
+  function normalizeProgressLogLines(lines) {
+    return Array.isArray(lines)
+      ? lines.map((line) => normalizeText(line)).filter(Boolean)
+      : [];
+  }
+
+  async function updateSecondaryQcWorkerProgress(requestId, progressOrText) {
     const normalizedRequestId = normalizeText(requestId);
-    const normalizedText = normalizeText(text);
-    if (!normalizedRequestId || !normalizedText) {
+    const progress = progressOrText && typeof progressOrText === 'object'
+      ? progressOrText
+      : { text: progressOrText };
+    const normalizedText = normalizeText(progress.text);
+    const logLines = normalizeProgressLogLines(progress.logLines);
+    if (!normalizedRequestId || (!normalizedText && !logLines.length)) {
       return;
     }
     await storageSetCached({
       [buildSecondaryQcWorkerProgressKey(normalizedRequestId)]: {
         requestId: normalizedRequestId,
         text: normalizedText,
+        logLines,
         updatedAt: new Date().toISOString()
       }
     });
@@ -5479,17 +5490,21 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const badgeState = createWorkerBadgeState();
     const applyBadgeState = (patch) => {
       mergeWorkerBadgeState(badgeState, patch);
-      mountWorkerBadge(badgeState);
     };
     const reportProgress = async (text, patch) => {
+      const nextPatch = patch && typeof patch === 'object' ? { ...patch } : {};
+      const logLines = normalizeProgressLogLines(nextPatch.logLines);
+      delete nextPatch.logLines;
       applyBadgeState({
         statusText: text,
-        ...(patch || {})
+        ...nextPatch
       });
       pushWorkerBadgeTimeline(badgeState, text);
-      mountWorkerBadge(badgeState);
       try {
-        await updateSecondaryQcWorkerProgress(requestId, text);
+        await updateSecondaryQcWorkerProgress(requestId, {
+          text,
+          logLines
+        });
       } catch (error) {
         // ignore progress sync errors
       }
@@ -5529,7 +5544,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         durationSeconds > 0
           ? `已读取视频信息，时长 ${formatDurationSeconds(durationSeconds)}`
           : '已读取视频信息，未获取到时长，将继续分析',
-        { stageLabel: '时长判断' }
+        {
+          stageLabel: '时长判断',
+          logLines: [
+            titleText ? `标题：${titleText}` : '',
+            videoVid ? `顶部VID：${videoVid}` : '',
+            durationSeconds > 0 ? `视频时长：${formatDurationSeconds(durationSeconds)}` : '视频时长：未读取到'
+          ]
+        }
       );
 
       await reportProgress(`当前模型模式：${getSecondaryQcModelModeLabel(modelMode)}`, { stageLabel: '时长判断' });
@@ -5545,7 +5567,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           wrongTags: [],
           missingCandidates: [],
           validatedCandidates: [],
-          rejectedCandidates: []
+          rejectedCandidates: [],
+          logLines: [
+            `最终说明：${finalReason}`,
+            '证据摘要：当前视频超过 5 分钟，按质检规则直接跳过，不进入视频理解模型。'
+          ]
         });
         responsePayload = {
           status: 'completed',
@@ -5586,7 +5612,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           wrongTags: [],
           missingCandidates: [],
           validatedCandidates: [],
-          rejectedCandidates: []
+          rejectedCandidates: [],
+          logLines: [
+            `最终说明：${finalReason}`,
+            '证据摘要：当前选择快速模式，视频超过 150 秒，不进入视频理解模型。'
+          ]
         });
         responsePayload = {
           status: 'completed',
@@ -5675,6 +5705,19 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         evidenceSummary: baseEvidenceSummary || videoSummary
       });
       await ensureSecondaryQcWorkerNotStopped(requestId);
+      await reportProgress('视频理解完成，正在整理证据', {
+        stageLabel: '视频理解',
+        logLines: [
+          videoAnalysis.overallTheme ? `整体主题：${videoAnalysis.overallTheme}` : '',
+          videoAnalysis.titleClues.length ? `标题线索：${videoAnalysis.titleClues.join('、')}` : '',
+          videoAnalysis.repeatedSignals.length ? `重复信号：${videoAnalysis.repeatedSignals.join('、')}` : '',
+          videoAnalysis.strongEvidence.length ? `强证据：${videoAnalysis.strongEvidence.join('、')}` : '',
+          videoAnalysis.timeline.length
+            ? `时间线：${videoAnalysis.timeline.map((item) => `${item.time || '时间未标注'} ${item.summary || '无描述'}`).join('；')}`
+            : '',
+          videoAnalysis.uncertainPoints.length ? `不确定点：${videoAnalysis.uncertainPoints.join('、')}` : ''
+        ]
+      });
 
       await reportProgress('正在分析成品标签', { stageLabel: '候选分析' });
       const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags), cancelCheck);
@@ -5696,6 +5739,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           : '当前没有候选标签需要验证',
         {
           stageLabel: '搜索验证',
+          logLines: [
+            firstSummary ? `候选判断：${firstSummary}` : '',
+            wrongTags.length ? `初判错打标签：${wrongTags.join('、')}` : '初判错打标签：无',
+            missingCandidates.length ? `候选补打标签：${missingCandidates.join('、')}` : '候选补打标签：无'
+          ],
           validatedCandidates: searchCandidates.map((item) => ({
             keyword: item.keyword,
             searchReason: item.reason,
@@ -5730,6 +5778,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             reason: '',
             matchedOption: null
           }))
+        });
+        await reportProgress(`候选标签 ${candidate.keyword} 检索完成`, {
+          stageLabel: '搜索验证',
+          logLines: [
+            candidate.reason ? `发起搜索：${candidate.reason}` : '',
+            `搜索结果：${options.map((option) => formatTagDetailForDisplay(option)).join('；') || '页面无结果'}`
+          ]
         });
       }
 
@@ -5772,6 +5827,32 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         finalReason,
         problemText,
         stageLabel: '已完成'
+      });
+      await reportProgress('最终结论已生成，正在整理结果', {
+        stageLabel: '生成结论',
+        logLines: [
+          evidenceSummary ? `证据摘要：${evidenceSummary.replace(/\n+/g, '；')}` : '',
+          validatedCandidates.length
+            ? `候选结论：${validatedCandidates.map((item) => {
+              const resultLabel = item.accepted === true ? '采纳' : item.accepted === false ? '放弃' : '待定';
+              const parts = [`${item.keyword}(${resultLabel})`];
+              if (item.reason) {
+                parts.push(item.reason);
+              }
+              if (item.matchedOption) {
+                parts.push(`采纳结果 ${formatTagDetailForDisplay(item.matchedOption)}`);
+              }
+              return parts.join('，');
+            }).join('；')}`
+            : '候选结论：无',
+          rejectedCandidates.length
+            ? `放弃候选：${rejectedCandidates.map((item) => `${item.keyword}（${item.reason || '暂无说明'}）`).join('；')}`
+            : '放弃候选：无',
+          finalWrongTags.length ? `最终错打标签：${finalWrongTags.join('、')}` : '最终错打标签：无',
+          missingTagsActionable.length ? `最终补打标签：${missingTagsActionable.join('、')}` : '最终补打标签：无',
+          problemText ? `落表问题：${problemText}` : '落表问题：无',
+          finalReason ? `最终说明：${finalReason}` : ''
+        ]
       });
 
       responsePayload = {
@@ -6059,17 +6140,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             </div>
             <div class="ysp-daily-panel__side">
               <div class="ysp-daily-panel__status" data-role="status"></div>
-              <div class="ysp-daily-panel__result-card">
-                <div class="ysp-daily-panel__toolbar">
-                  <span class="ysp-daily-panel__label">下载中心</span>
-                </div>
-                <div class="ysp-daily-panel__download-list" data-role="downloads"></div>
-              </div>
               <div class="ysp-daily-panel__log-card">
                 <div class="ysp-daily-panel__toolbar">
                   <span class="ysp-daily-panel__label">运行日志</span>
                 </div>
                 <div class="ysp-daily-panel__log-list" data-role="logs"></div>
+              </div>
+              <div class="ysp-daily-panel__result-card" data-role="downloads-card" hidden>
+                <div class="ysp-daily-panel__toolbar">
+                  <span class="ysp-daily-panel__label">下载中心</span>
+                </div>
+                <div class="ysp-daily-panel__download-list" data-role="downloads"></div>
               </div>
               <div class="ysp-daily-panel__actions">
                 <button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button>
@@ -6128,6 +6209,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         stop: root.querySelector('[data-role="stop"]'),
         clearData: root.querySelector('[data-role="clear-data"]'),
         status: root.querySelector('[data-role="status"]'),
+        downloadsCard: root.querySelector('[data-role="downloads-card"]'),
         downloads: root.querySelector('[data-role="downloads"]'),
         logs: root.querySelector('[data-role="logs"]')
       };
@@ -6657,7 +6739,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           </div>
         `);
       }
-      this.refs.downloads.innerHTML = cards.length ? cards.join('') : '<div class="ysp-daily-panel__report-empty">暂无结果</div>';
+      this.refs.downloadsCard.hidden = !cards.length;
+      this.refs.downloads.innerHTML = cards.join('');
     }
 
     renderLogs() {
@@ -7455,11 +7538,20 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           WORKER_RESPONSE_TIMEOUT,
           (progress) => {
             const progressText = normalizeText(progress && progress.text);
-            if (!progressText || progressText === lastProgressText) {
+            const progressLogLines = normalizeProgressLogLines(progress && progress.logLines);
+            const signature = JSON.stringify([progressText, progressLogLines]);
+            if (!progressText && !progressLogLines.length) {
               return;
             }
-            lastProgressText = progressText;
-            this.pushLog(`${row.taskId}：${progressText}`);
+            if (signature === lastProgressText) {
+              return;
+            }
+            lastProgressText = signature;
+            const lines = [progressText, ...progressLogLines].filter(Boolean);
+            const uniqueLines = lines.filter((line, index) => lines.indexOf(line) === index);
+            uniqueLines.forEach((line) => {
+              this.pushLog(`${row.taskId}：${line}`);
+            });
           },
           activeCancelCheck
         );
