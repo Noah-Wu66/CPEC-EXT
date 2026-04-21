@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.55
+// @version      2.1.56
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -4430,6 +4430,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             <div class="ysp-daily-worker-badge__final-value">${escapeXml(
               state.skipReason === 'long_video'
                 ? `长视频跳过（超过 ${formatDurationSeconds(MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS)}）`
+                : state.skipReason === 'content_inspection_failed'
+                  ? '内容风控跳过'
                 : state.problemText || state.finalReason || '当前不需要补打'
             )}</div>
           </div>
@@ -5371,22 +5373,71 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await reportProgress(`视频地址已获取：${videoUrl}`, { stageLabel: '获取视频地址' });
 
       await reportProgress('正在理解视频内容', { stageLabel: '视频理解' });
-      const videoSummaryRaw = await requestOmniVideoSummaryByMode(
-        apiKey,
-        videoUrl,
-        buildOmniVideoSummaryPrompt(titleText),
-        durationSeconds,
-        modelMode,
-        cancelCheck,
-        async (modelName) => {
-          await reportProgress(
-            modelName === OMNI_VIDEO_FALLBACK_MODEL
-              ? '自适应模式选择专业模型'
-              : '自适应模式选择快速模型',
-            { stageLabel: '视频理解' }
-          );
+      let videoSummaryRaw = '';
+      try {
+        videoSummaryRaw = await requestOmniVideoSummaryByMode(
+          apiKey,
+          videoUrl,
+          buildOmniVideoSummaryPrompt(titleText),
+          durationSeconds,
+          modelMode,
+          cancelCheck,
+          async (modelName) => {
+            await reportProgress(
+              modelName === OMNI_VIDEO_FALLBACK_MODEL
+                ? '自适应模式选择专业模型'
+                : '自适应模式选择快速模型',
+              { stageLabel: '视频理解' }
+            );
+          }
+        );
+      } catch (error) {
+        const videoInspectionMessage = normalizeText(error && error.message ? error.message : String(error));
+        if (!isDashscopeVideoInspectionErrorMessage(videoInspectionMessage)) {
+          throw error;
         }
-      );
+        const finalReason = '视频触发模型内容风控，当前条目已跳过';
+        const evidenceSummary = `模型返回：${videoInspectionMessage || '视频内容触发风控拦截'}`;
+        await reportProgress('视频触发内容风控，当前条目已跳过', {
+          stageLabel: '视频理解',
+          finalReason,
+          skipReason: 'content_inspection_failed',
+          evidenceSummary,
+          problemText: '',
+          missingCandidates: [],
+          validatedCandidates: [],
+          rejectedCandidates: [],
+          logLines: [
+            `最终说明：${finalReason}`,
+            `证据摘要：${evidenceSummary}`
+          ]
+        });
+        responsePayload = {
+          status: 'completed',
+          requestId,
+          taskId: listVid,
+          videoVid,
+          videoUrl,
+          needRecord: false,
+          problemText: '',
+          missingTagsActionable: [],
+          selectedTags,
+          searchResults: [],
+          summary: '',
+          durationSeconds,
+          titleText,
+          videoSummary: '',
+          evidenceSummary,
+          validatedCandidates: [],
+          rejectedCandidates: [],
+          finalReason,
+          skipped: true,
+          skipReason: 'content_inspection_failed',
+          completedAt: new Date().toISOString()
+        };
+        await reportProgress('风控跳过完成，正在返回结果', { stageLabel: '已完成' });
+        return;
+      }
       const videoAnalysis = normalizeOmniVideoAnalysis(parseModelJsonObject(videoSummaryRaw, '视频理解'));
       const videoSummary = formatOmniVideoAnalysisForPrompt(videoAnalysis);
       const baseEvidenceSummary = [
@@ -5596,6 +5647,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       unmountWorkerBadge();
       await closeCurrentWorkerPage();
     }
+  }
+
+  function isDashscopeVideoInspectionErrorMessage(message) {
+    const normalized = normalizeText(message).toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+    return normalized.includes('internalerror.algo.datainspectionfailed')
+      || normalized.includes('input video data may contain inappropriate content')
+      || normalized.includes('视频数据可能包含不适宜内容')
+      || normalized.includes('视频内容可能包含不适宜内容');
   }
 
   function advanceDailyCheckpointCursor(checkpoint, itemCount) {
@@ -7461,6 +7523,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         this.pushLog(
           `${row.taskId}：快速模式跳过${response.durationSeconds ? `（${formatDurationSeconds(response.durationSeconds)}）` : ''}`
         );
+        return;
+      }
+      if (response.skipped && response.skipReason === 'content_inspection_failed') {
+        this.pushLog(`${row.taskId}：视频触发内容风控，已跳过`);
         return;
       }
 
