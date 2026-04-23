@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.61
+// @version      2.1.62
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -7273,8 +7273,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const startDate = normalizeText(this.settings.secondaryQc.startDate);
       const endDate = normalizeText(this.settings.secondaryQc.endDate);
       const targetCount = normalizePositiveInteger(this.settings.secondaryQc.targetCount, 10, 1, 999);
+      const parallelCountInputValue = this.refs.secondaryQcParallelCount
+        ? this.refs.secondaryQcParallelCount.value
+        : this.settings.secondaryQc.parallelCount;
       const parallelCount = normalizeSecondaryQcParallelCount(
-        this.settings.secondaryQc.parallelCount,
+        parallelCountInputValue,
         SECONDARY_QC_DEFAULT_PARALLEL_COUNT
       );
       const maxDate = getTodayDateString();
@@ -7299,6 +7302,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (!apiKey) {
         throw new Error('请先在设置里填写 DASHSCOPE_API_KEY');
       }
+      this.settings.secondaryQc.parallelCount = parallelCount;
+      if (this.refs.secondaryQcParallelCount) {
+        this.refs.secondaryQcParallelCount.value = String(parallelCount);
+      }
+      await this.persistSettings();
 
       this.runtime.running = true;
       this.runtime.jobType = 'secondaryQc';
