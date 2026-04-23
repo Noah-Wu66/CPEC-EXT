@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.59
+// @version      2.1.61
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -3286,7 +3286,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       return {
         vid: row.vid || '',
         time: `${hh}:${mm}`,
-        problem: row.problem || '',
+        missingTags: row.missingTags || '',
         standardOperator: row.standardOperator || '',
         qcOperator: row.qcOperator || ''
       };
@@ -3301,7 +3301,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         columns: [
           { key: 'vid', label: 'vid', width: 16 },
           { key: 'time', label: '时间', width: 12 },
-          { key: 'problem', label: '问题', width: 34 },
+          { key: 'missingTags', label: '漏打标签', width: 34 },
           { key: 'standardOperator', label: '标准化操作人', width: 18 },
           { key: 'qcOperator', label: '质检人', width: 16 }
         ],
@@ -4119,7 +4119,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       return null;
     }
     const vid = normalizeText(row.vid);
-    const problem = normalizeText(row.problem);
+    const missingTags = normalizeText(row.missingTags);
     const standardOperator = normalizeText(row.standardOperator);
     const qcOperator = normalizeText(row.qcOperator);
     const itemKey = normalizeText(row.itemKey);
@@ -4128,7 +4128,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
     return {
       vid,
-      problem,
+      missingTags,
       standardOperator,
       qcOperator,
       itemKey
@@ -4241,7 +4241,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           return {
             vid,
             time: normalizeText(row.time),
-            problem: normalizeText(row.problem),
+            missingTags: normalizeText(row.missingTags),
             standardOperator: normalizeText(row.standardOperator),
             qcOperator: normalizeText(row.qcOperator)
           };
@@ -4343,6 +4343,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       );
     }
     return [];
+  }
+
+  function buildMissingTagRecordText(tags) {
+    const normalizedTags = normalizeTagArray(tags);
+    return normalizedTags.join('、');
   }
 
   function normalizeTextArray(value) {
@@ -4816,15 +4821,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       '这一步是最后落表结论，本次任务只做补打，不做错打筛查。',
       '你现在拿到了标题、视频理解结果、当前已选成品标签完整信息、第一轮搜索计划，以及候选标签在系统中的真实搜索结果。',
       '规则：',
-      '1. need_record 必须由你独立判断。只有真正需要落到二次质检表里时才返回 true，否则 false。',
-      '2. missing_tags_actionable 只保留“页面真实搜得到”且“确实应该补打”的重要标签。',
-      '3. candidate_decisions 必须覆盖每一个已搜索的候选标签，每个候选只出现一次，accepted 表示最终是否采纳，reason 必须说明原因。',
-      '4. 如果 accepted 为 true，请尽量在 candidate_decisions 里补充 matched_option_id、matched_option_name、matched_option_type、matched_option_remark，指出你最终采纳的是哪一个搜索结果。',
-      '5. evidence_summary 要概括真正支持结论的强证据，重点看标题、主题、反复出现的信息、画面与口播共同支持的点。',
-      '6. final_reason 用一句中文说明为什么最终落到这个结论。',
-      '7. problem_text 只有在 need_record 为 true 时才输出，格式只允许是“补打XX、YY”；如果不需要记录，返回空字符串。',
-      '8. 单次擦边出现、弱相关、没有反复支撑、不是主题核心的标签，一律不要补。',
-      '9. 只能返回 JSON，不要返回其他文字。',
+      '1. missing_tags_actionable 只保留“页面真实搜得到”且“确实应该补打”的重要标签。',
+      '2. candidate_decisions 必须覆盖每一个已搜索的候选标签，每个候选只出现一次，accepted 表示最终是否采纳，reason 必须说明原因。',
+      '3. 如果 accepted 为 true，请尽量在 candidate_decisions 里补充 matched_option_id、matched_option_name、matched_option_type、matched_option_remark，指出你最终采纳的是哪一个搜索结果。',
+      '4. evidence_summary 要概括真正支持结论的强证据，重点看标题、主题、反复出现的信息、画面与口播共同支持的点。',
+      '5. final_reason 用一句中文说明为什么最终落到这个结论。',
+      '6. 单次擦边出现、弱相关、没有反复支撑、不是主题核心的标签，一律不要补。',
+      '7. 只能返回 JSON，不要返回其他文字。',
       '',
       `标题：${normalizeText(titleText) || '无'}`,
       `视频理解结果：${videoSummary}`,
@@ -4833,7 +4836,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       `候选标签真实搜索结果：${JSON.stringify(searchResults || [])}`,
       '',
       '输出格式：',
-      '{"need_record":false,"missing_tags_actionable":[],"candidate_decisions":[{"keyword":"","accepted":false,"reason":"","matched_option_id":"","matched_option_name":"","matched_option_type":"","matched_option_remark":""}],"evidence_summary":"","final_reason":"","problem_text":""}'
+      '{"missing_tags_actionable":[],"candidate_decisions":[{"keyword":"","accepted":false,"reason":"","matched_option_id":"","matched_option_name":"","matched_option_type":"","matched_option_remark":""}],"evidence_summary":"","final_reason":""}'
     ].join('\n');
   }
 
@@ -4982,7 +4985,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           finalReason,
           skipReason: 'long_video',
           evidenceSummary: '当前视频超过 5 分钟，按质检规则直接跳过，不进入视频理解模型。',
-          problemText: '',
           missingCandidates: [],
           validatedCandidates: [],
           rejectedCandidates: [],
@@ -5008,7 +5010,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           finalReason,
           skipReason: 'flash_model_limit',
           evidenceSummary: '当前选择快速模式，视频超过 150 秒，不进入视频理解模型。',
-          problemText: '',
           missingCandidates: [],
           validatedCandidates: [],
           rejectedCandidates: [],
@@ -5071,7 +5072,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           finalReason,
           skipReason: 'content_inspection_failed',
           evidenceSummary,
-          problemText: '',
           missingCandidates: [],
           validatedCandidates: [],
           rejectedCandidates: [],
@@ -5182,7 +5182,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         cancelCheck
       );
       const finalJudge = parseModelJsonObject(finalJudgeRaw, '最终结论');
-      const needRecord = normalizeBooleanFlag(finalJudge.need_record);
       const missingTagsActionable = normalizeTagArray(finalJudge.missing_tags_actionable);
       const candidateDecisions = normalizeCandidateDecisionArray(finalJudge.candidate_decisions);
       const validatedCandidates = buildValidatedCandidates(searchResults, candidateDecisions);
@@ -5194,7 +5193,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         }));
       const evidenceSummary = normalizeText(finalJudge.evidence_summary) || [firstSummary, baseEvidenceSummary].filter(Boolean).join('\n');
       const finalReason = normalizeText(finalJudge.final_reason) || firstSummary;
-      const problemText = normalizeText(finalJudge.problem_text);
+      const missingTagsText = buildMissingTagRecordText(missingTagsActionable);
       await reportProgress('最终结论已生成，正在整理结果', {
         stageLabel: '生成结论',
         logLines: [
@@ -5216,15 +5215,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             ? `放弃候选：${rejectedCandidates.map((item) => `${item.keyword}（${item.reason || '暂无说明'}）`).join('；')}`
             : '放弃候选：无',
           missingTagsActionable.length ? `最终补打标签：${missingTagsActionable.join('、')}` : '最终补打标签：无',
-          problemText ? `落表问题：${problemText}` : '落表问题：无',
+          missingTagsText ? `落表漏打标签：${missingTagsText}` : '落表漏打标签：无',
           finalReason ? `最终说明：${finalReason}` : ''
         ]
       });
 
       responsePayload = {
         status: 'completed',
-        needRecord,
-        problemText
+        missingTagsActionable
       };
       await reportProgress('处理完成，正在返回结果', { stageLabel: '已完成' });
     } catch (error) {
@@ -6839,15 +6837,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         return;
       }
 
-      const needRecord = normalizeBooleanFlag(response.needRecord);
-      const problemText = normalizeText(response.problemText);
-      if (!needRecord) {
-        this.pushLog(`${row.taskId}：不需要补打`);
+      const missingTagsActionable = normalizeTagArray(response.missingTagsActionable);
+      if (!missingTagsActionable.length) {
+        this.pushLog(`${row.taskId}：未发现漏打标签`);
         return;
       }
-      if (!problemText) {
-        throw new Error(prefixTaskError(row.taskId, '模型判定需要记录，但未返回问题文本'));
-      }
+      const missingTagsText = buildMissingTagRecordText(missingTagsActionable);
 
       const itemTargetCount = checkpoint.itemTargetCounts[itemIndex] || 0;
       const itemRecordedCount = checkpoint.itemRecordedCounts[itemIndex] || 0;
@@ -6858,14 +6853,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       checkpoint.rows.push({
         vid: row.taskId,
-        problem: problemText,
+        missingTags: missingTagsText,
         standardOperator: row.standardOperator,
         qcOperator: checkpoint.qcOperator,
         itemKey: descriptor.itemKey
       });
       checkpoint.itemRecordedCounts[itemIndex] = itemRecordedCount + 1;
       this.pushLog(
-        `${row.taskId}：已记录问题 ${problemText}（${checkpoint.itemRecordedCounts[itemIndex]}/${itemTargetCount}）`
+        `${row.taskId}：已记录漏打标签 ${missingTagsText}（${checkpoint.itemRecordedCounts[itemIndex]}/${itemTargetCount}）`
       );
     }
 
