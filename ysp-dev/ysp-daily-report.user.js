@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化工作台
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.57
+// @version      2.1.59
 // @description  在标准化系统页面执行日报采集与二次质检，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1117,199 +1117,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   min-width: 92px;
 }
 
-.ysp-daily-worker-badge {
-  position: fixed;
-  top: 18px;
-  right: 18px;
-  z-index: 2147483647;
-  width: min(420px, calc(100vw - 24px));
-  max-height: calc(100vh - 36px);
-  overflow: hidden;
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(13, 31, 49, 0.98), rgba(18, 45, 70, 0.96));
-  color: #f7fbff;
-  border: 1px solid rgba(153, 198, 240, 0.22);
-  box-shadow: 0 22px 50px rgba(8, 20, 32, 0.34);
-  backdrop-filter: blur(16px);
-}
-
-.ysp-daily-worker-badge__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid rgba(197, 220, 244, 0.14);
-}
-
-.ysp-daily-worker-badge__title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.ysp-daily-worker-badge__subtitle {
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: rgba(227, 240, 252, 0.78);
-}
-
-.ysp-daily-worker-badge__stage {
-  flex-shrink: 0;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(120, 185, 255, 0.16);
-  border: 1px solid rgba(153, 205, 255, 0.18);
-  font-size: 11px;
-  font-weight: 700;
-  color: #d8eeff;
-}
-
-.ysp-daily-worker-badge__body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px 14px;
-  overflow-y: auto;
-  max-height: calc(100vh - 110px);
-}
-
-.ysp-daily-worker-badge__section {
-  padding: 12px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(194, 222, 246, 0.12);
-}
-
-.ysp-daily-worker-badge__section-title {
-  margin: 0 0 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #d9ecff;
-}
-
-.ysp-daily-worker-badge__meta {
-  display: grid;
-  grid-template-columns: 88px 1fr;
-  gap: 8px 10px;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.ysp-daily-worker-badge__meta dt {
-  margin: 0;
-  color: rgba(215, 232, 247, 0.66);
-}
-
-.ysp-daily-worker-badge__meta dd {
-  margin: 0;
-  color: #f7fbff;
-  word-break: break-word;
-}
-
-.ysp-daily-worker-badge__text {
-  font-size: 12px;
-  line-height: 1.7;
-  color: #f4f9ff;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.ysp-daily-worker-badge__empty {
-  font-size: 12px;
-  line-height: 1.6;
-  color: rgba(219, 236, 251, 0.56);
-}
-
-.ysp-daily-worker-badge__list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ysp-daily-worker-badge__item {
-  padding: 9px 10px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(198, 226, 248, 0.1);
-  font-size: 12px;
-  line-height: 1.6;
-  color: #f7fbff;
-  word-break: break-word;
-}
-
-.ysp-daily-worker-badge__item-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 3px;
-}
-
-.ysp-daily-worker-badge__item-label {
-  font-weight: 700;
-}
-
-.ysp-daily-worker-badge__item-badge {
-  flex-shrink: 0;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.ysp-daily-worker-badge__item-badge.is-accepted {
-  background: rgba(78, 201, 134, 0.18);
-  color: #9af0b8;
-}
-
-.ysp-daily-worker-badge__item-badge.is-rejected {
-  background: rgba(255, 167, 38, 0.18);
-  color: #ffd79c;
-}
-
-.ysp-daily-worker-badge__item-subtext {
-  margin-top: 4px;
-  color: rgba(226, 239, 252, 0.72);
-}
-
-.ysp-daily-worker-badge__timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ysp-daily-worker-badge__timeline-entry {
-  padding-left: 11px;
-  border-left: 2px solid rgba(118, 183, 250, 0.32);
-  font-size: 12px;
-  line-height: 1.55;
-  color: rgba(239, 247, 255, 0.86);
-}
-
-.ysp-daily-worker-badge__final {
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(111, 183, 255, 0.1);
-  border: 1px solid rgba(158, 208, 255, 0.16);
-}
-
-.ysp-daily-worker-badge__final-label {
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #d8eeff;
-}
-
-.ysp-daily-worker-badge__final-value {
-  font-size: 13px;
-  line-height: 1.7;
-  color: #ffffff;
-}
-
 @media (max-width: 920px) {
   .ysp-daily-panel__field-grid,
   .ysp-daily-panel__group-grid {
@@ -1318,17 +1125,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   .ysp-daily-panel__button-row {
     flex-direction: column;
-  }
-
-  .ysp-daily-worker-badge {
-    top: 10px;
-    right: 10px;
-    width: calc(100vw - 20px);
-    max-height: calc(100vh - 20px);
-  }
-
-  .ysp-daily-worker-badge__body {
-    max-height: calc(100vh - 94px);
   }
 }
   `;
@@ -3156,7 +2952,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
     await storageSetCached({
       [buildSecondaryQcWorkerProgressKey(normalizedRequestId)]: {
-        requestId: normalizedRequestId,
         text: normalizedText,
         logLines,
         updatedAt: new Date().toISOString()
@@ -3170,10 +2965,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       return;
     }
     await storageSetCached({
-      [buildSecondaryQcWorkerStopKey(normalizedRequestId)]: {
-        requestId: normalizedRequestId,
-        stoppedAt: new Date().toISOString()
-      }
+      [buildSecondaryQcWorkerStopKey(normalizedRequestId)]: { stopped: true }
     });
   }
 
@@ -4322,214 +4114,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     await sleep(600);
   }
 
-  function createWorkerBadgeState() {
-    return {
-      stageLabel: '准备中',
-      statusText: '',
-      taskId: '',
-      videoVid: '',
-      titleText: '',
-      durationSeconds: 0,
-      evidenceSummary: '',
-      videoSummary: '',
-      missingCandidates: [],
-      validatedCandidates: [],
-      rejectedCandidates: [],
-      finalReason: '',
-      problemText: '',
-      skipReason: '',
-      timeline: []
-    };
-  }
-
-  function mergeWorkerBadgeState(state, patch) {
-    const target = state || createWorkerBadgeState();
-    if (!patch || typeof patch !== 'object') {
-      return target;
-    }
-    const keys = [
-      'stageLabel',
-      'statusText',
-      'taskId',
-      'videoVid',
-      'titleText',
-      'durationSeconds',
-      'evidenceSummary',
-      'videoSummary',
-      'finalReason',
-      'problemText',
-      'skipReason'
-    ];
-    keys.forEach((key) => {
-      if (Object.prototype.hasOwnProperty.call(patch, key)) {
-        target[key] = patch[key];
-      }
-    });
-    if (Object.prototype.hasOwnProperty.call(patch, 'missingCandidates')) {
-      target.missingCandidates = normalizeTagArray(patch.missingCandidates);
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, 'validatedCandidates')) {
-      target.validatedCandidates = Array.isArray(patch.validatedCandidates) ? patch.validatedCandidates : [];
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, 'rejectedCandidates')) {
-      target.rejectedCandidates = Array.isArray(patch.rejectedCandidates) ? patch.rejectedCandidates : [];
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, 'timeline')) {
-      target.timeline = Array.isArray(patch.timeline) ? patch.timeline.slice(0, 8) : [];
-    }
-    return target;
-  }
-
-  function pushWorkerBadgeTimeline(state, text) {
-    const entry = normalizeText(text);
-    if (!entry) {
-      return;
-    }
-    if (state.timeline[0] === entry) {
-      return;
-    }
-    state.timeline.unshift(entry);
-    state.timeline = state.timeline.slice(0, 8);
-  }
-
-  function renderWorkerBadgeCandidateList(items, emptyText) {
-    if (!Array.isArray(items) || !items.length) {
-      return `<div class="ysp-daily-worker-badge__empty">${escapeXml(emptyText)}</div>`;
-    }
-    return `
-      <div class="ysp-daily-worker-badge__list">
-        ${items.map((item) => {
-          const options = normalizeTagDetailArray(item && item.options).map((option) => formatTagDetailForDisplay(option));
-          const accepted = item && item.accepted === true;
-          const rejected = item && item.accepted === false;
-          const badgeClass = accepted ? 'is-accepted' : rejected ? 'is-rejected' : '';
-          const badgeText = accepted ? '采纳' : rejected ? '放弃' : '待判定';
-          const reason = normalizeText(item && item.reason);
-          const searchReason = normalizeText(item && item.searchReason);
-          const matchedOption = formatTagDetailForDisplay(item && item.matchedOption);
-          return `
-            <div class="ysp-daily-worker-badge__item">
-              <div class="ysp-daily-worker-badge__item-title">
-                <span class="ysp-daily-worker-badge__item-label">${escapeXml(normalizeText(item && item.keyword) || '未命名候选')}</span>
-                <span class="ysp-daily-worker-badge__item-badge ${badgeClass}">${badgeText}</span>
-              </div>
-              <div>${escapeXml(reason || '暂无说明')}</div>
-              ${searchReason ? `<div class="ysp-daily-worker-badge__item-subtext">发起搜索：${escapeXml(searchReason)}</div>` : ''}
-              <div class="ysp-daily-worker-badge__item-subtext">搜索结果：${escapeXml(options.join('；') || '页面无结果')}</div>
-              ${matchedOption ? `<div class="ysp-daily-worker-badge__item-subtext">采纳结果：${escapeXml(matchedOption)}</div>` : ''}
-            </div>
-          `;
-        }).join('')}
-      </div>
-    `;
-  }
-
-  function renderWorkerBadgeReasonList(items, emptyText) {
-    if (!Array.isArray(items) || !items.length) {
-      return `<div class="ysp-daily-worker-badge__empty">${escapeXml(emptyText)}</div>`;
-    }
-    return `
-      <div class="ysp-daily-worker-badge__list">
-        ${items.map((item) => `
-          <div class="ysp-daily-worker-badge__item">
-            <div class="ysp-daily-worker-badge__item-label">${escapeXml(normalizeText(item && item.keyword) || '未命名候选')}</div>
-            <div class="ysp-daily-worker-badge__item-subtext">${escapeXml(normalizeText(item && item.reason) || '暂无说明')}</div>
-          </div>
-        `).join('')}
-      </div>
-    `;
-  }
-
-  function mountWorkerBadge(stateOrText) {
-    let badge = document.getElementById('ysp-daily-worker-badge');
-    if (!badge) {
-      badge = document.createElement('div');
-      badge.id = 'ysp-daily-worker-badge';
-      badge.className = 'ysp-daily-worker-badge';
-      document.body.appendChild(badge);
-    }
-    const state = typeof stateOrText === 'string'
-      ? mergeWorkerBadgeState(createWorkerBadgeState(), { statusText: stateOrText })
-      : (stateOrText && typeof stateOrText === 'object' ? stateOrText : createWorkerBadgeState());
-    const subtitleParts = [];
-    if (state.taskId) {
-      subtitleParts.push(`任务 ${state.taskId}`);
-    }
-    if (state.durationSeconds > 0) {
-      subtitleParts.push(`时长 ${formatDurationSeconds(state.durationSeconds)}`);
-    }
-    badge.innerHTML = `
-      <div class="ysp-daily-worker-badge__header">
-        <div>
-          <div class="ysp-daily-worker-badge__title">二次质检决策过程</div>
-          <div class="ysp-daily-worker-badge__subtitle">${escapeXml(subtitleParts.join(' · ') || (state.statusText || '处理中'))}</div>
-        </div>
-        <div class="ysp-daily-worker-badge__stage">${escapeXml(state.stageLabel || '处理中')}</div>
-      </div>
-      <div class="ysp-daily-worker-badge__body">
-        <section class="ysp-daily-worker-badge__section">
-          <h3 class="ysp-daily-worker-badge__section-title">视频信息</h3>
-          <dl class="ysp-daily-worker-badge__meta">
-            <dt>任务 VID</dt>
-            <dd>${escapeXml(state.taskId || '未识别')}</dd>
-            <dt>顶部 VID</dt>
-            <dd>${escapeXml(state.videoVid || '未识别')}</dd>
-            <dt>标题</dt>
-            <dd>${escapeXml(state.titleText || '未读取到标题')}</dd>
-            <dt>时长</dt>
-            <dd>${escapeXml(formatDurationSeconds(state.durationSeconds) || '未读取到')}</dd>
-          </dl>
-        </section>
-        <section class="ysp-daily-worker-badge__section">
-          <h3 class="ysp-daily-worker-badge__section-title">过程</h3>
-          <div class="ysp-daily-worker-badge__timeline">
-            ${(state.timeline.length ? state.timeline : [state.statusText || '处理中']).map((entry) => `
-              <div class="ysp-daily-worker-badge__timeline-entry">${escapeXml(entry)}</div>
-            `).join('')}
-          </div>
-        </section>
-        <section class="ysp-daily-worker-badge__section">
-          <h3 class="ysp-daily-worker-badge__section-title">证据摘要</h3>
-          <div class="ysp-daily-worker-badge__text">${escapeXml(state.evidenceSummary || state.videoSummary || '模型证据尚未生成')}</div>
-        </section>
-        <section class="ysp-daily-worker-badge__section">
-          <h3 class="ysp-daily-worker-badge__section-title">候选补打标签</h3>
-          <div class="ysp-daily-worker-badge__text">${escapeXml(state.missingCandidates.join('、') || '当前没有候选补打标签')}</div>
-        </section>
-        <section class="ysp-daily-worker-badge__section">
-          <h3 class="ysp-daily-worker-badge__section-title">搜索验证</h3>
-          ${renderWorkerBadgeCandidateList(state.validatedCandidates, '候选标签尚未进入搜索验证')}
-        </section>
-        <section class="ysp-daily-worker-badge__section">
-          <h3 class="ysp-daily-worker-badge__section-title">放弃候选</h3>
-          ${renderWorkerBadgeReasonList(state.rejectedCandidates, '当前没有被放弃的候选')}
-        </section>
-        <section class="ysp-daily-worker-badge__section">
-          <h3 class="ysp-daily-worker-badge__section-title">最终结论</h3>
-          <div class="ysp-daily-worker-badge__final">
-            <div class="ysp-daily-worker-badge__final-label">结论</div>
-            <div class="ysp-daily-worker-badge__final-value">${escapeXml(
-              state.skipReason === 'long_video'
-                ? `长视频跳过（超过 ${formatDurationSeconds(MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS)}）`
-                : state.skipReason === 'content_inspection_failed'
-                  ? '内容风控跳过'
-                : state.problemText || state.finalReason || '当前不需要补打'
-            )}</div>
-          </div>
-          <div class="ysp-daily-worker-badge__text" style="margin-top: 10px;">${escapeXml(state.finalReason || '暂无最终说明')}</div>
-        </section>
-      </div>
-    `;
-    return badge;
-  }
-
-  function unmountWorkerBadge() {
-    const badge = document.getElementById('ysp-daily-worker-badge');
-    if (badge) {
-      badge.remove();
-    }
-  }
-
   function normalizeSecondaryQcDraftRow(row) {
     if (!row || typeof row !== 'object') {
       return null;
@@ -4743,7 +4327,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       qcOperator: normalizeText(checkpoint.qcOperator),
       status: normalizeText(checkpoint.status),
       statusText: normalizeText(checkpoint.statusText),
-      summaryText: normalizeText(checkpoint.summaryText),
       logs: Array.isArray(checkpoint.logs) ? checkpoint.logs.slice(0, MAX_LOGS) : [],
       startedAt: checkpoint.startedAt,
       updatedAt: checkpoint.updatedAt
@@ -5097,9 +4680,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await storageRemove(responseKey);
       await storageSetCached({
         [requestKey]: {
-          requestId,
-          videoVid: normalizedVid,
-          createdAt: new Date().toISOString()
+          videoVid: normalizedVid
         }
       });
       openUrlInNewTab(workerUrl);
@@ -5275,36 +4856,52 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const requestKey = buildSecondaryQcMediaWorkerRequestKey(requestId);
     const responseKey = buildSecondaryQcMediaWorkerResponseKey(requestId);
     let responsePayload = null;
-    try {
-      enforcePageMuted({ pausePlayback: false });
+    let requestCancelled = false;
+    let requestWatcher = 0;
+    const stopWatchingRequest = () => {
+      if (requestWatcher) {
+        window.clearInterval(requestWatcher);
+        requestWatcher = 0;
+      }
+    };
+    const syncRequestState = async () => {
       const requestState = await storageGet(requestKey);
       const request = requestState[requestKey];
-      if (!request || typeof request !== 'object') {
+      requestCancelled = !request || typeof request !== 'object';
+      if (requestCancelled) {
+        stopWatchingRequest();
+      }
+      return request;
+    };
+    const cancelCheck = () => requestCancelled;
+    try {
+      enforcePageMuted({ pausePlayback: false });
+      const request = await syncRequestState();
+      if (!request) {
         throw new Error('未找到视频地址任务上下文');
       }
+      requestWatcher = window.setInterval(() => {
+        syncRequestState().catch(() => undefined);
+      }, 250);
 
       const videoVid = normalizeText(request.videoVid || new URLSearchParams(location.search).get('vid'));
       if (!videoVid) {
         throw new Error('未提供视频 VID');
       }
 
-      const videoUrl = await waitForYangshipinDirectVideoUrl(videoVid);
+      const videoUrl = await waitForYangshipinDirectVideoUrl(videoVid, cancelCheck);
 
       responsePayload = {
         status: 'completed',
-        requestId,
-        videoVid,
-        videoUrl,
-        completedAt: new Date().toISOString()
+        videoUrl
       };
     } catch (error) {
       responsePayload = {
         status: 'error',
-        requestId,
-        error: error && error.message ? error.message : String(error),
-        completedAt: new Date().toISOString()
+        error: error && error.message ? error.message : String(error)
       };
     } finally {
+      stopWatchingRequest();
       const latestRequestState = await storageGet(requestKey);
       const latestRequest = latestRequestState[requestKey];
       if (!latestRequest || typeof latestRequest !== 'object') {
@@ -5323,19 +4920,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const requestKey = buildSecondaryQcWorkerRequestKey(requestId);
     const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
     const cancelCheck = () => JOB_ABORT_CONTROLLER.secondaryQcWorkerStopped;
-    const badgeState = createWorkerBadgeState();
-    const applyBadgeState = (patch) => {
-      mergeWorkerBadgeState(badgeState, patch);
-    };
     const reportProgress = async (text, patch) => {
       const nextPatch = patch && typeof patch === 'object' ? { ...patch } : {};
       const logLines = normalizeProgressLogLines(nextPatch.logLines);
-      delete nextPatch.logLines;
-      applyBadgeState({
-        statusText: text,
-        ...nextPatch
-      });
-      pushWorkerBadgeTimeline(badgeState, text);
       try {
         await updateSecondaryQcWorkerProgress(requestId, {
           text,
@@ -5362,7 +4949,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const modelMode = normalizeSecondaryQcModelMode(request.modelMode);
 
       const listVid = normalizeText(request.taskId || getDetailPageTaskId());
-      applyBadgeState({ taskId: listVid });
 
       await waitForDetailPageReady(cancelCheck);
       await waitForDetailAnalysisReady(listVid, cancelCheck);
@@ -5373,12 +4959,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const durationSeconds = await waitForDetailDurationSeconds(cancelCheck);
       const videoVid = getDetailVideoVid(listVid);
       const selectedTags = getDetailSelectedTagDetails();
-      applyBadgeState({
-        taskId: listVid,
-        videoVid,
-        titleText,
-        durationSeconds
-      });
       await reportProgress(
         durationSeconds > 0
           ? `已读取视频信息，时长 ${formatDurationSeconds(durationSeconds)}`
@@ -5413,26 +4993,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         });
         responsePayload = {
           status: 'completed',
-          requestId,
-          taskId: listVid,
-          videoVid,
-          videoUrl: '',
-          needRecord: false,
-          problemText: '',
-          missingTagsActionable: [],
-          selectedTags,
-          searchResults: [],
-          summary: '',
           durationSeconds,
-          titleText,
-          videoSummary: '',
-          evidenceSummary: '当前视频超过 5 分钟，按质检规则直接跳过，不进入视频理解模型。',
-          validatedCandidates: [],
-          rejectedCandidates: [],
-          finalReason,
           skipped: true,
-          skipReason: 'long_video',
-          completedAt: new Date().toISOString()
+          skipReason: 'long_video'
         };
         await reportProgress('长视频跳过完成，正在返回结果', { stageLabel: '已完成' });
         return;
@@ -5456,26 +5019,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         });
         responsePayload = {
           status: 'completed',
-          requestId,
-          taskId: listVid,
-          videoVid,
-          videoUrl: '',
-          needRecord: false,
-          problemText: '',
-          missingTagsActionable: [],
-          selectedTags,
-          searchResults: [],
-          summary: '',
           durationSeconds,
-          titleText,
-          videoSummary: '',
-          evidenceSummary: '当前选择快速模式，视频超过 150 秒，不进入视频理解模型。',
-          validatedCandidates: [],
-          rejectedCandidates: [],
-          finalReason,
           skipped: true,
-          skipReason: 'flash_model_limit',
-          completedAt: new Date().toISOString()
+          skipReason: 'flash_model_limit'
         };
         await reportProgress('快速模式跳过完成，正在返回结果', { stageLabel: '已完成' });
         return;
@@ -5536,26 +5082,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         });
         responsePayload = {
           status: 'completed',
-          requestId,
-          taskId: listVid,
-          videoVid,
-          videoUrl,
-          needRecord: false,
-          problemText: '',
-          missingTagsActionable: [],
-          selectedTags,
-          searchResults: [],
-          summary: '',
-          durationSeconds,
-          titleText,
-          videoSummary: '',
-          evidenceSummary,
-          validatedCandidates: [],
-          rejectedCandidates: [],
-          finalReason,
           skipped: true,
-          skipReason: 'content_inspection_failed',
-          completedAt: new Date().toISOString()
+          skipReason: 'content_inspection_failed'
         };
         await reportProgress('风控跳过完成，正在返回结果', { stageLabel: '已完成' });
         return;
@@ -5572,10 +5100,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           : '',
         videoAnalysis.uncertainPoints.length ? `不确定点：${videoAnalysis.uncertainPoints.join('、')}` : ''
       ].filter(Boolean).join('\n');
-      applyBadgeState({
-        videoSummary,
-        evidenceSummary: baseEvidenceSummary || videoSummary
-      });
       await ensureSecondaryQcWorkerNotStopped(requestId);
       await reportProgress('视频理解完成，正在整理证据', {
         stageLabel: '视频理解',
@@ -5597,10 +5121,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const searchCandidates = normalizeTagSearchCandidateArray(firstJudge.search_candidates);
       const missingCandidates = searchCandidates.map((item) => item.keyword);
       const firstSummary = normalizeText(firstJudge.summary);
-      applyBadgeState({
-        missingCandidates,
-        evidenceSummary: [firstSummary ? `候选判断：${firstSummary}` : '', baseEvidenceSummary].filter(Boolean).join('\n')
-      });
       await ensureSecondaryQcWorkerNotStopped(requestId);
 
       await reportProgress(
@@ -5636,17 +5156,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           keyword: candidate.keyword,
           reason: candidate.reason,
           options
-        });
-        applyBadgeState({
-          stageLabel: '搜索验证',
-          validatedCandidates: searchResults.map((item) => ({
-            keyword: item.keyword,
-            searchReason: item.reason,
-            options: item.options,
-            accepted: null,
-            reason: '',
-            matchedOption: null
-          }))
         });
         await reportProgress(`候选标签 ${candidate.keyword} 检索完成`, {
           stageLabel: '搜索验证',
@@ -5686,14 +5195,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const evidenceSummary = normalizeText(finalJudge.evidence_summary) || [firstSummary, baseEvidenceSummary].filter(Boolean).join('\n');
       const finalReason = normalizeText(finalJudge.final_reason) || firstSummary;
       const problemText = normalizeText(finalJudge.problem_text);
-      applyBadgeState({
-        validatedCandidates,
-        rejectedCandidates,
-        evidenceSummary,
-        finalReason,
-        problemText,
-        stageLabel: '已完成'
-      });
       await reportProgress('最终结论已生成，正在整理结果', {
         stageLabel: '生成结论',
         logLines: [
@@ -5722,36 +5223,15 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       responsePayload = {
         status: 'completed',
-        requestId,
-        taskId: listVid,
-        videoVid,
-        videoUrl,
         needRecord,
-        problemText,
-        missingTagsActionable,
-        wrongTags: [],
-        selectedTags,
-        searchResults,
-        summary: firstSummary,
-        durationSeconds,
-        titleText,
-        videoSummary,
-        evidenceSummary,
-        validatedCandidates,
-        rejectedCandidates,
-        finalReason,
-        skipped: false,
-        skipReason: '',
-        completedAt: new Date().toISOString()
+        problemText
       };
       await reportProgress('处理完成，正在返回结果', { stageLabel: '已完成' });
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
       responsePayload = {
         status: 'error',
-        requestId,
-        error: message,
-        completedAt: new Date().toISOString()
+        error: message
       };
     } finally {
       await storageSetCached({
@@ -5765,7 +5245,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       } catch (error) {
         // ignore
       }
-      unmountWorkerBadge();
       await closeCurrentWorkerPage();
     }
   }
@@ -6896,12 +6375,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       }
     }
 
-    updateCheckpointStatus(text, summaryText) {
+    updateCheckpointStatus(text) {
       const checkpoint = this.getActiveCheckpoint();
       this.runtime.statusText = text;
       if (checkpoint) {
         checkpoint.statusText = text;
-        checkpoint.summaryText = summaryText || checkpoint.summaryText || '';
       }
       this.renderStatus();
       void this.persistActiveCheckpoint().catch(() => {});
@@ -7110,6 +6588,20 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         .length;
     }
 
+    isSecondaryQcTargetReached(itemIndex, checkpoint) {
+      const activeCheckpoint = checkpoint || this.runtime.secondaryQc.checkpoint;
+      if (!activeCheckpoint) {
+        return false;
+      }
+      if (activeCheckpoint.rows.length >= activeCheckpoint.targetCount) {
+        return true;
+      }
+      if (!Number.isInteger(itemIndex) || itemIndex < 0) {
+        return false;
+      }
+      return (activeCheckpoint.itemRecordedCounts[itemIndex] || 0) >= (activeCheckpoint.itemTargetCounts[itemIndex] || 0);
+    }
+
     getSecondaryQcDispatchCapacity(itemIndex, checkpoint) {
       const activeCheckpoint = checkpoint || this.runtime.secondaryQc.checkpoint;
       if (!activeCheckpoint) {
@@ -7144,8 +6636,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const inflightCount = this.getSecondaryQcInflightEntries(checkpoint).length;
       const parallelCount = this.getSecondaryQcParallelCount(checkpoint);
       this.updateCheckpointStatus(
-        `正在质检 ${item.exportLabel}`,
-        `${itemIndex + 1}/${itemsLength} · 本品类 ${checkpoint.itemRecordedCounts[itemIndex] || 0}/${checkpoint.itemTargetCounts[itemIndex] || 0} · 进行中 ${inflightCount}/${parallelCount} · 总计 ${checkpoint.rows.length}/${checkpoint.targetCount}`
+        `正在质检 ${item.exportLabel}`
       );
     }
 
@@ -7167,6 +6658,41 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       for (const requestId of normalizedRequestIds) {
         await requestSecondaryQcWorkerStop(requestId);
       }
+    }
+
+    async cancelSecondaryQcInflightTasks(inflightTasks, reason, item, itemIndex) {
+      if (!(inflightTasks instanceof Map) || !inflightTasks.size) {
+        return [];
+      }
+      const normalizedReason = normalizeText(reason) || 'cancelled';
+      const requestIds = uniqueTextList(Array.from(inflightTasks.values()).map((descriptor) => {
+        if (!descriptor || !descriptor.requestId) {
+          return '';
+        }
+        descriptor.stopRequested = true;
+        return descriptor.requestId;
+      }));
+      if (!requestIds.length) {
+        inflightTasks.clear();
+        return [];
+      }
+      if (normalizedReason === 'quota_reached') {
+        const checkpoint = this.runtime.secondaryQc.checkpoint;
+        if (checkpoint && checkpoint.rows.length >= checkpoint.targetCount) {
+          this.pushLog(`总目标已满，已停止 ${requestIds.length} 个进行中的详情页`);
+        } else if (item && Number.isInteger(itemIndex) && itemIndex >= 0) {
+          this.pushLog(`${this.describeItem(item)}：已达到本品类目标，已停止 ${requestIds.length} 个进行中的详情页`);
+        }
+      }
+      await this.stopSecondaryQcRequests(requestIds);
+      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      if (checkpoint) {
+        checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint)
+          .filter((entry) => !requestIds.includes(entry.requestId));
+        await this.saveCheckpoint('secondaryQc');
+      }
+      inflightTasks.clear();
+      return requestIds;
     }
 
     async recoverSecondaryQcInflightState() {
@@ -7203,19 +6729,19 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         row,
         pageNumber,
         totalPages,
-        promise: null
+        promise: null,
+        stopRequested: false
       };
+      const taskCancelCheck = () => descriptor.stopRequested || activeCancelCheck();
 
       await storageRemove([responseKey, progressKey]);
       await storageSetCached({
         [requestKey]: {
-          requestId,
           apiKey,
           modelMode,
           taskId: row.taskId,
           standardOperator: row.standardOperator,
-          qcOperator: checkpoint.qcOperator,
-          createdAt: new Date().toISOString()
+          qcOperator: checkpoint.qcOperator
         }
       });
       checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint).concat({
@@ -7237,7 +6763,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             requestId,
             WORKER_RESPONSE_TIMEOUT,
             (progress) => {
-              if (this.isCurrentJobStopRequested()) {
+              if (descriptor.stopRequested || this.isCurrentJobStopRequested()) {
                 return;
               }
               const progressText = normalizeText(progress && progress.text);
@@ -7256,7 +6782,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
                 this.pushLog(`${row.taskId}：${line}`);
               });
             },
-            activeCancelCheck
+            taskCancelCheck
           );
         } catch (error) {
           const message = error && error.message ? error.message : String(error);
@@ -7345,26 +6871,49 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
     async handleSettledSecondaryQcTask(settled) {
       const checkpoint = this.runtime.secondaryQc.checkpoint;
-      const requestId = settled && settled.descriptor ? settled.descriptor.requestId : '';
+      const descriptor = settled && settled.descriptor ? settled.descriptor : null;
+      const requestId = descriptor ? descriptor.requestId : '';
+      const taskId = descriptor ? descriptor.taskId : '';
       if (checkpoint && requestId) {
         checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint)
           .filter((entry) => entry.requestId !== requestId);
       }
-      if (!settled || settled.status === 'rejected') {
+      if (!descriptor) {
         await this.saveCheckpoint('secondaryQc');
-        throw settled && settled.error ? settled.error : new Error('详情页处理失败');
+        return;
+      }
+      if (!settled || settled.status === 'rejected') {
+        const message = normalizeText(
+          settled && settled.error && settled.error.message
+            ? settled.error.message
+            : settled && settled.error
+              ? String(settled.error)
+              : '详情页处理失败'
+        );
+        if (message && message !== '采集已结束') {
+          this.pushLog(`${prefixTaskError(taskId, message)}，已跳过当前条目`);
+        }
+        await this.saveCheckpoint('secondaryQc');
+        return;
       }
 
-      await this.applySecondaryQcTaskResponse(settled.descriptor, settled.result && settled.result.response);
-      if (checkpoint && !checkpoint.processedTaskIds.includes(settled.descriptor.taskId)) {
-        checkpoint.processedTaskIds.push(settled.descriptor.taskId);
+      try {
+        await this.applySecondaryQcTaskResponse(descriptor, settled.result && settled.result.response);
+      } catch (error) {
+        const message = normalizeText(error && error.message ? error.message : String(error)) || '详情页处理失败';
+        this.pushLog(`${prefixTaskError(taskId, message)}，已跳过当前条目`);
+        await this.saveCheckpoint('secondaryQc');
+        return;
+      }
+      if (checkpoint && !checkpoint.processedTaskIds.includes(taskId)) {
+        checkpoint.processedTaskIds.push(taskId);
       }
       await this.saveCheckpoint('secondaryQc');
     }
 
     async waitForNextSecondaryQcTask(inflightTasks, item, itemIndex, itemsLength) {
       if (!inflightTasks.size) {
-        return null;
+        return;
       }
       const settled = await Promise.race(Array.from(inflightTasks.values()).map((descriptor) => descriptor.promise));
       inflightTasks.delete(settled.descriptor.requestId);
@@ -7375,34 +6924,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             .filter((entry) => entry.requestId !== settled.descriptor.requestId);
           await this.saveCheckpoint('secondaryQc');
         }
-        const remainingRequestIds = Array.from(inflightTasks.keys());
-        if (remainingRequestIds.length) {
-          await this.stopSecondaryQcRequests(remainingRequestIds);
-          if (checkpoint) {
-            checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint)
-              .filter((entry) => !remainingRequestIds.includes(entry.requestId));
-            await this.saveCheckpoint('secondaryQc');
-          }
-          inflightTasks.clear();
-        }
+        await this.cancelSecondaryQcInflightTasks(inflightTasks, 'manual_stop');
         throw new Error('采集已结束');
       }
       try {
         await this.handleSettledSecondaryQcTask(settled);
         this.updateSecondaryQcItemProgress(item, itemIndex, itemsLength);
-        return settled;
-      } catch (error) {
-        const remainingRequestIds = Array.from(inflightTasks.keys());
-        if (remainingRequestIds.length) {
-          await this.stopSecondaryQcRequests(remainingRequestIds);
-          const checkpoint = this.runtime.secondaryQc.checkpoint;
-          if (checkpoint) {
-            checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint)
-              .filter((entry) => !remainingRequestIds.includes(entry.requestId));
-            await this.saveCheckpoint('secondaryQc');
-          }
-          inflightTasks.clear();
+        if (this.isSecondaryQcTargetReached(itemIndex, this.runtime.secondaryQc.checkpoint)) {
+          await this.cancelSecondaryQcInflightTasks(inflightTasks, 'quota_reached', item, itemIndex);
         }
+      } catch (error) {
+        await this.cancelSecondaryQcInflightTasks(inflightTasks, 'fatal_error');
         throw error;
       }
     }
@@ -7440,15 +6972,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     async drainSecondaryQcInflightTasks(inflightTasks, item, itemIndex, itemsLength) {
+      if (this.isSecondaryQcTargetReached(itemIndex, this.runtime.secondaryQc.checkpoint)) {
+        await this.cancelSecondaryQcInflightTasks(inflightTasks, 'quota_reached', item, itemIndex);
+      }
       while (inflightTasks.size) {
         if (this.isCurrentJobStopRequested()) {
-          await this.stopSecondaryQcRequests(Array.from(inflightTasks.keys()));
-          const checkpoint = this.runtime.secondaryQc.checkpoint;
-          if (checkpoint) {
-            checkpoint.inflightEntries = [];
-            await this.saveCheckpoint('secondaryQc');
-          }
-          inflightTasks.clear();
+          await this.cancelSecondaryQcInflightTasks(inflightTasks, 'manual_stop');
           throw new Error('采集已结束');
         }
         await this.waitForNextSecondaryQcTask(inflightTasks, item, itemIndex, itemsLength);
@@ -7533,8 +7062,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         results: {},
         logs: [],
         startedAt: new Date().toISOString(),
-        statusText: '正在准备日报',
-        summaryText: ''
+        statusText: '正在准备日报'
       };
       this.render();
       await this.saveCheckpoint('daily');
@@ -7576,8 +7104,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             return this.runDailyFromCheckpoint(activeCancelCheck);
           }
           this.updateCheckpointStatus(
-            `正在继续 ${item.exportLabel}`,
-            `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 质检`
+            `正在继续 ${item.exportLabel}`
           );
           await this.runDailyQualityCheckForItem(currentDate, item, activeCancelCheck);
           advanceDailyCheckpointCursor(checkpoint, items.length);
@@ -7610,16 +7137,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
         checkpoint.phase = 'std';
         this.updateCheckpointStatus(
-          `正在采集 ${item.exportLabel}`,
-          `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 标准化`
+          `正在采集 ${item.exportLabel}`
         );
         await this.saveCheckpoint('daily');
         await this.runDailyStandardizationForItem(currentDate, item, activeCancelCheck);
 
         checkpoint.phase = 'resume-qc';
         this.updateCheckpointStatus(
-          `正在继续 ${item.exportLabel}`,
-          `${checkpoint.currentDateIndex + 1}/${dateList.length} · ${checkpoint.currentItemIndex + 1}/${items.length} · 下一步`
+          `正在继续 ${item.exportLabel}`
         );
         await this.saveCheckpoint('daily');
         this.pushLog(`${currentDate} ${this.describeItem(item)}：标准化已完成，正在继续质检`);
@@ -7805,8 +7330,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         qcOperator: getCurrentLoginName(),
         logs: [],
         startedAt: new Date().toISOString(),
-        statusText: '正在准备二次质检',
-        summaryText: ''
+        statusText: '正在准备二次质检'
       };
       this.render();
       await this.saveCheckpoint('secondaryQc');
