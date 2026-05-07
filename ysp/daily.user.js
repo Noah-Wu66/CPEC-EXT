@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频日报采集器
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.2.2
+// @version      2.3.1
 // @description  在标准化系统页面采集日报数据，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1268,12 +1268,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const STORAGE_KEYS = {
     settings: 'yspDailyReportSettingsV1',
     report: 'yspDailyReportReportV1',
-    resultCache: 'yspDailyReportResultCacheV1',
-    checkpoint: 'yspDailyReportCheckpointV1'
+    resultCache: 'yspDailyReportApiResultCacheV1',
+    checkpoint: 'yspDailyReportApiCheckpointV1'
   };
   const MAX_LOGS = 200;
-  const QUERY_TIMEOUT = 90000;
-  const PAGE_READY_TIMEOUT = 60000;
+  const API_ENDPOINTS = {
+    categoryList: '/api/category/category/list',
+    taskList: '/api/api/task/list/std'
+  };
 
   function createDefaultWorkbenchSettings() {
     return {
@@ -1322,15 +1324,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  const PAGE_MUTE_CONTROLLER = {
-    active: false,
-    pausePlayback: false,
-    observer: null,
-    mediaStates: new Map(),
-    mediaHandlers: new Map(),
-    mediaPlayGuards: new Map()
-  };
-
   const JOB_ABORT_CONTROLLER = {
     listJobGeneration: 0,
     listJobStoppedGeneration: 0
@@ -1351,134 +1344,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return normalizedToken > 0 && JOB_ABORT_CONTROLLER.listJobStoppedGeneration >= normalizedToken;
   }
 
-  function getMediaElementsFromNode(node) {
-    if (!(node instanceof Element)) {
-      return [];
-    }
-    const result = [];
-    if (node instanceof HTMLMediaElement) {
-      result.push(node);
-    }
-    result.push(...Array.from(node.querySelectorAll('video, audio')));
-    return result;
-  }
-
-  function rememberMediaState(element) {
-    if (!PAGE_MUTE_CONTROLLER.mediaStates.has(element)) {
-      PAGE_MUTE_CONTROLLER.mediaStates.set(element, {
-        muted: Boolean(element.muted),
-        defaultMuted: Boolean(element.defaultMuted),
-        autoplay: Boolean(element.autoplay)
-      });
-    }
-  }
-
-  function attachMediaMuteGuard(element) {
-    if (PAGE_MUTE_CONTROLLER.mediaHandlers.has(element)) {
-      return;
-    }
-    const handler = () => {
-      if (PAGE_MUTE_CONTROLLER.active && !element.muted) {
-        element.muted = true;
-        element.defaultMuted = true;
-      }
-    };
-    element.addEventListener('volumechange', handler, true);
-    PAGE_MUTE_CONTROLLER.mediaHandlers.set(element, handler);
-  }
-
-  function attachMediaPauseGuard(element) {
-    if (PAGE_MUTE_CONTROLLER.mediaPlayGuards.has(element)) {
-      return;
-    }
-    const handler = () => {
-      if (!PAGE_MUTE_CONTROLLER.active || !PAGE_MUTE_CONTROLLER.pausePlayback) {
-        return;
-      }
-      if (!element.paused) {
-        try {
-          element.pause();
-        } catch (error) {
-          // ignore
-        }
-      }
-    };
-    element.addEventListener('play', handler, true);
-    element.addEventListener('playing', handler, true);
-    PAGE_MUTE_CONTROLLER.mediaPlayGuards.set(element, handler);
-  }
-
-  function muteMediaElement(element, pausePlayback) {
-    if (!(element instanceof HTMLMediaElement)) {
-      return;
-    }
-    rememberMediaState(element);
-    attachMediaMuteGuard(element);
-    if (pausePlayback) {
-      attachMediaPauseGuard(element);
-      element.autoplay = false;
-      try {
-        element.pause();
-      } catch (error) {
-        // ignore
-      }
-    }
-    element.defaultMuted = true;
-    element.muted = true;
-  }
-
-  function enforcePageMuted(options) {
-    const pausePlayback = Boolean(options && options.pausePlayback);
-    PAGE_MUTE_CONTROLLER.active = true;
-    PAGE_MUTE_CONTROLLER.pausePlayback = PAGE_MUTE_CONTROLLER.pausePlayback || pausePlayback;
-    Array.from(document.querySelectorAll('video, audio')).forEach((element) => {
-      muteMediaElement(element, PAGE_MUTE_CONTROLLER.pausePlayback);
-    });
-    if (!PAGE_MUTE_CONTROLLER.observer) {
-      PAGE_MUTE_CONTROLLER.observer = new MutationObserver((mutations) => {
-        if (!PAGE_MUTE_CONTROLLER.active) {
-          return;
-        }
-        mutations.forEach((mutation) => {
-          mutation.addedNodes.forEach((node) => {
-            getMediaElementsFromNode(node).forEach((element) => muteMediaElement(element, PAGE_MUTE_CONTROLLER.pausePlayback));
-          });
-        });
-      });
-      PAGE_MUTE_CONTROLLER.observer.observe(document.documentElement, {
-        childList: true,
-        subtree: true
-      });
-    }
-  }
-
-  function releasePageMuted() {
-    PAGE_MUTE_CONTROLLER.active = false;
-    PAGE_MUTE_CONTROLLER.pausePlayback = false;
-    if (PAGE_MUTE_CONTROLLER.observer) {
-      PAGE_MUTE_CONTROLLER.observer.disconnect();
-      PAGE_MUTE_CONTROLLER.observer = null;
-    }
-    PAGE_MUTE_CONTROLLER.mediaHandlers.forEach((handler, element) => {
-      element.removeEventListener('volumechange', handler, true);
-    });
-    PAGE_MUTE_CONTROLLER.mediaHandlers.clear();
-    PAGE_MUTE_CONTROLLER.mediaPlayGuards.forEach((handler, element) => {
-      element.removeEventListener('play', handler, true);
-      element.removeEventListener('playing', handler, true);
-    });
-    PAGE_MUTE_CONTROLLER.mediaPlayGuards.clear();
-    PAGE_MUTE_CONTROLLER.mediaStates.forEach((state, element) => {
-      if (!(element instanceof HTMLMediaElement)) {
-        return;
-      }
-      element.autoplay = Boolean(state.autoplay);
-      element.defaultMuted = Boolean(state.defaultMuted);
-      element.muted = Boolean(state.muted);
-    });
-    PAGE_MUTE_CONTROLLER.mediaStates.clear();
-  }
-
   function normalizeText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
   }
@@ -1490,17 +1355,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
-  }
-
-  function isVisible(element) {
-    if (!element || !element.isConnected) {
-      return false;
-    }
-    const style = window.getComputedStyle(element);
-    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
-      return false;
-    }
-    return element.getClientRects().length > 0;
   }
 
   function formatClock(value) {
@@ -1764,11 +1618,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     if (
       !checkpoint
       || typeof checkpoint !== 'object'
-      || checkpoint.version !== 4
+      || checkpoint.version !== 5
       || !normalizeText(checkpoint.startDate)
       || !normalizeText(checkpoint.endDate)
       || !normalizeText(checkpoint.status)
-      || !normalizeText(checkpoint.phase)
       || !normalizeText(checkpoint.startedAt)
       || !normalizeText(checkpoint.updatedAt)
     ) {
@@ -1789,9 +1642,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       return null;
     }
     if (!['running', 'paused', 'stopped', 'error'].includes(normalizeText(checkpoint.status))) {
-      return null;
-    }
-    if (!['std', 'resume-qc'].includes(normalizeText(checkpoint.phase))) {
       return null;
     }
     const normalizedResults = {};
@@ -1815,7 +1665,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
     return {
       ...checkpoint,
-      version: 4,
+      version: 5,
       startDate,
       endDate,
       dateList,
@@ -1909,27 +1759,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return location.pathname.startsWith('/stdList');
   }
 
-  function isDetailPage() {
-    return location.pathname.startsWith('/stdDetail/');
-  }
-
   async function waitForBodyReady(timeoutMs) {
     return waitFor(() => document.body, timeoutMs || 15000, '页面主体未准备完成');
-  }
-
-  function createMouseEvent(type, init) {
-    return new MouseEvent(type, {
-      bubbles: true,
-      cancelable: true,
-      ...(init || {})
-    });
-  }
-
-  function createKeyboardEvent(type, init) {
-    return new KeyboardEvent(type, {
-      bubbles: true,
-      ...(init || {})
-    });
   }
 
   async function storageGet(keys) {
@@ -1958,14 +1789,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
   }
 
-  function triggerMouseClick(element) {
-    element.scrollIntoView({ block: 'center', inline: 'center' });
-    const events = ['mouseover', 'mousedown', 'mouseup', 'click'];
-    for (const type of events) {
-      element.dispatchEvent(createMouseEvent(type));
-    }
-  }
-
   async function waitFor(checker, timeoutMs, message, options) {
     const cancelCheck = options && typeof options.cancelCheck === 'function' ? options.cancelCheck : null;
     const cancelMessage = normalizeText(options && options.cancelMessage) || '采集已结束';
@@ -1983,189 +1806,114 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     throw new Error(message);
   }
 
-  function getAllButtons() {
-    return Array.from(document.querySelectorAll('button')).filter(isVisible);
-  }
-
-  function findButtonByText(text) {
-    return getAllButtons().find((button) => normalizeText(button.textContent) === text) || null;
-  }
-
-  function getFormItems() {
-    return Array.from(document.querySelectorAll('.el-form-item'));
-  }
-
-  function getFormItemByLabel(labelText) {
-    return getFormItems().find((item) => {
-      const label = item.querySelector('.el-form-item__label');
-      return label && normalizeText(label.textContent) === labelText;
-    }) || null;
-  }
-
-  function getSelectWrapperByLabel(labelText, index) {
-    const item = getFormItemByLabel(labelText);
-    if (!item) {
-      return null;
-    }
-    const wrappers = Array.from(item.querySelectorAll('.el-select__wrapper')).filter(isVisible);
-    return wrappers[index || 0] || null;
-  }
-
-  function getCategoryWrapper(level) {
-    const item = getFormItemByLabel('品类选择');
-    if (!item) {
-      return null;
-    }
-    const wrappers = Array.from(item.querySelectorAll('.el-select__wrapper')).filter(isVisible);
-    return wrappers[level] || null;
-  }
-
-  function getSelectedTextFromWrapper(wrapper) {
-    if (!wrapper) {
-      return '';
-    }
-    const selected = wrapper.querySelector('.el-select__selected-item span');
-    return normalizeText(selected ? selected.textContent : wrapper.textContent);
-  }
-
-  function getVisibleSelectDropdowns() {
-    return Array.from(document.querySelectorAll('.el-select-dropdown, .el-popper'))
-      .filter((element) => isVisible(element) && element.querySelector('.el-select-dropdown__item'));
-  }
-
-  function getDropdownOptions(dropdown) {
-    return Array.from(dropdown.querySelectorAll('.el-select-dropdown__item')).filter(isVisible);
-  }
-
-  async function openDropdownForOption(wrapper, optionText, cancelCheck) {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      triggerMouseClick(wrapper);
-      const dropdown = await waitFor(() => {
-        const candidates = getVisibleSelectDropdowns();
-        return candidates.find((candidate) => {
-          return getDropdownOptions(candidate).some((option) => normalizeText(option.textContent) === optionText);
-        });
-      }, 4000, `未找到可选内容：${optionText}`, { cancelCheck });
-      if (dropdown) {
-        return dropdown;
+  function getCookieValue(name) {
+    const target = `${encodeURIComponent(name)}=`;
+    const cookies = String(document.cookie || '').split(';');
+    for (const cookie of cookies) {
+      const text = cookie.trim();
+      if (text.startsWith(target)) {
+        return decodeURIComponent(text.slice(target.length));
       }
     }
-    throw new Error(`无法展开选项：${optionText}`);
+    return '';
   }
 
-  async function selectOption(wrapper, optionText, cancelCheck) {
-    if (getSelectedTextFromWrapper(wrapper) === optionText) {
-      return;
+  function buildApiUrl(endpoint, params) {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params || {})) {
+      if (value === undefined || value === null) {
+        continue;
+      }
+      query.set(key, String(value));
     }
-    const dropdown = await openDropdownForOption(wrapper, optionText, cancelCheck);
-    const option = getDropdownOptions(dropdown).find((item) => {
-      return normalizeText(item.textContent) === optionText && !item.classList.contains('is-disabled');
+    const queryText = query.toString();
+    return queryText ? `${endpoint}?${queryText}` : endpoint;
+  }
+
+  function getApiErrorMessage(payload) {
+    const message = normalizeText(payload && payload.msg);
+    return message || '登录已失效或接口无权限，请重新登录后再试';
+  }
+
+  async function fetchApiJson(endpoint, params, options) {
+    const token = getCookieValue('std_admin_token');
+    if (!token) {
+      throw new Error('登录已失效或接口无权限，请重新登录后再试');
+    }
+    const response = await fetch(buildApiUrl(endpoint, params), {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        'X-Token': token
+      },
+      signal: options && options.signal
     });
-    if (!option) {
-      throw new Error(`未找到选项：${optionText}`);
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('登录已失效或接口无权限，请重新登录后再试');
     }
-    triggerMouseClick(option);
-    await waitFor(() => getSelectedTextFromWrapper(wrapper) === optionText, 4000, `选项未生效：${optionText}`, { cancelCheck });
+    if (!response.ok) {
+      throw new Error(`接口请求失败：${response.status}`);
+    }
+    let payload = null;
+    try {
+      payload = JSON.parse(await response.text());
+    } catch (error) {
+      throw new Error('接口返回内容不是有效数据');
+    }
+    if (!payload || Number(payload.code) !== 0) {
+      throw new Error(getApiErrorMessage(payload));
+    }
+    return payload;
   }
 
-  function setNativeInputValue(input, value) {
-    const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-    descriptor.set.call(input, value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+  function getApiList(payload) {
+    if (payload && payload.data && Array.isArray(payload.data.list)) {
+      return payload.data.list;
+    }
+    return [];
   }
 
-  async function setDateRange(labelText, startDate, endDate, cancelCheck) {
-    const item = getFormItemByLabel(labelText);
-    if (!item) {
-      throw new Error(`未找到日期设置：${labelText}`);
+  function readTaskTotal(payload) {
+    const total = Number(payload && payload.total);
+    if (!Number.isFinite(total)) {
+      throw new Error('接口返回缺少数量 total');
     }
-    const inputs = Array.from(item.querySelectorAll('input.el-range-input')).filter(isVisible);
-    if (inputs.length < 2) {
-      throw new Error(`日期设置暂时不可用：${labelText}`);
-    }
-    const startValue = formatDateTime(startDate);
-    const endValue = formatDateTime(endDate);
-    inputs[0].focus();
-    setNativeInputValue(inputs[0], startValue);
-    inputs[0].blur();
-    await sleep(120);
-    inputs[1].focus();
-    setNativeInputValue(inputs[1], endValue);
-    inputs[1].dispatchEvent(createKeyboardEvent('keydown', { key: 'Enter' }));
-    inputs[1].dispatchEvent(createKeyboardEvent('keyup', { key: 'Enter' }));
-    inputs[1].blur();
-    document.body.dispatchEvent(createMouseEvent('click'));
-    await waitFor(() => inputs[0].value === startValue && inputs[1].value === endValue, 4000, `${labelText} 未写入成功`, { cancelCheck });
+    return total;
   }
 
-  function getVisibleLoadingMask() {
-    return Array.from(document.querySelectorAll('.el-loading-mask, .vxe-loading')).find(isVisible) || null;
+  function buildTaskDateParams(dateString, field) {
+    const range = buildDateRange(dateString);
+    const params = {
+      create_time_begin: '',
+      create_time_end: '',
+      modify_time_begin: '',
+      modify_time_end: ''
+    };
+    if (field === 'create') {
+      params.create_time_begin = formatDateTime(range.start);
+      params.create_time_end = formatDateTime(range.end);
+    } else {
+      params.modify_time_begin = formatDateTime(range.start);
+      params.modify_time_end = formatDateTime(range.end);
+    }
+    return params;
   }
 
-  function getTopResultCount() {
-    const wrappers = Array.from(document.querySelectorAll('.vxe-tools--wrapper, .vxe-toolbar'));
-    for (const wrapper of wrappers) {
-      const text = normalizeText(wrapper.textContent);
-      const match = text.match(/共\s*([\d,]+)\s*个结果/);
-      if (match) {
-        return Number(match[1].replace(/,/g, ''));
-      }
-    }
-    return null;
-  }
-
-  async function clickQueryAndReadCount(cancelCheck) {
-    const queryButton = findButtonByText('查询');
-    if (!queryButton) {
-      throw new Error('页面还在加载，请稍后再试');
-    }
-    triggerMouseClick(queryButton);
-    const startedAt = Date.now();
-    let stableValue = null;
-    let stableSince = 0;
-    while (Date.now() - startedAt < QUERY_TIMEOUT) {
-      if (cancelCheck && cancelCheck()) {
-        throw new Error('采集已结束');
-      }
-      const loading = getVisibleLoadingMask();
-      const current = getTopResultCount();
-      const enoughWait = Date.now() - startedAt > 800;
-      if (!loading && enoughWait && typeof current === 'number') {
-        if (stableValue === current) {
-          if (!stableSince) {
-            stableSince = Date.now();
-          }
-          if (Date.now() - stableSince >= 1200) {
-            return current;
-          }
-        } else {
-          stableValue = current;
-          stableSince = Date.now();
-        }
-      }
-      await sleep(250);
-    }
-    throw new Error('查询结果读取超时');
-  }
-
-  async function clickResetButton() {
-    const resetButton = findButtonByText('重置');
-    if (!resetButton) {
-      throw new Error('页面还在加载，请稍后再试');
-    }
-    triggerMouseClick(resetButton);
-    await sleep(600);
-  }
-
-  async function waitForPageReady(cancelCheck) {
-    await waitFor(() => {
-      return findButtonByText('查询')
-        && findButtonByText('重置')
-        && getCategoryWrapper(0)
-        && getFormItemByLabel('创建时间')
-        && getFormItemByLabel('修改时间');
-    }, PAGE_READY_TIMEOUT, '页面还在加载，请稍后再试', { cancelCheck });
+  function buildTaskListParams(categoryId, dateString, field, extraParams) {
+    return {
+      select_type: 2,
+      ...buildTaskDateParams(dateString, field),
+      type: categoryId,
+      category: '',
+      limit: 10000,
+      allnum_op: 1,
+      page: 1,
+      page_size: 50,
+      otype: 'json',
+      jsonp: 'no',
+      ...(extraParams || {})
+    };
   }
 
   function buildOrderedResults(items, results) {
@@ -2257,6 +2005,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return `<c r="${ref}" s="${styleId}"><v>${value}</v></c>`;
   }
 
+  function formulaCell(ref, formula, value, styleId) {
+    const cachedValue = Number(value || 0);
+    return `<c r="${ref}" s="${styleId}"><f>${escapeXml(formula)}</f><v>${Number.isFinite(cachedValue) ? cachedValue : 0}</v></c>`;
+  }
+
   function buildColumnsXml(columns) {
     const parts = ['<cols>'];
     const totalColumns = 1 + columns.length * METRIC_HEADERS.length;
@@ -2305,31 +2058,32 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     rows.push(`<row r="2" ht="22" customHeight="1">${secondRowCells.join('')}</row>`);
 
     dateRows.forEach((reportRow, rowIndex) => {
-      const dataValues = [formatDisplayDate(reportRow.date)];
-      for (const result of reportRow.results) {
-        dataValues.push(
-          result.inboundCount || 0,
-          result.stdTotalCount || 0,
-          result.stdPassCount || 0,
-          result.stdRejectCount || 0,
-          result.stdRejectRate || 0,
-          result.qcTotalCount || 0,
-          result.qcPassCount || 0,
-          result.qcRejectCount || 0,
-          result.qcRejectRate || 0
-        );
-      }
       const worksheetRowNumber = rowIndex + 3;
-      const dataCells = dataValues.map((value, cellIndex) => {
-        const ref = makeCellRef(cellIndex + 1, worksheetRowNumber);
-        if (cellIndex === 0) {
-          return inlineCell(ref, value, 8);
-        }
-        const metricIndex = (cellIndex - 1) % METRIC_HEADERS.length;
-        if (metricIndex === 4 || metricIndex === 8) {
-          return numberCell(ref, Number(value || 0), 10);
-        }
-        return numberCell(ref, Number(value || 0), 9);
+      const dataCells = [inlineCell(makeCellRef(1, worksheetRowNumber), formatDisplayDate(reportRow.date), 8)];
+
+      reportRow.results.forEach((result, resultIndex) => {
+        const baseColumn = 2 + resultIndex * METRIC_HEADERS.length;
+        const inboundRef = makeCellRef(baseColumn, worksheetRowNumber);
+        const stdTotalRef = makeCellRef(baseColumn + 1, worksheetRowNumber);
+        const stdPassRef = makeCellRef(baseColumn + 2, worksheetRowNumber);
+        const stdRejectRef = makeCellRef(baseColumn + 3, worksheetRowNumber);
+        const stdRejectRateRef = makeCellRef(baseColumn + 4, worksheetRowNumber);
+        const qcTotalRef = makeCellRef(baseColumn + 5, worksheetRowNumber);
+        const qcPassRef = makeCellRef(baseColumn + 6, worksheetRowNumber);
+        const qcRejectRef = makeCellRef(baseColumn + 7, worksheetRowNumber);
+        const qcRejectRateRef = makeCellRef(baseColumn + 8, worksheetRowNumber);
+
+        dataCells.push(
+          numberCell(inboundRef, Number(result.inboundCount || 0), 9),
+          formulaCell(stdTotalRef, `${stdPassRef}+${stdRejectRef}`, result.stdTotalCount || 0, 9),
+          numberCell(stdPassRef, Number(result.stdPassCount || 0), 9),
+          numberCell(stdRejectRef, Number(result.stdRejectCount || 0), 9),
+          formulaCell(stdRejectRateRef, `IF(${stdTotalRef}=0,0,${stdRejectRef}/${stdTotalRef})`, result.stdRejectRate || 0, 10),
+          formulaCell(qcTotalRef, `${qcPassRef}+${qcRejectRef}`, result.qcTotalCount || 0, 9),
+          numberCell(qcPassRef, Number(result.qcPassCount || 0), 9),
+          numberCell(qcRejectRef, Number(result.qcRejectCount || 0), 9),
+          formulaCell(qcRejectRateRef, `IF(${qcTotalRef}=0,0,${qcRejectRef}/${qcTotalRef})`, result.qcRejectRate || 0, 10)
+        );
       });
       rows.push(`<row r="${worksheetRowNumber}" ht="22" customHeight="1">${dataCells.join('')}</row>`);
     });
@@ -2605,51 +2359,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
   }
 
-  async function applyCategorySelection(item, cancelCheck, onSelected) {
-    const primary = getCategoryWrapper(0);
-    if (!primary) {
-      throw new Error('未找到品类选项');
-    }
-    await selectOption(primary, item.queryLabel, cancelCheck);
-    if (typeof onSelected === 'function') {
-      onSelected(item);
-    }
-  }
-
-  async function applySelectFilter(label, value, cancelCheck) {
-    const wrapper = getSelectWrapperByLabel(label, 0);
-    if (!wrapper) {
-      throw new Error(`未找到筛选条件：${label}`);
-    }
-    await selectOption(wrapper, value, cancelCheck);
-  }
-
-  async function prepareListQueryFilters(item, options) {
-    const config = options && typeof options === 'object' ? options : {};
-    const cancelCheck = typeof config.cancelCheck === 'function' ? config.cancelCheck : null;
-    const dateLabel = normalizeText(config.dateLabel);
-    const range = config.range && typeof config.range === 'object' ? config.range : null;
-    const filters = Array.isArray(config.filters) ? config.filters : [];
-    await clickResetButton();
-    await applyCategorySelection(item, cancelCheck, config.onCategorySelected);
-    if (dateLabel && range && range.start instanceof Date && range.end instanceof Date) {
-      await setDateRange(dateLabel, range.start, range.end, cancelCheck);
-    }
-    for (const filter of filters) {
-      if (!filter || !normalizeText(filter.label) || !normalizeText(filter.value)) {
-        continue;
-      }
-      await applySelectFilter(filter.label, filter.value, cancelCheck);
-    }
-  }
-
   class YspDailyReportApp {
     constructor() {
       this.panel = null;
       this.handleOutsideInteraction = null;
       this.handleViewportChange = null;
       this.settings = createDefaultWorkbenchSettings();
-      this.runtime = { minimized: false, running: false, openGroupMenu: '', jobType: '', listJobAbortToken: 0, stopping: false, pauseRequested: false, statusText: '等待开始', logs: [], checkpoint: null, report: null, resultCache: {} };
+      this.runtime = { minimized: false, running: false, openGroupMenu: '', jobType: '', listJobAbortToken: 0, activeAbortController: null, stopping: false, pauseRequested: false, statusText: '等待开始', logs: [], checkpoint: null, report: null, resultCache: {} };
       this.refs = {};
     }
 
@@ -2686,6 +2402,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.runtime.running = false;
       this.runtime.jobType = '';
       this.runtime.listJobAbortToken = 0;
+      this.runtime.activeAbortController = null;
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
       if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') {
@@ -2845,14 +2562,114 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     updateCheckpointStatus(text) { const checkpoint = this.getActiveCheckpoint(); this.runtime.statusText = text; if (checkpoint) checkpoint.statusText = text; this.renderStatus(); void this.persistActiveCheckpoint().catch(() => {}); }
     async saveCheckpoint() { if (!this.runtime.checkpoint) return; this.runtime.checkpoint.updatedAt = new Date().toISOString(); await storageSetCached({ [STORAGE_KEYS.checkpoint]: this.runtime.checkpoint }); }
     async clearCheckpoint() { await storageRemove(STORAGE_KEYS.checkpoint); this.runtime.checkpoint = null; }
-    async clearAllCachedData() { if (this.runtime.running) return; const confirmed = window.confirm('这只会清除日报本地缓存、结果和任务进度，不会清空已保存的日期。确认清除吗？'); if (!confirmed) return; await storageRemove([STORAGE_KEYS.report, STORAGE_KEYS.resultCache, STORAGE_KEYS.checkpoint]); this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.statusText = '已清除本地缓存'; this.runtime.logs = []; this.runtime.checkpoint = null; this.runtime.report = null; this.runtime.resultCache = {}; this.syncSettingsToInputs(); this.render(); }
-    async stopCurrentJob() { if (!this.runtime.running) return; const checkpoint = this.getActiveCheckpoint(); const stoppedStatusText = '采集已结束，可以重新开始'; requestListJobAbort(this.runtime.listJobAbortToken); this.runtime.stopping = true; this.runtime.pauseRequested = false; this.runtime.statusText = stoppedStatusText; this.pushLog('采集已结束'); if (checkpoint) { checkpoint.status = 'stopped'; checkpoint.statusText = stoppedStatusText; await this.saveCheckpoint(); } this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.render(); }
-    pauseCurrentJob() { if (!this.runtime.running) return; this.runtime.pauseRequested = true; this.runtime.stopping = false; this.runtime.statusText = '正在暂停当前任务'; this.pushLog('正在暂停当前任务'); this.render(); }
+    async clearAllCachedData() {
+      if (this.runtime.running) return;
+      const confirmed = window.confirm('这只会清除日报本地缓存、结果和任务进度，不会清空已保存的日期。确认清除吗？');
+      if (!confirmed) return;
+      await storageRemove([STORAGE_KEYS.report, STORAGE_KEYS.resultCache, STORAGE_KEYS.checkpoint]);
+      this.runtime.running = false;
+      this.runtime.jobType = '';
+      this.runtime.activeAbortController = null;
+      this.runtime.stopping = false;
+      this.runtime.pauseRequested = false;
+      this.runtime.statusText = '已清除本地缓存';
+      this.runtime.logs = [];
+      this.runtime.checkpoint = null;
+      this.runtime.report = null;
+      this.runtime.resultCache = {};
+      this.syncSettingsToInputs();
+      this.render();
+    }
+
+    async stopCurrentJob() {
+      if (!this.runtime.running) return;
+      const checkpoint = this.getActiveCheckpoint();
+      const stoppedStatusText = '采集已结束，可以重新开始';
+      requestListJobAbort(this.runtime.listJobAbortToken);
+      this.runtime.stopping = true;
+      this.runtime.pauseRequested = false;
+      this.runtime.statusText = stoppedStatusText;
+      this.abortActiveApiRequest();
+      this.pushLog('采集已结束');
+      if (checkpoint) {
+        checkpoint.status = 'stopped';
+        checkpoint.statusText = stoppedStatusText;
+        await this.saveCheckpoint();
+      }
+      this.runtime.running = false;
+      this.runtime.jobType = '';
+      this.runtime.activeAbortController = null;
+      this.runtime.stopping = false;
+      this.runtime.pauseRequested = false;
+      this.render();
+    }
+
+    pauseCurrentJob() {
+      if (!this.runtime.running) return;
+      this.runtime.pauseRequested = true;
+      this.runtime.stopping = false;
+      this.runtime.statusText = '正在暂停当前任务';
+      this.abortActiveApiRequest();
+      this.pushLog('正在暂停当前任务');
+      this.render();
+    }
     async handlePauseResumeAction() { if (this.runtime.running) { this.pauseCurrentJob(); return; } await this.resumePausedJob(); }
-    async resumePausedJob() { if (this.runtime.running) return; if (!isListPage()) throw new Error('继续任务请回到标准化列表页'); const pausedTask = this.getPausedTaskMeta(); if (!pausedTask) throw new Error('当前没有可继续的暂停任务'); this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.running = true; this.runtime.jobType = 'daily'; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS) : []; pausedTask.checkpoint.status = 'running'; pausedTask.checkpoint.statusText = '正在继续日报'; this.runtime.statusText = pausedTask.checkpoint.statusText; await this.saveCheckpoint(); this.pushLog('继续日报'); this.render(); await this.runDailyFromCheckpoint(); }
+    async resumePausedJob() { if (this.runtime.running) return; if (!isListPage()) throw new Error('继续任务请回到标准化列表页'); const pausedTask = this.getPausedTaskMeta(); if (!pausedTask) throw new Error('当前没有可继续的暂停任务'); this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.running = true; this.runtime.jobType = 'daily'; this.runtime.activeAbortController = null; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS) : []; pausedTask.checkpoint.status = 'running'; pausedTask.checkpoint.statusText = '正在继续日报'; this.runtime.statusText = pausedTask.checkpoint.statusText; await this.saveCheckpoint(); this.pushLog('继续日报'); this.render(); await this.runDailyFromCheckpoint(); }
     async tryResume() { if (!this.runtime.running) { this.render(); return; } if (this.runtime.jobType === 'daily' && this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.pushLog('检测到未完成日报，正在继续'); await this.runDailyFromCheckpoint(); return; } this.runtime.running = false; this.runtime.jobType = ''; this.render(); }
     describeItem(item) { return item.exportLabel; }
     isCurrentJobStopRequested() { return isListJobAbortRequested(this.runtime.listJobAbortToken) || this.runtime.stopping; }
+    abortActiveApiRequest() { if (this.runtime.activeAbortController) this.runtime.activeAbortController.abort(); }
+    beginApiRequest() { this.ensureNotStopped(); const controller = new AbortController(); this.runtime.activeAbortController = controller; return controller; }
+    finishApiRequest(controller) { if (this.runtime.activeAbortController === controller) this.runtime.activeAbortController = null; }
+
+    async requestApiJson(endpoint, params) {
+      const controller = this.beginApiRequest();
+      try {
+        const payload = await fetchApiJson(endpoint, params, { signal: controller.signal });
+        this.ensureNotStopped();
+        return payload;
+      } catch (error) {
+        if (controller.signal.aborted) {
+          this.ensureNotStopped();
+        }
+        throw error;
+      } finally {
+        this.finishApiRequest(controller);
+      }
+    }
+
+    async requestTaskTotal(params) {
+      const payload = await this.requestApiJson(API_ENDPOINTS.taskList, params);
+      return readTaskTotal(payload);
+    }
+
+    async fetchCategoryIdMap(items) {
+      this.updateCheckpointStatus('正在读取品类信息');
+      const payload = await this.requestApiJson(API_ENDPOINTS.categoryList, {
+        page: 1,
+        page_size: 100,
+        level: 0
+      });
+      const idByName = new Map();
+      for (const row of getApiList(payload)) {
+        const name = normalizeText(row && row.category_name);
+        const id = row && row.category_id;
+        if (name && id !== undefined && id !== null && normalizeText(id)) {
+          idByName.set(name, id);
+        }
+      }
+      const result = new Map();
+      for (const item of items) {
+        const queryLabel = normalizeText(item.queryLabel);
+        if (!idByName.has(queryLabel)) {
+          throw new Error(`接口没有找到品类：${queryLabel}`);
+        }
+        result.set(item.key, idByName.get(queryLabel));
+      }
+      this.pushLog(`品类信息读取完成：${items.length} 个品类`);
+      return result;
+    }
+
     getCachedDailyResult(date, item) {
       const dayResults = this.runtime.resultCache && this.runtime.resultCache[date];
       if (!dayResults || !dayResults[item.key]) {
@@ -2911,13 +2728,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       this.runtime.running = true;
       this.runtime.jobType = 'daily';
+      this.runtime.activeAbortController = null;
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
       this.runtime.logs = [];
       this.runtime.statusText = '正在准备日报';
       this.runtime.report = null;
       this.runtime.checkpoint = {
-        version: 4,
+        version: 5,
         status: 'running',
         startDate,
         endDate,
@@ -2926,7 +2744,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         itemKeys: items.map((item) => item.key),
         currentDateIndex: 0,
         currentItemIndex: 0,
-        phase: 'std',
         results: {},
         logs: [],
         startedAt: new Date().toISOString(),
@@ -2938,9 +2755,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await this.runDailyFromCheckpoint();
     }
 
-    async runDailyFromCheckpoint(cancelCheck) {
-      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
-      await waitForPageReady(activeCancelCheck);
+    async runDailyFromCheckpoint() {
       const checkpoint = this.runtime.checkpoint;
       if (!checkpoint || checkpoint.status !== 'running') {
         this.runtime.running = false;
@@ -2956,30 +2771,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (!items.length || !dateList.length) {
         throw new Error('当前日报任务没有可采集内容');
       }
-
-      if (checkpoint.phase === 'resume-qc') {
-        const currentDate = dateList[checkpoint.currentDateIndex];
-        const item = items[checkpoint.currentItemIndex];
-        if (currentDate && item) {
-          const cachedResult = this.getCachedDailyResult(currentDate, item);
-          if (cachedResult) {
-            checkpoint.results[currentDate] = checkpoint.results[currentDate] || {};
-            checkpoint.results[currentDate][item.key] = cachedResult;
-            this.pushLog(`${currentDate} ${this.describeItem(item)}：已使用已保存结果`);
-            advanceDailyCheckpointCursor(checkpoint, items.length);
-            checkpoint.phase = 'std';
-            await this.saveCheckpoint();
-            return this.runDailyFromCheckpoint(activeCancelCheck);
-          }
-          this.updateCheckpointStatus(
-            `正在继续 ${item.exportLabel}`
-          );
-          await this.runDailyQualityCheckForItem(currentDate, item, activeCancelCheck);
-          advanceDailyCheckpointCursor(checkpoint, items.length);
-          checkpoint.phase = 'std';
-          await this.saveCheckpoint();
-        }
-      }
+      const categoryIdMap = await this.fetchCategoryIdMap(items);
 
       while (checkpoint.currentDateIndex < dateList.length) {
         this.ensureNotStopped();
@@ -2998,101 +2790,46 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           checkpoint.results[currentDate][item.key] = cachedResult;
           this.pushLog(`${currentDate} ${this.describeItem(item)}：已使用已保存结果`);
           advanceDailyCheckpointCursor(checkpoint, items.length);
-          checkpoint.phase = 'std';
           await this.saveCheckpoint();
           continue;
         }
 
-        checkpoint.phase = 'std';
-        this.updateCheckpointStatus(
-          `正在采集 ${item.exportLabel}`
-        );
+        this.updateCheckpointStatus(`正在采集 ${item.exportLabel}`);
         await this.saveCheckpoint();
-        await this.runDailyStandardizationForItem(currentDate, item, activeCancelCheck);
-
-        checkpoint.phase = 'resume-qc';
-        this.updateCheckpointStatus(
-          `正在继续 ${item.exportLabel}`
-        );
+        const result = await this.runDailyApiForItem(currentDate, item, categoryIdMap.get(item.key));
+        checkpoint.results[currentDate][item.key] = result;
+        await this.cacheDailyResult(currentDate, item, result);
+        advanceDailyCheckpointCursor(checkpoint, items.length);
         await this.saveCheckpoint();
-        this.pushLog(`${currentDate} ${this.describeItem(item)}：标准化已完成，正在继续质检`);
-        window.location.reload();
-        return;
       }
 
       await this.completeDailyJob();
     }
 
-    async runDailyStandardizationForItem(date, item, cancelCheck) {
+    async runDailyApiForItem(date, item, categoryId) {
       this.ensureNotStopped();
-      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
-      const checkpoint = this.runtime.checkpoint;
-      const result = checkpoint.results[date][item.key] || createEmptyResult(item);
-      const range = buildDateRange(date);
-
-      await prepareListQueryFilters(item, {
-        cancelCheck: activeCancelCheck,
-        dateLabel: '创建时间',
-        range,
-        onCategorySelected: () => {
-          this.pushLog(`已选择品类：${this.describeItem(item)}`);
-        }
-      });
-
-      this.pushLog(`${date} ${this.describeItem(item)}：读取入库量`);
-      result.inboundCount = await clickQueryAndReadCount(activeCancelCheck);
+      const result = createEmptyResult(item);
+      this.pushLog(`${date} ${this.describeItem(item)}：接口读取中`);
+      result.inboundCount = await this.requestTaskTotal(buildTaskListParams(categoryId, date, 'create'));
       this.pushLog(`${date} ${this.describeItem(item)}：入库量 ${result.inboundCount}`);
 
-      await applySelectFilter('标准化状态', '标准化通过', activeCancelCheck);
-      result.stdPassCount = await clickQueryAndReadCount(activeCancelCheck);
+      result.stdPassCount = await this.requestTaskTotal(buildTaskListParams(categoryId, date, 'create', { state: 87 }));
       this.pushLog(`${date} ${this.describeItem(item)}：标准化通过 ${result.stdPassCount}`);
 
-      await applySelectFilter('标准化状态', '标准化拒绝', activeCancelCheck);
-      result.stdRejectCount = await clickQueryAndReadCount(activeCancelCheck);
+      result.stdRejectCount = await this.requestTaskTotal(buildTaskListParams(categoryId, date, 'create', { state: 88 }));
       result.stdTotalCount = result.stdPassCount + result.stdRejectCount;
       result.stdRejectRate = calculateRatio(result.stdRejectCount, result.stdTotalCount);
       this.pushLog(`${date} ${this.describeItem(item)}：标准化拒绝 ${result.stdRejectCount}`);
 
-      checkpoint.results[date][item.key] = {
-        ...result,
-        key: item.key,
-        category: item.exportLabel,
-        label: item.exportLabel,
-        groupLabel: item.groupLabel,
-        subgroupLabel: item.subgroupLabel,
-        theme: item.theme,
-        collectionCompleted: false
-      };
-      await this.saveCheckpoint();
-    }
-
-    async runDailyQualityCheckForItem(date, item, cancelCheck) {
-      this.ensureNotStopped();
-      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
-      const checkpoint = this.runtime.checkpoint;
-      const result = checkpoint.results[date][item.key] || createEmptyResult(item);
-      const range = buildDateRange(date);
-
-      await prepareListQueryFilters(item, {
-        cancelCheck: activeCancelCheck,
-        dateLabel: '修改时间',
-        range,
-        onCategorySelected: () => {
-          this.pushLog(`已选择品类：${this.describeItem(item)}`);
-        }
-      });
-
-      await applySelectFilter('质检状态', '质检通过', activeCancelCheck);
-      result.qcPassCount = await clickQueryAndReadCount(activeCancelCheck);
+      result.qcPassCount = await this.requestTaskTotal(buildTaskListParams(categoryId, date, 'modify', { check: 2 }));
       this.pushLog(`${date} ${this.describeItem(item)}：质检通过 ${result.qcPassCount}`);
 
-      await applySelectFilter('质检状态', '质检拒绝', activeCancelCheck);
-      result.qcRejectCount = await clickQueryAndReadCount(activeCancelCheck);
+      result.qcRejectCount = await this.requestTaskTotal(buildTaskListParams(categoryId, date, 'modify', { check: 3 }));
       result.qcTotalCount = result.qcPassCount + result.qcRejectCount;
       result.qcRejectRate = calculateRatio(result.qcRejectCount, result.qcTotalCount);
       this.pushLog(`${date} ${this.describeItem(item)}：质检拒绝 ${result.qcRejectCount}`);
 
-      checkpoint.results[date][item.key] = {
+      return {
         ...result,
         key: item.key,
         category: item.exportLabel,
@@ -3102,8 +2839,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         theme: item.theme,
         collectionCompleted: true
       };
-      await this.cacheDailyResult(date, item, checkpoint.results[date][item.key]);
-      await this.saveCheckpoint();
     }
 
     async completeDailyJob() {
@@ -3128,6 +2863,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await this.clearCheckpoint();
       this.runtime.running = false;
       this.runtime.jobType = '';
+      this.runtime.activeAbortController = null;
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
       this.runtime.statusText = '日报采集完成，可以下载结果了';
@@ -3147,6 +2883,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         await this.saveCheckpoint();
       }
       this.runtime.running = false;
+      this.runtime.activeAbortController = null;
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
       this.runtime.statusText = paused ? '任务已暂停，可点击继续任务' : stopped ? '采集已结束，可以重新开始' : `任务遇到问题：${message}`;
