@@ -3,7 +3,6 @@
 !ysjs/
 !ysjs/ysjs.js
 !ysp/
-!ysp/ysp-daily-report.user.js
-!ysp-dev/
-!ysp-dev/ysp-daily-report.user.js
-!ysp-dev/ysp-tag-library-crawler.user.js
+!ysp/daily.user.js
+!ysp/qc.user.js
+!ysp/tags.user.js

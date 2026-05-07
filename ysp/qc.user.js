@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         央视频标准化工作台
+// @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.1.62
-// @description  在标准化系统页面执行日报采集与二次质检，并保存结果
+// @version      1.0.2
+// @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
 // @match        https://std.video.cloud.cctv.com/*
@@ -10,8 +10,8 @@
 // @match        https://www.yangshipin.cn/*
 // @match        https://m.yangshipin.cn/*
 // @match        https://w.yangshipin.cn/*
-// @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp-dev/ysp-daily-report.user.js
-// @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp-dev/ysp-daily-report.user.js
+// @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp/qc.user.js
+// @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp/qc.user.js
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
@@ -30,15 +30,14 @@
 (function () {
   'use strict';
 
-  if (window.__YSP_WORKBENCH__) {
+  if (window.__YSP_SECONDARY_QC__) {
     return;
   }
-  window.__YSP_WORKBENCH__ = true;
+  window.__YSP_SECONDARY_QC__ = true;
 
   const SCRIPT_VERSION = GM_info.script.version;
-
   const PANEL_STYLE = `
-#ysp-daily-panel-root {
+#ysp-secondary-qc-panel-root {
   position: fixed;
   inset: 0;
   z-index: 2147483647;
@@ -51,7 +50,7 @@
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
 }
 
-#ysp-daily-panel-root.is-settings-open {
+#ysp-secondary-qc-panel-root.is-settings-open {
   pointer-events: auto;
 }
 
@@ -62,7 +61,7 @@
   transition: background 0.22s ease;
 }
 
-#ysp-daily-panel-root.is-focused .ysp-daily-panel__backdrop {
+#ysp-secondary-qc-panel-root.is-focused .ysp-daily-panel__backdrop {
   background: rgba(8, 24, 40, 0.28);
 }
 
@@ -84,16 +83,16 @@
   transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
 }
 
-#ysp-daily-panel-root.is-minimized {
+#ysp-secondary-qc-panel-root.is-minimized {
   justify-content: flex-end;
 }
 
-#ysp-daily-panel-root.is-minimized .ysp-daily-panel__backdrop {
+#ysp-secondary-qc-panel-root.is-minimized .ysp-daily-panel__backdrop {
   opacity: 0;
   pointer-events: none;
 }
 
-#ysp-daily-panel-root.is-minimized .ysp-daily-panel {
+#ysp-secondary-qc-panel-root.is-minimized .ysp-daily-panel {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -290,7 +289,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
 .ysp-daily-panel__date-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -597,7 +596,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
 }
 
-#ysp-daily-panel-root.is-minimized .ysp-daily-panel__dock {
+#ysp-secondary-qc-panel-root.is-minimized .ysp-daily-panel__dock {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -605,7 +604,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 }
 
 @media (max-width: 1366px) {
-  #ysp-daily-panel-root {
+  #ysp-secondary-qc-panel-root {
     padding: 16px;
   }
 
@@ -1074,7 +1073,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   transition: opacity 0.18s ease, visibility 0.18s ease;
 }
 
-#ysp-daily-panel-root.is-settings-open .ysp-daily-panel__modal-mask {
+#ysp-secondary-qc-panel-root.is-settings-open .ysp-daily-panel__modal-mask {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -1278,18 +1277,15 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   ];
 
   const STORAGE_KEYS = {
-    settings: 'yspWorkbenchSettingsV2',
-    report: 'yspWorkbenchDailyReportV2',
-    resultCache: 'yspWorkbenchDailyResultCacheV2',
-    secondaryQcReport: 'yspWorkbenchSecondaryQcReportV2',
-    dailyCheckpoint: 'yspWorkbenchDailyCheckpointV2',
-    secondaryQcCheckpoint: 'yspWorkbenchSecondaryQcCheckpointV2',
-    secondaryQcWorkerRequestPrefix: 'yspWorkbenchSecondaryQcWorkerRequestV2:',
-    secondaryQcWorkerResponsePrefix: 'yspWorkbenchSecondaryQcWorkerResponseV2:',
-    secondaryQcWorkerProgressPrefix: 'yspWorkbenchSecondaryQcWorkerProgressV2:',
-    secondaryQcWorkerStopPrefix: 'yspWorkbenchSecondaryQcWorkerStopV2:',
-    secondaryQcMediaWorkerRequestPrefix: 'yspWorkbenchSecondaryQcMediaWorkerRequestV2:',
-    secondaryQcMediaWorkerResponsePrefix: 'yspWorkbenchSecondaryQcMediaWorkerResponseV2:'
+    settings: 'yspSecondaryQcSettingsV1',
+    report: 'yspSecondaryQcReportV1',
+    checkpoint: 'yspSecondaryQcCheckpointV1',
+    workerRequestPrefix: 'yspSecondaryQcWorkerRequestV1:',
+    workerResponsePrefix: 'yspSecondaryQcWorkerResponseV1:',
+    workerProgressPrefix: 'yspSecondaryQcWorkerProgressV1:',
+    workerStopPrefix: 'yspSecondaryQcWorkerStopV1:',
+    mediaWorkerRequestPrefix: 'yspSecondaryQcMediaWorkerRequestV1:',
+    mediaWorkerResponsePrefix: 'yspSecondaryQcMediaWorkerResponseV1:'
   };
   const MAX_LOGS = 200;
   const QUERY_TIMEOUT = 90000;
@@ -1312,6 +1308,72 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const SECONDARY_QC_MAX_PARALLEL_COUNT = 5;
   const SECONDARY_QC_DEFAULT_PARALLEL_COUNT = 2;
 
+  function createDefaultWorkbenchSettings() {
+    return {
+      version: 1,
+      ui: { panelMinimized: true },
+      startDate: '',
+      endDate: '',
+      targetCount: 10,
+      parallelCount: SECONDARY_QC_DEFAULT_PARALLEL_COUNT,
+      modelMode: 'adaptive',
+      categoryKey: '',
+      secrets: { dashscopeApiKey: '' }
+    };
+  }
+
+  function normalizeDateInputValue(value, maxDateString) {
+    const maxDate = normalizeText(maxDateString) || getTodayDateString();
+    const date = normalizeText(value);
+    if (!date) return '';
+    return date > maxDate ? maxDate : date;
+  }
+
+  function normalizePositiveInteger(value, fallbackValue, minValue, maxValue) {
+    const numberValue = Math.trunc(Number(value));
+    if (!Number.isFinite(numberValue) || numberValue < (minValue || 1)) return fallbackValue;
+    if (maxValue && numberValue > maxValue) return maxValue;
+    return numberValue;
+  }
+
+  function normalizeSecondaryQcModelMode(value) {
+    if (value === 'flash' || value === 'plus') return value;
+    return 'adaptive';
+  }
+
+  function normalizeSecondaryQcParallelCount(value, fallbackValue) {
+    const safeFallback = normalizePositiveInteger(fallbackValue, SECONDARY_QC_DEFAULT_PARALLEL_COUNT, SECONDARY_QC_MIN_PARALLEL_COUNT, SECONDARY_QC_MAX_PARALLEL_COUNT);
+    return normalizePositiveInteger(value, safeFallback, SECONDARY_QC_MIN_PARALLEL_COUNT, SECONDARY_QC_MAX_PARALLEL_COUNT);
+  }
+
+  function normalizeWorkbenchSettings(rawSettings) {
+    const defaults = createDefaultWorkbenchSettings();
+    if (!rawSettings || typeof rawSettings !== 'object' || rawSettings.version !== defaults.version) return defaults;
+    const startDate = normalizeDateInputValue(rawSettings.startDate, getTodayDateString()) || defaults.startDate;
+    let endDate = normalizeDateInputValue(rawSettings.endDate, getTodayDateString());
+    if (endDate && startDate && endDate < startDate) endDate = '';
+    return {
+      version: defaults.version,
+      ui: {
+        panelMinimized: rawSettings.ui && rawSettings.ui.panelMinimized !== undefined
+          ? Boolean(rawSettings.ui.panelMinimized)
+          : defaults.ui.panelMinimized
+      },
+      startDate,
+      endDate,
+      targetCount: normalizePositiveInteger(rawSettings.targetCount, defaults.targetCount, 1, 999),
+      parallelCount: normalizeSecondaryQcParallelCount(rawSettings.parallelCount, defaults.parallelCount),
+      modelMode: normalizeSecondaryQcModelMode(rawSettings.modelMode),
+      categoryKey: normalizeSelectedKeys([rawSettings.categoryKey])[0] || '',
+      secrets: {
+        dashscopeApiKey: normalizeText(rawSettings.secrets && rawSettings.secrets.dashscopeApiKey)
+      }
+    };
+  }
+
+  function cloneWorkbenchSettings(settings) {
+    return normalizeWorkbenchSettings(JSON.parse(JSON.stringify(settings || createDefaultWorkbenchSettings())));
+  }
   function injectPanelStyle() {
     GM_addStyle(PANEL_STYLE);
   }
@@ -1707,201 +1769,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return Boolean(result && result.collectionCompleted === true);
   }
 
-  function normalizeStoredReport(report) {
-    if (
-      !report
-      || typeof report !== 'object'
-      || report.version !== 1
-      || !normalizeText(report.startDate)
-      || !normalizeText(report.endDate)
-      || !normalizeText(report.generatedAt)
-      || !Array.isArray(report.itemKeys)
-      || !Array.isArray(report.columns)
-      || !Array.isArray(report.rows)
-    ) {
-      return null;
-    }
-
-    const sourceKeys = normalizeSelectedKeys(report.itemKeys);
-    if (!sourceKeys.length || sourceKeys.length !== report.itemKeys.length) {
-      return null;
-    }
-    const columns = buildReportColumns(getEntriesByKeys(sourceKeys));
-    const normalizedRows = [];
-
-    for (const rawRow of report.rows) {
-      if (!rawRow || typeof rawRow !== 'object' || !rawRow.date || !Array.isArray(rawRow.results)) {
-        continue;
-      }
-      const rowMap = new Map();
-      for (const result of rawRow.results) {
-        const normalized = normalizeStoredResultRow(result);
-        if (normalized) {
-          rowMap.set(normalized.key, normalized);
-        }
-      }
-      normalizedRows.push({
-        date: rawRow.date,
-        results: columns.map((column) => rowMap.get(column.key) || createEmptyResult(column.key))
-      });
-    }
-
-    if (!normalizedRows.length) {
-      return null;
-    }
-
-    return {
-      version: 1,
-      startDate: report.startDate,
-      endDate: report.endDate,
-      itemKeys: sourceKeys,
-      columns,
-      rows: normalizedRows,
-      generatedAt: report.generatedAt
-    };
-  }
-
-  function normalizeStoredCheckpoint(checkpoint) {
-    if (
-      !checkpoint
-      || typeof checkpoint !== 'object'
-      || checkpoint.version !== 4
-      || !normalizeText(checkpoint.startDate)
-      || !normalizeText(checkpoint.endDate)
-      || !normalizeText(checkpoint.status)
-      || !normalizeText(checkpoint.phase)
-      || !normalizeText(checkpoint.startedAt)
-      || !normalizeText(checkpoint.updatedAt)
-    ) {
-      return null;
-    }
-    const groupIds = normalizeSelectedGroupIds(checkpoint.groupIds);
-    const itemKeys = normalizeSelectedKeys(checkpoint.itemKeys);
-    const startDate = checkpoint.startDate || '';
-    const endDate = checkpoint.endDate || '';
-    const dateList = Array.isArray(checkpoint.dateList) ? checkpoint.dateList.filter(Boolean) : [];
-    if (!startDate || !endDate || !groupIds.length || !itemKeys.length || !dateList.length) {
-      return null;
-    }
-    if (!Number.isInteger(checkpoint.currentDateIndex) || !Number.isInteger(checkpoint.currentItemIndex)) {
-      return null;
-    }
-    if (checkpoint.currentDateIndex < 0 || checkpoint.currentDateIndex > dateList.length || checkpoint.currentItemIndex < 0 || checkpoint.currentItemIndex > itemKeys.length) {
-      return null;
-    }
-    if (!['running', 'paused', 'stopped', 'error'].includes(normalizeText(checkpoint.status))) {
-      return null;
-    }
-    if (!['std', 'resume-qc'].includes(normalizeText(checkpoint.phase))) {
-      return null;
-    }
-    const normalizedResults = {};
-    if (checkpoint.results && typeof checkpoint.results === 'object') {
-      for (const [date, dayResults] of Object.entries(checkpoint.results)) {
-        if (!dayResults || typeof dayResults !== 'object') {
-          continue;
-        }
-        const normalizedDayResults = {};
-        for (const rowValue of Object.values(dayResults)) {
-          const normalizedRow = normalizeStoredResultRow(rowValue);
-          if (!normalizedRow) {
-            continue;
-          }
-          normalizedDayResults[normalizedRow.key] = normalizedRow;
-        }
-        if (Object.keys(normalizedDayResults).length) {
-          normalizedResults[date] = normalizedDayResults;
-        }
-      }
-    }
-    return {
-      ...checkpoint,
-      version: 4,
-      startDate,
-      endDate,
-      dateList,
-      groupIds,
-      itemKeys,
-      currentDateIndex: checkpoint.currentDateIndex,
-      currentItemIndex: checkpoint.currentItemIndex,
-      results: normalizedResults
-    };
-  }
-
-  function normalizeStoredResultCache(cache) {
-    if (!cache || typeof cache !== 'object') {
-      return {};
-    }
-    const normalizedCache = {};
-    for (const [date, dayResults] of Object.entries(cache)) {
-      if (!dayResults || typeof dayResults !== 'object') {
-        continue;
-      }
-      const normalizedDayResults = {};
-      for (const rowValue of Object.values(dayResults)) {
-        const normalizedRow = normalizeStoredResultRow(rowValue);
-        if (!normalizedRow || !normalizedRow.collectionCompleted) {
-          continue;
-        }
-        normalizedDayResults[normalizedRow.key] = normalizedRow;
-      }
-      if (Object.keys(normalizedDayResults).length) {
-        normalizedCache[date] = normalizedDayResults;
-      }
-    }
-    return normalizedCache;
-  }
-
-  function trimResultCacheByCutoff(cache, cutoffDateString) {
-    const trimmedCache = {};
-    for (const [date, dayResults] of Object.entries(cache || {})) {
-      if (isDateExpiredByQuarter(date, cutoffDateString)) {
-        continue;
-      }
-      trimmedCache[date] = dayResults;
-    }
-    return trimmedCache;
-  }
-
-  function trimReportByCutoff(report, cutoffDateString) {
-    const normalizedReport = normalizeStoredReport(report);
-    if (!normalizedReport) {
-      return null;
-    }
-    const rows = normalizedReport.rows.filter((row) => !isDateExpiredByQuarter(row.date, cutoffDateString));
-    if (!rows.length) {
-      return null;
-    }
-    return {
-      ...normalizedReport,
-      startDate: rows[0].date,
-      endDate: rows[rows.length - 1].date,
-      rows
-    };
-  }
-
-  function buildReportColumns(entries) {
-    const totalByLabel = new Map();
-    const usedByLabel = new Map();
-    for (const entry of entries) {
-      totalByLabel.set(entry.exportLabel, (totalByLabel.get(entry.exportLabel) || 0) + 1);
-    }
-    return entries.map((entry) => {
-      const total = totalByLabel.get(entry.exportLabel) || 0;
-      const used = (usedByLabel.get(entry.exportLabel) || 0) + 1;
-      usedByLabel.set(entry.exportLabel, used);
-      return {
-        key: entry.key,
-        label: total > 1 ? `${entry.exportLabel}·${used}` : entry.exportLabel,
-        exportLabel: entry.exportLabel,
-        groupLabel: entry.groupLabel,
-        subgroupLabel: entry.subgroupLabel,
-        queryLabel: entry.queryLabel,
-        theme: entry.theme
-      };
-    });
-  }
-
   function isSupportedPage() {
     if (location.hostname !== 'std.video.cloud.cctv.com') {
       return false;
@@ -2178,38 +2045,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }, PAGE_READY_TIMEOUT, '页面还在加载，请稍后再试', { cancelCheck });
   }
 
-  function buildOrderedResults(items, results) {
-    return items.map((item) => {
-      const result = results[item.key] || createEmptyResult(item);
-      return {
-        key: item.key,
-        category: item.exportLabel,
-        label: item.exportLabel,
-        groupLabel: item.groupLabel,
-        subgroupLabel: item.subgroupLabel,
-        theme: item.theme,
-        inboundCount: result.inboundCount || 0,
-        stdTotalCount: result.stdTotalCount || 0,
-        stdPassCount: result.stdPassCount || 0,
-        stdRejectCount: result.stdRejectCount || 0,
-        stdRejectRate: result.stdRejectRate || 0,
-        qcTotalCount: result.qcTotalCount || 0,
-        qcPassCount: result.qcPassCount || 0,
-        qcRejectCount: result.qcRejectCount || 0,
-        qcRejectRate: result.qcRejectRate || 0
-      };
-    });
-  }
-
-  function buildDailyReportRows(dateList, items, resultsByDate) {
-    return dateList.map((date) => {
-      return {
-        date,
-        results: buildOrderedResults(items, resultsByDate && resultsByDate[date] ? resultsByDate[date] : {})
-      };
-    });
-  }
-
   function formatReportPeriod(report) {
     if (!report) {
       return '';
@@ -2222,30 +2057,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return startDate === endDate ? startDate : `${startDate} 至 ${endDate}`;
   }
 
-  function formatShortDateToken(dateString) {
-    const [year, month, day] = String(dateString || '').split('-').map((part) => Number(part));
-    if (!year || !month || !day) {
-      return '';
-    }
-    return `${month}.${day}`;
-  }
-
   function sanitizeFilenamePart(value) {
     return normalizeText(value).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
-  }
-
-  function getReportFileToken(report) {
-    const startDate = report.startDate || '';
-    const endDate = report.endDate || startDate;
-    const entries = getEntriesByKeys(report.itemKeys);
-    const labels = entries.length
-      ? entries.map((entry) => entry.label)
-      : (Array.isArray(report && report.columns) ? report.columns.map((column) => sanitizeFilenamePart(column.label || column.exportLabel || '')) : []).filter(Boolean);
-    const categoryToken = sanitizeFilenamePart(labels.join('、')) || '日报';
-    const dateToken = startDate
-      ? (startDate === endDate ? formatShortDateToken(startDate) : `${formatShortDateToken(startDate)}-${formatShortDateToken(endDate)}`)
-      : formatShortDateToken(formatInputDate(new Date()));
-    return sanitizeFilenamePart(`${categoryToken} ${dateToken}`) || `日报 ${dateToken}`;
   }
 
   function makeCellRef(column, row) {
@@ -2261,108 +2074,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   function inlineCell(ref, value, styleId) {
     return `<c r="${ref}" s="${styleId}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`;
-  }
-
-  function numberCell(ref, value, styleId) {
-    return `<c r="${ref}" s="${styleId}"><v>${value}</v></c>`;
-  }
-
-  function buildColumnsXml(columns) {
-    const parts = ['<cols>'];
-    const totalColumns = 1 + columns.length * METRIC_HEADERS.length;
-    for (let index = 1; index <= totalColumns; index += 1) {
-      const width = index === 1 ? 12 : (index - 2) % METRIC_HEADERS.length >= 4 ? 13 : 11;
-      parts.push(`<col min="${index}" max="${index}" width="${width}" customWidth="1"/>`);
-    }
-    parts.push('</cols>');
-    return parts.join('');
-  }
-
-  function getColumnStyleIds(theme) {
-    if (theme === 'knowledge') {
-      return { top: 2, sub: 3 };
-    }
-    if (theme === 'culture') {
-      return { top: 6, sub: 7 };
-    }
-    return { top: 4, sub: 5 };
-  }
-
-  function buildWorksheetXml(report) {
-    const columns = Array.isArray(report.columns) ? report.columns : [];
-    const dateRows = Array.isArray(report.rows) ? report.rows : [];
-    const rows = [];
-    const merges = ['A1:A2'];
-
-    const topRow = [inlineCell('A1', '时间', 1)];
-    let column = 2;
-    for (const item of columns) {
-      const styleIds = getColumnStyleIds(item.theme);
-      topRow.push(inlineCell(makeCellRef(column, 1), item.label, styleIds.top));
-      merges.push(`${makeCellRef(column, 1)}:${makeCellRef(column + METRIC_HEADERS.length - 1, 1)}`);
-      column += METRIC_HEADERS.length;
-    }
-    rows.push(`<row r="1" ht="24" customHeight="1">${topRow.join('')}</row>`);
-
-    const secondRowCells = [inlineCell('A2', '', 1)];
-    for (const item of columns) {
-      const styleIds = getColumnStyleIds(item.theme);
-      for (let index = 0; index < METRIC_HEADERS.length; index += 1) {
-        const ref = makeCellRef(secondRowCells.length + 1, 2);
-        secondRowCells.push(inlineCell(ref, METRIC_HEADERS[index], styleIds.sub));
-      }
-    }
-    rows.push(`<row r="2" ht="22" customHeight="1">${secondRowCells.join('')}</row>`);
-
-    dateRows.forEach((reportRow, rowIndex) => {
-      const dataValues = [formatDisplayDate(reportRow.date)];
-      for (const result of reportRow.results) {
-        dataValues.push(
-          result.inboundCount || 0,
-          result.stdTotalCount || 0,
-          result.stdPassCount || 0,
-          result.stdRejectCount || 0,
-          result.stdRejectRate || 0,
-          result.qcTotalCount || 0,
-          result.qcPassCount || 0,
-          result.qcRejectCount || 0,
-          result.qcRejectRate || 0
-        );
-      }
-      const worksheetRowNumber = rowIndex + 3;
-      const dataCells = dataValues.map((value, cellIndex) => {
-        const ref = makeCellRef(cellIndex + 1, worksheetRowNumber);
-        if (cellIndex === 0) {
-          return inlineCell(ref, value, 8);
-        }
-        const metricIndex = (cellIndex - 1) % METRIC_HEADERS.length;
-        if (metricIndex === 4 || metricIndex === 8) {
-          return numberCell(ref, Number(value || 0), 10);
-        }
-        return numberCell(ref, Number(value || 0), 9);
-      });
-      rows.push(`<row r="${worksheetRowNumber}" ht="22" customHeight="1">${dataCells.join('')}</row>`);
-    });
-
-    return [
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
-      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="2" topLeftCell="A3" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
-      '<sheetFormatPr defaultRowHeight="20"/>',
-      buildColumnsXml(columns),
-      `<sheetData>${rows.join('')}</sheetData>`,
-      `<mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${ref}"/>`).join('')}</mergeCells>`,
-      '</worksheet>'
-    ].join('');
-  }
-
-  function buildWorkbookXml() {
-    return [
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
-      '<sheets><sheet name="日报数据" sheetId="1" r:id="rId1"/></sheets>',
-      '</workbook>'
-    ].join('');
   }
 
   function buildWorkbookRelsXml() {
@@ -2394,47 +2105,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',
       '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>',
       '</Types>'
-    ].join('');
-  }
-
-  function buildStylesXml() {
-    return [
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-      '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
-      '<fonts count="2">',
-      '<font><sz val="11"/><color rgb="FF17212B"/><name val="Microsoft YaHei"/></font>',
-      '<font><b/><sz val="11"/><color rgb="FF17212B"/><name val="Microsoft YaHei"/></font>',
-      '</fonts>',
-      '<fills count="8">',
-      '<fill><patternFill patternType="none"/></fill>',
-      '<fill><patternFill patternType="gray125"/></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFF1E0"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFF8E9"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFDCEAF8"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFEEF5FC"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFF4DFD8"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFFBECE6"/><bgColor indexed="64"/></patternFill></fill>',
-      '</fills>',
-      '<borders count="2">',
-      '<border><left/><right/><top/><bottom/><diagonal/></border>',
-      '<border><left style="thin"><color rgb="FFD7E1EA"/></left><right style="thin"><color rgb="FFD7E1EA"/></right><top style="thin"><color rgb="FFD7E1EA"/></top><bottom style="thin"><color rgb="FFD7E1EA"/></bottom><diagonal/></border>',
-      '</borders>',
-      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
-      '<cellXfs count="11">',
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>',
-      '<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="7" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="10" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '</cellXfs>',
-      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>',
-      '</styleSheet>'
     ].join('');
   }
 
@@ -2580,17 +2250,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
   }
 
-  function buildXlsxBlob(report) {
-    const zip = new ZipBuilder();
-    zip.addText('[Content_Types].xml', buildContentTypesXml());
-    zip.addText('_rels/.rels', buildRootRelsXml());
-    zip.addText('xl/workbook.xml', buildWorkbookXml());
-    zip.addText('xl/_rels/workbook.xml.rels', buildWorkbookRelsXml());
-    zip.addText('xl/styles.xml', buildStylesXml());
-    zip.addText('xl/worksheets/sheet1.xml', buildWorksheetXml(report));
-    return zip.build();
-  }
-
   function triggerBlobDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -2598,159 +2257,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     anchor.download = filename;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  function downloadReport(report) {
-    triggerBlobDownload(buildXlsxBlob(report), `${getReportFileToken(report)}.xlsx`);
-  }
-
-  function createDefaultWorkbenchSettings() {
-    const yesterday = getYesterdayDateString();
-    return {
-      version: 1,
-      ui: {
-        panelMinimized: true,
-        activeModule: 'secondaryQc'
-      },
-      daily: {
-        startDate: yesterday,
-        endDate: '',
-        groupIds: []
-      },
-      secondaryQc: {
-        startDate: '',
-        endDate: '',
-        groupIds: [],
-        targetCount: 10,
-        parallelCount: SECONDARY_QC_DEFAULT_PARALLEL_COUNT,
-        modelMode: 'adaptive',
-        categoryKey: ''
-      },
-      secrets: {
-        dashscopeApiKey: ''
-      }
-    };
-  }
-
-  function normalizeDateInputValue(value, maxDateString) {
-    const maxDate = normalizeText(maxDateString) || getYesterdayDateString();
-    const date = normalizeText(value);
-    if (!date) {
-      return '';
-    }
-    return date > maxDate ? maxDate : date;
-  }
-
-  function normalizePositiveInteger(value, fallbackValue, minValue, maxValue) {
-    const numberValue = Math.trunc(Number(value));
-    if (!Number.isFinite(numberValue) || numberValue < (minValue || 1)) {
-      return fallbackValue;
-    }
-    if (maxValue && numberValue > maxValue) {
-      return maxValue;
-    }
-    return numberValue;
-  }
-
-  function normalizeActiveModule(value) {
-    return value === 'daily' ? 'daily' : 'secondaryQc';
-  }
-
-  function normalizeSecondaryQcModelMode(value) {
-    if (value === 'flash' || value === 'plus') {
-      return value;
-    }
-    return 'adaptive';
-  }
-
-  function normalizeSecondaryQcParallelCount(value, fallbackValue) {
-    const safeFallback = normalizePositiveInteger(
-      fallbackValue,
-      SECONDARY_QC_DEFAULT_PARALLEL_COUNT,
-      SECONDARY_QC_MIN_PARALLEL_COUNT,
-      SECONDARY_QC_MAX_PARALLEL_COUNT
-    );
-    return normalizePositiveInteger(
-      value,
-      safeFallback,
-      SECONDARY_QC_MIN_PARALLEL_COUNT,
-      SECONDARY_QC_MAX_PARALLEL_COUNT
-    );
-  }
-
-  function normalizeWorkbenchSettings(rawSettings) {
-    const defaults = createDefaultWorkbenchSettings();
-    if (!rawSettings || typeof rawSettings !== 'object' || rawSettings.version !== defaults.version) {
-      return defaults;
-    }
-    if (
-      !rawSettings.ui
-      || typeof rawSettings.ui !== 'object'
-      || !rawSettings.daily
-      || typeof rawSettings.daily !== 'object'
-      || !rawSettings.secondaryQc
-      || typeof rawSettings.secondaryQc !== 'object'
-      || !rawSettings.secrets
-      || typeof rawSettings.secrets !== 'object'
-    ) {
-      return defaults;
-    }
-    const source = rawSettings;
-    const dailyMaxDate = getYesterdayDateString();
-    const secondaryQcMaxDate = getTodayDateString();
-
-    const dailyStartDate = normalizeDateInputValue(source.daily && source.daily.startDate, dailyMaxDate) || defaults.daily.startDate;
-    let dailyEndDate = normalizeDateInputValue(source.daily && source.daily.endDate, dailyMaxDate);
-    if (dailyEndDate && dailyEndDate < dailyStartDate) {
-      dailyEndDate = '';
-    }
-
-    const qcStartDate = normalizeDateInputValue(source.secondaryQc && source.secondaryQc.startDate, secondaryQcMaxDate) || defaults.secondaryQc.startDate;
-    let qcEndDate = normalizeDateInputValue(source.secondaryQc && source.secondaryQc.endDate, secondaryQcMaxDate);
-    if (qcEndDate && qcEndDate < qcStartDate) {
-      qcEndDate = '';
-    }
-
-    return {
-      version: defaults.version,
-      ui: {
-        panelMinimized: source.ui && source.ui.panelMinimized !== undefined
-          ? Boolean(source.ui.panelMinimized)
-          : defaults.ui.panelMinimized,
-        activeModule: normalizeActiveModule(source.ui && source.ui.activeModule)
-      },
-      daily: {
-        startDate: dailyStartDate,
-        endDate: dailyEndDate,
-        groupIds: normalizeSelectedGroupIds(source.daily && source.daily.groupIds)
-      },
-      secondaryQc: {
-        startDate: qcStartDate,
-        endDate: qcEndDate,
-        groupIds: normalizeSelectedGroupIds(source.secondaryQc && source.secondaryQc.groupIds),
-        categoryKey: normalizeSelectedKeys([
-          source.secondaryQc && source.secondaryQc.categoryKey
-        ])[0] || '',
-        targetCount: normalizePositiveInteger(
-          source.secondaryQc && source.secondaryQc.targetCount,
-          defaults.secondaryQc.targetCount,
-          1,
-          999
-        ),
-        parallelCount: normalizeSecondaryQcParallelCount(
-          source.secondaryQc && source.secondaryQc.parallelCount,
-          defaults.secondaryQc.parallelCount
-        ),
-        modelMode: normalizeSecondaryQcModelMode(source.secondaryQc && source.secondaryQc.modelMode)
-      },
-      secrets: {
-        dashscopeApiKey: normalizeText(source.secrets && source.secrets.dashscopeApiKey)
-      }
-    };
-  }
-
-  function cloneWorkbenchSettings(settings) {
-    return normalizeWorkbenchSettings(JSON.parse(JSON.stringify(settings || createDefaultWorkbenchSettings())));
   }
 
   function buildWorkbookXmlNamed(sheetName) {
@@ -2870,27 +2376,27 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   }
 
   function buildSecondaryQcWorkerRequestKey(requestId) {
-    return `${STORAGE_KEYS.secondaryQcWorkerRequestPrefix}${requestId}`;
+    return `${STORAGE_KEYS.workerRequestPrefix}${requestId}`;
   }
 
   function buildSecondaryQcWorkerResponseKey(requestId) {
-    return `${STORAGE_KEYS.secondaryQcWorkerResponsePrefix}${requestId}`;
+    return `${STORAGE_KEYS.workerResponsePrefix}${requestId}`;
   }
 
   function buildSecondaryQcWorkerProgressKey(requestId) {
-    return `${STORAGE_KEYS.secondaryQcWorkerProgressPrefix}${requestId}`;
+    return `${STORAGE_KEYS.workerProgressPrefix}${requestId}`;
   }
 
   function buildSecondaryQcWorkerStopKey(requestId) {
-    return `${STORAGE_KEYS.secondaryQcWorkerStopPrefix}${requestId}`;
+    return `${STORAGE_KEYS.workerStopPrefix}${requestId}`;
   }
 
   function buildSecondaryQcMediaWorkerRequestKey(requestId) {
-    return `${STORAGE_KEYS.secondaryQcMediaWorkerRequestPrefix}${requestId}`;
+    return `${STORAGE_KEYS.mediaWorkerRequestPrefix}${requestId}`;
   }
 
   function buildSecondaryQcMediaWorkerResponseKey(requestId) {
-    return `${STORAGE_KEYS.secondaryQcMediaWorkerResponsePrefix}${requestId}`;
+    return `${STORAGE_KEYS.mediaWorkerResponsePrefix}${requestId}`;
   }
 
   function getSecondaryQcWorkerRequestIdFromLocation() {
@@ -5258,17 +4764,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       || normalized.includes('视频内容可能包含不适宜内容');
   }
 
-  function advanceDailyCheckpointCursor(checkpoint, itemCount) {
-    if (!checkpoint) {
-      return;
-    }
-    checkpoint.currentItemIndex += 1;
-    if (checkpoint.currentItemIndex >= itemCount) {
-      checkpoint.currentDateIndex += 1;
-      checkpoint.currentItemIndex = 0;
-    }
-  }
-
   async function applyCategorySelection(item, cancelCheck, onSelected) {
     const primary = getCategoryWrapper(0);
     if (!primary) {
@@ -5307,1271 +4802,84 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
   }
 
-  class YspWorkbenchApp {
+  class YspSecondaryQcApp {
     constructor() {
       this.panel = null;
       this.handleOutsideInteraction = null;
+      this.handleViewportChange = null;
       this.settingsModalOpen = false;
       this.settingsDraft = createDefaultWorkbenchSettings();
       this.settings = createDefaultWorkbenchSettings();
-      this.runtime = {
-        minimized: false,
-        running: false,
-        openGroupMenu: '',
-        jobType: '',
-        listJobAbortToken: 0,
-        stopping: false,
-        pauseRequested: false,
-        statusText: '等待开始',
-        logs: [],
-        daily: {
-          checkpoint: null,
-          report: null,
-          resultCache: {}
-        },
-        secondaryQc: {
-          checkpoint: null,
-          report: null
-        }
-      };
+      this.runtime = { minimized: false, running: false, openGroupMenu: '', jobType: '', listJobAbortToken: 0, stopping: false, pauseRequested: false, statusText: '等待开始', logs: [], checkpoint: null, report: null };
       this.refs = {};
     }
 
-    async init() {
-      if (!isSupportedPage()) {
-        return;
-      }
-      injectPanelStyle();
-      await this.clearExpiredCache();
-      await this.loadState();
-      this.mountPanel();
-      if (isListPage()) {
-        await this.tryResume();
-      }
-    }
-
-    async clearExpiredCache() {
-      const state = await storageGet([
-        STORAGE_KEYS.report,
-        STORAGE_KEYS.resultCache,
-        STORAGE_KEYS.dailyCheckpoint,
-        STORAGE_KEYS.secondaryQcCheckpoint
-      ]);
-      const cutoffDate = getQuarterCutoffDateString(new Date());
-
-      const nextReport = trimReportByCutoff(state[STORAGE_KEYS.report], cutoffDate);
-      if (nextReport) {
-        await storageSetCached({ [STORAGE_KEYS.report]: nextReport });
-      } else {
-        await storageRemove(STORAGE_KEYS.report);
-      }
-
-      const nextResultCache = trimResultCacheByCutoff(
-        normalizeStoredResultCache(state[STORAGE_KEYS.resultCache]),
-        cutoffDate
-      );
-      if (Object.keys(nextResultCache).length) {
-        await storageSetCached({ [STORAGE_KEYS.resultCache]: nextResultCache });
-      } else {
-        await storageRemove(STORAGE_KEYS.resultCache);
-      }
-
-      const checkpoints = [
-        [STORAGE_KEYS.dailyCheckpoint, state[STORAGE_KEYS.dailyCheckpoint]],
-        [STORAGE_KEYS.secondaryQcCheckpoint, state[STORAGE_KEYS.secondaryQcCheckpoint]]
-      ];
-      for (const [key, checkpoint] of checkpoints) {
-        const dateValue = checkpoint && normalizeText(checkpoint.updatedAt || checkpoint.startedAt).slice(0, 10);
-        if (dateValue && isDateExpiredByQuarter(dateValue, cutoffDate)) {
-          await storageRemove(key);
-        }
-      }
-    }
-
-    async loadState() {
-      const state = await storageGet([
-        STORAGE_KEYS.settings,
-        STORAGE_KEYS.report,
-        STORAGE_KEYS.resultCache,
-        STORAGE_KEYS.dailyCheckpoint,
-        STORAGE_KEYS.secondaryQcReport,
-        STORAGE_KEYS.secondaryQcCheckpoint
-      ]);
-      this.settings = normalizeWorkbenchSettings(state[STORAGE_KEYS.settings]);
-      this.settingsDraft = cloneWorkbenchSettings(this.settings);
-      this.runtime.minimized = Boolean(this.settings.ui.panelMinimized);
-      this.runtime.daily.report = normalizeStoredReport(state[STORAGE_KEYS.report]);
-      this.runtime.daily.resultCache = normalizeStoredResultCache(state[STORAGE_KEYS.resultCache]);
-      this.runtime.daily.checkpoint = normalizeStoredCheckpoint(state[STORAGE_KEYS.dailyCheckpoint]);
-      this.runtime.secondaryQc.report = normalizeSecondaryQcReport(state[STORAGE_KEYS.secondaryQcReport]);
-      this.runtime.secondaryQc.checkpoint = normalizeSecondaryQcCheckpoint(state[STORAGE_KEYS.secondaryQcCheckpoint]);
-      this.runtime.logs = [];
-      this.runtime.statusText = '等待开始';
-      this.runtime.running = false;
-      this.runtime.jobType = '';
-      this.runtime.listJobAbortToken = 0;
-      this.runtime.stopping = false;
-      this.runtime.pauseRequested = false;
-
-      const candidates = [];
-      if (this.runtime.daily.checkpoint && this.runtime.daily.checkpoint.status === 'running') {
-        candidates.push({
-          jobType: 'daily',
-          updatedAt: this.runtime.daily.checkpoint.updatedAt || this.runtime.daily.checkpoint.startedAt || '',
-          checkpoint: this.runtime.daily.checkpoint
-        });
-      }
-      if (this.runtime.secondaryQc.checkpoint && this.runtime.secondaryQc.checkpoint.status === 'running') {
-        candidates.push({
-          jobType: 'secondaryQc',
-          updatedAt: this.runtime.secondaryQc.checkpoint.updatedAt || this.runtime.secondaryQc.checkpoint.startedAt || '',
-          checkpoint: this.runtime.secondaryQc.checkpoint
-        });
-      }
-
-      if (candidates.length) {
-        candidates.sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
-        const active = candidates[0];
-        this.runtime.running = true;
-        this.runtime.jobType = active.jobType;
-        this.runtime.listJobAbortToken = beginListJobAbortSession();
-        this.runtime.logs = Array.isArray(active.checkpoint.logs) ? active.checkpoint.logs.slice(0, MAX_LOGS) : [];
-        this.runtime.statusText = active.checkpoint.statusText || '检测到未完成任务，正在准备继续';
-        return;
-      }
-
-      const pausedTask = this.getPausedTaskMeta();
-      if (pausedTask) {
-        this.runtime.statusText = pausedTask.checkpoint.statusText || `存在已暂停${pausedTask.label}，可点击继续任务`;
-        this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS) : [];
-        return;
-      }
-
-      const stoppedCheckpoint = this.runtime.secondaryQc.checkpoint || this.runtime.daily.checkpoint;
-      if (stoppedCheckpoint && stoppedCheckpoint.statusText) {
-        this.runtime.statusText = stoppedCheckpoint.statusText;
-        this.runtime.logs = Array.isArray(stoppedCheckpoint.logs) ? stoppedCheckpoint.logs.slice(0, MAX_LOGS) : [];
-      }
-    }
+    async init() { if (!isSupportedPage()) return; injectPanelStyle(); await this.clearExpiredCache(); await this.loadState(); this.mountPanel(); if (isListPage()) await this.tryResume(); }
+    async clearExpiredCache() { const state = await storageGet(STORAGE_KEYS.checkpoint); const checkpoint = state[STORAGE_KEYS.checkpoint]; const cutoffDate = getQuarterCutoffDateString(new Date()); const dateValue = checkpoint && normalizeText(checkpoint.updatedAt || checkpoint.startedAt).slice(0, 10); if (dateValue && isDateExpiredByQuarter(dateValue, cutoffDate)) await storageRemove(STORAGE_KEYS.checkpoint); }
+    async loadState() { const state = await storageGet([STORAGE_KEYS.settings, STORAGE_KEYS.report, STORAGE_KEYS.checkpoint]); this.settings = normalizeWorkbenchSettings(state[STORAGE_KEYS.settings]); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.runtime.minimized = Boolean(this.settings.ui.panelMinimized); this.runtime.report = normalizeSecondaryQcReport(state[STORAGE_KEYS.report]); this.runtime.checkpoint = normalizeSecondaryQcCheckpoint(state[STORAGE_KEYS.checkpoint]); this.runtime.logs = []; this.runtime.statusText = '等待开始'; this.runtime.running = false; this.runtime.jobType = ''; this.runtime.listJobAbortToken = 0; this.runtime.stopping = false; this.runtime.pauseRequested = false; if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS) : []; this.runtime.statusText = this.runtime.checkpoint.statusText || '检测到未完成二次质检，正在准备继续'; return; } if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'paused') { this.runtime.statusText = this.runtime.checkpoint.statusText || '存在已暂停质检，可点击继续任务'; this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS) : []; return; } if (this.runtime.checkpoint && this.runtime.checkpoint.statusText) { this.runtime.statusText = this.runtime.checkpoint.statusText; this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS) : []; } }
 
     mountPanel() {
-      const existing = document.getElementById('ysp-daily-panel-root');
-      if (existing) {
-        existing.remove();
-      }
-
+      const existing = document.getElementById('ysp-secondary-qc-panel-root');
+      if (existing) existing.remove();
       const root = document.createElement('div');
-      root.id = 'ysp-daily-panel-root';
+      root.id = 'ysp-secondary-qc-panel-root';
       root.innerHTML = `
-        <div class="ysp-daily-panel__backdrop"></div>
-        <div class="ysp-daily-panel__popup-layer" data-role="popup-layer"></div>
-        <div class="ysp-daily-panel">
-          <div class="ysp-daily-panel__header">
-            <div class="ysp-daily-panel__header-top">
-              <div>
-                <div class="ysp-daily-panel__title">央视频标准化工作台</div>
-              </div>
-              <div class="ysp-daily-panel__header-actions">
-                <button type="button" class="ysp-daily-panel__header-chip" data-role="open-settings">设置</button>
-                <div class="ysp-daily-panel__header-chip">v${SCRIPT_VERSION}</div>
-                <button type="button" class="ysp-daily-panel__header-chip" data-role="minimize">收起</button>
-              </div>
-            </div>
-          </div>
-          <div class="ysp-daily-panel__body">
-            <div class="ysp-daily-panel__main">
-              <div class="ysp-daily-panel__module-switcher" role="tablist" aria-label="模块切换">
-                <button type="button" class="ysp-daily-panel__module-tab" data-role="show-daily" aria-selected="false">日报模块</button>
-                <button type="button" class="ysp-daily-panel__module-tab" data-role="show-secondary-qc" aria-selected="true">质检模块</button>
-              </div>
-              <section class="ysp-daily-panel__module" data-role="daily-module">
-                <div class="ysp-daily-panel__module-body">
-                  <div class="ysp-daily-panel__field-grid">
-                    <label class="ysp-daily-panel__date-field" for="ysp-daily-start-date">
-                      <span class="ysp-daily-panel__date-caption">开始日期</span>
-                      <input id="ysp-daily-start-date" class="ysp-daily-panel__date" type="date" />
-                    </label>
-                    <label class="ysp-daily-panel__date-field" for="ysp-daily-end-date">
-                      <span class="ysp-daily-panel__date-caption">结束日期</span>
-                      <input id="ysp-daily-end-date" class="ysp-daily-panel__date" type="date" />
-                    </label>
-                  </div>
-                  <div class="ysp-daily-panel__field">
-                    <span class="ysp-daily-panel__label">品类编组</span>
-                    <div data-role="daily-groups"></div>
-                  </div>
-                  <div class="ysp-daily-panel__actions">
-                    <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-daily">开始日报</button>
-                  </div>
-                </div>
-              </section>
-
-              <section class="ysp-daily-panel__module" data-role="secondary-qc-module">
-                <div class="ysp-daily-panel__module-body">
-                  <div class="ysp-daily-panel__field-grid">
-                    <label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-start-date">
-                      <span class="ysp-daily-panel__date-caption">开始周期</span>
-                      <input id="ysp-secondary-qc-start-date" class="ysp-daily-panel__date" type="date" />
-                    </label>
-                    <label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-end-date">
-                      <span class="ysp-daily-panel__date-caption">结束周期</span>
-                      <input id="ysp-secondary-qc-end-date" class="ysp-daily-panel__date" type="date" />
-                    </label>
-                    <label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-target-count">
-                      <span class="ysp-daily-panel__date-caption">质检条数</span>
-                      <input id="ysp-secondary-qc-target-count" class="ysp-daily-panel__input" type="number" min="1" max="999" step="1" />
-                    </label>
-                    <label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-parallel-count">
-                      <span class="ysp-daily-panel__date-caption">并发数</span>
-                      <input id="ysp-secondary-qc-parallel-count" class="ysp-daily-panel__input" type="number" min="${SECONDARY_QC_MIN_PARALLEL_COUNT}" max="${SECONDARY_QC_MAX_PARALLEL_COUNT}" step="1" />
-                    </label>
-                    <label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-model-mode">
-                      <span class="ysp-daily-panel__date-caption">模型切换</span>
-                      <select id="ysp-secondary-qc-model-mode" class="ysp-daily-panel__input">
-                        <option value="adaptive">自适应</option>
-                        <option value="flash">快速</option>
-                        <option value="plus">专业</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div class="ysp-daily-panel__field">
-                    <span class="ysp-daily-panel__label">质检品类</span>
-                    <div data-role="secondary-qc-groups"></div>
-                  </div>
-                  <div class="ysp-daily-panel__actions">
-                    <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-secondary-qc">开始质检</button>
-                  </div>
-                </div>
-              </section>
-            </div>
-            <div class="ysp-daily-panel__side">
-              <div class="ysp-daily-panel__status" data-role="status"></div>
-              <div class="ysp-daily-panel__log-card">
-                <div class="ysp-daily-panel__toolbar">
-                  <span class="ysp-daily-panel__label">运行日志</span>
-                </div>
-                <div class="ysp-daily-panel__log-list" data-role="logs"></div>
-              </div>
-              <div class="ysp-daily-panel__result-card" data-role="downloads-card" hidden>
-                <div class="ysp-daily-panel__toolbar">
-                  <span class="ysp-daily-panel__label">下载中心</span>
-                </div>
-                <div class="ysp-daily-panel__download-list" data-role="downloads"></div>
-              </div>
-              <div class="ysp-daily-panel__actions">
-                <button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button>
-                <button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button>
-        <div class="ysp-daily-panel__modal-mask" data-role="settings-mask">
-          <div class="ysp-daily-panel__modal">
-            <div class="ysp-daily-panel__toolbar">
-              <span class="ysp-daily-panel__label">设置</span>
-            </div>
-            <label class="ysp-daily-panel__date-field" for="ysp-settings-dashscope-api-key">
-              <span class="ysp-daily-panel__date-caption">DASHSCOPE_API_KEY（本地保存）</span>
-              <input id="ysp-settings-dashscope-api-key" class="ysp-daily-panel__input" type="password" placeholder="请输入阿里云模型 Key" />
-            </label>
-            <div class="ysp-daily-panel__actions">
-              <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清理缓存</button>
-            </div>
-            <div class="ysp-daily-panel__actions">
-              <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="save-settings">保存设置</button>
-              <button type="button" class="ysp-daily-panel__button" data-role="close-settings">关闭</button>
-            </div>
-          </div>
-        </div>
-      `;
+        <div class="ysp-daily-panel__backdrop"></div><div class="ysp-daily-panel__popup-layer" data-role="popup-layer"></div>
+        <div class="ysp-daily-panel"><div class="ysp-daily-panel__header"><div class="ysp-daily-panel__header-top"><div><div class="ysp-daily-panel__title">央视频二次质检助手</div></div><div class="ysp-daily-panel__header-actions"><button type="button" class="ysp-daily-panel__header-chip" data-role="open-settings">设置</button><div class="ysp-daily-panel__header-chip">v${SCRIPT_VERSION}</div><button type="button" class="ysp-daily-panel__header-chip" data-role="minimize">收起</button></div></div></div>
+          <div class="ysp-daily-panel__body"><div class="ysp-daily-panel__main"><section class="ysp-daily-panel__module"><div class="ysp-daily-panel__module-body"><div class="ysp-daily-panel__field-grid"><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-start-date"><span class="ysp-daily-panel__date-caption">开始周期</span><input id="ysp-secondary-qc-start-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-end-date"><span class="ysp-daily-panel__date-caption">结束周期</span><input id="ysp-secondary-qc-end-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-target-count"><span class="ysp-daily-panel__date-caption">质检条数</span><input id="ysp-secondary-qc-target-count" class="ysp-daily-panel__input" type="number" min="1" max="999" step="1" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-parallel-count"><span class="ysp-daily-panel__date-caption">并发数</span><input id="ysp-secondary-qc-parallel-count" class="ysp-daily-panel__input" type="number" min="${SECONDARY_QC_MIN_PARALLEL_COUNT}" max="${SECONDARY_QC_MAX_PARALLEL_COUNT}" step="1" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-model-mode"><span class="ysp-daily-panel__date-caption">模型切换</span><select id="ysp-secondary-qc-model-mode" class="ysp-daily-panel__input"><option value="adaptive">自适应</option><option value="flash">快速</option><option value="plus">专业</option></select></label></div><div class="ysp-daily-panel__field"><span class="ysp-daily-panel__label">质检品类</span><div data-role="secondary-qc-groups"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-secondary-qc">开始质检</button></div></div></section></div><div class="ysp-daily-panel__side"><div class="ysp-daily-panel__status" data-role="status"></div><div class="ysp-daily-panel__log-card"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">运行日志</span></div><div class="ysp-daily-panel__log-list" data-role="logs"></div></div><div class="ysp-daily-panel__result-card" data-role="downloads-card" hidden><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">下载中心</span></div><div class="ysp-daily-panel__download-list" data-role="downloads"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button><button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button></div></div></div></div>
+        <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button><div class="ysp-daily-panel__modal-mask" data-role="settings-mask"><div class="ysp-daily-panel__modal"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">设置</span></div><label class="ysp-daily-panel__date-field" for="ysp-settings-dashscope-api-key"><span class="ysp-daily-panel__date-caption">DASHSCOPE_API_KEY（本地保存）</span><input id="ysp-settings-dashscope-api-key" class="ysp-daily-panel__input" type="password" placeholder="请输入阿里云模型 Key" /></label><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清理缓存</button></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="save-settings">保存设置</button><button type="button" class="ysp-daily-panel__button" data-role="close-settings">关闭</button></div></div></div>`;
       document.body.appendChild(root);
       this.panel = root;
-      this.refs = {
-        backdrop: root.querySelector('.ysp-daily-panel__backdrop'),
-        popupLayer: root.querySelector('[data-role="popup-layer"]'),
-        surface: root.querySelector('.ysp-daily-panel'),
-        dock: root.querySelector('[data-role="dock"]'),
-        minimize: root.querySelector('[data-role="minimize"]'),
-        openSettings: root.querySelector('[data-role="open-settings"]'),
-        settingsMask: root.querySelector('[data-role="settings-mask"]'),
-        settingsInput: root.querySelector('#ysp-settings-dashscope-api-key'),
-        saveSettings: root.querySelector('[data-role="save-settings"]'),
-        closeSettings: root.querySelector('[data-role="close-settings"]'),
-        dailyModule: root.querySelector('[data-role="daily-module"]'),
-        dailyTab: root.querySelector('[data-role="show-daily"]'),
-        dailyStartDate: root.querySelector('#ysp-daily-start-date'),
-        dailyEndDate: root.querySelector('#ysp-daily-end-date'),
-        dailyGroups: root.querySelector('[data-role="daily-groups"]'),
-        startDaily: root.querySelector('[data-role="start-daily"]'),
-        secondaryQcModule: root.querySelector('[data-role="secondary-qc-module"]'),
-        secondaryQcTab: root.querySelector('[data-role="show-secondary-qc"]'),
-        secondaryQcStartDate: root.querySelector('#ysp-secondary-qc-start-date'),
-        secondaryQcEndDate: root.querySelector('#ysp-secondary-qc-end-date'),
-        secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'),
-        secondaryQcParallelCount: root.querySelector('#ysp-secondary-qc-parallel-count'),
-        secondaryQcModelMode: root.querySelector('#ysp-secondary-qc-model-mode'),
-        secondaryQcGroups: root.querySelector('[data-role="secondary-qc-groups"]'),
-        startSecondaryQc: root.querySelector('[data-role="start-secondary-qc"]'),
-        pauseResume: root.querySelector('[data-role="pause-resume"]'),
-        stop: root.querySelector('[data-role="stop"]'),
-        clearData: root.querySelector('[data-role="clear-data"]'),
-        status: root.querySelector('[data-role="status"]'),
-        downloadsCard: root.querySelector('[data-role="downloads-card"]'),
-        downloads: root.querySelector('[data-role="downloads"]'),
-        logs: root.querySelector('[data-role="logs"]')
-      };
-
+      this.refs = { backdrop: root.querySelector('.ysp-daily-panel__backdrop'), popupLayer: root.querySelector('[data-role="popup-layer"]'), surface: root.querySelector('.ysp-daily-panel'), dock: root.querySelector('[data-role="dock"]'), minimize: root.querySelector('[data-role="minimize"]'), openSettings: root.querySelector('[data-role="open-settings"]'), settingsMask: root.querySelector('[data-role="settings-mask"]'), settingsInput: root.querySelector('#ysp-settings-dashscope-api-key'), saveSettings: root.querySelector('[data-role="save-settings"]'), closeSettings: root.querySelector('[data-role="close-settings"]'), secondaryQcStartDate: root.querySelector('#ysp-secondary-qc-start-date'), secondaryQcEndDate: root.querySelector('#ysp-secondary-qc-end-date'), secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'), secondaryQcParallelCount: root.querySelector('#ysp-secondary-qc-parallel-count'), secondaryQcModelMode: root.querySelector('#ysp-secondary-qc-model-mode'), secondaryQcGroups: root.querySelector('[data-role="secondary-qc-groups"]'), startSecondaryQc: root.querySelector('[data-role="start-secondary-qc"]'), pauseResume: root.querySelector('[data-role="pause-resume"]'), stop: root.querySelector('[data-role="stop"]'), clearData: root.querySelector('[data-role="clear-data"]'), status: root.querySelector('[data-role="status"]'), downloadsCard: root.querySelector('[data-role="downloads-card"]'), downloads: root.querySelector('[data-role="downloads"]'), logs: root.querySelector('[data-role="logs"]') };
       this.bindPanelEvents();
       this.syncSettingsToInputs();
       this.render();
     }
 
-    destroy() {
-      if (this.handleOutsideInteraction) {
-        document.removeEventListener('pointerdown', this.handleOutsideInteraction, true);
-        document.removeEventListener('mousedown', this.handleOutsideInteraction, true);
-        document.removeEventListener('touchstart', this.handleOutsideInteraction, true);
-        this.handleOutsideInteraction = null;
-      }
-      if (this.handleViewportChange) {
-        window.removeEventListener('resize', this.handleViewportChange);
-        this.handleViewportChange = null;
-      }
-      releasePageMuted();
-      if (this.panel && this.panel.isConnected) {
-        this.panel.remove();
-      }
-      this.panel = null;
-      this.refs = {};
-    }
-
-    persistActiveCheckpoint() {
-      const checkpoint = this.getActiveCheckpoint();
-      if (!checkpoint || !this.runtime.jobType) {
-        return Promise.resolve();
-      }
-      return this.saveCheckpoint(this.runtime.jobType);
-    }
-
-    getActiveCheckpoint() {
-      if (this.runtime.jobType === 'daily') {
-        return this.runtime.daily.checkpoint;
-      }
-      if (this.runtime.jobType === 'secondaryQc') {
-        return this.runtime.secondaryQc.checkpoint;
-      }
-      return null;
-    }
-
-    getListAbortCheck() {
-      const abortToken = this.runtime.listJobAbortToken;
-      return () => isListJobAbortRequested(abortToken);
-    }
-
-    getPausedTaskMeta() {
-      const candidates = [];
-      if (this.runtime.daily.checkpoint && this.runtime.daily.checkpoint.status === 'paused') {
-        candidates.push({
-          jobType: 'daily',
-          label: '日报',
-          checkpoint: this.runtime.daily.checkpoint,
-          updatedAt: this.runtime.daily.checkpoint.updatedAt || this.runtime.daily.checkpoint.startedAt || ''
-        });
-      }
-      if (this.runtime.secondaryQc.checkpoint && this.runtime.secondaryQc.checkpoint.status === 'paused') {
-        candidates.push({
-          jobType: 'secondaryQc',
-          label: '质检模块',
-          checkpoint: this.runtime.secondaryQc.checkpoint,
-          updatedAt: this.runtime.secondaryQc.checkpoint.updatedAt || this.runtime.secondaryQc.checkpoint.startedAt || ''
-        });
-      }
-      if (!candidates.length) {
-        return null;
-      }
-      candidates.sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
-      return candidates[0];
-    }
-
-    getCheckpointStorageKey(jobType) {
-      return jobType === 'secondaryQc' ? STORAGE_KEYS.secondaryQcCheckpoint : STORAGE_KEYS.dailyCheckpoint;
-    }
-
-    getModuleSettings(moduleType) {
-      return moduleType === 'secondaryQc' ? this.settings.secondaryQc : this.settings.daily;
-    }
-
-    getSelectedGroupEntries(moduleType) {
-      if (moduleType === 'secondaryQc') {
-        return [];
-      }
-      return getSubgroupEntriesByIds(this.getModuleSettings(moduleType).groupIds);
-    }
-
-    getSelectedEntries(moduleType) {
-      if (moduleType === 'secondaryQc') {
-        const categoryKey = normalizeText(this.settings.secondaryQc.categoryKey);
-        return categoryKey ? getEntriesByKeys([categoryKey]) : [];
-      }
-      return getEntriesByGroupIds(this.getModuleSettings(moduleType).groupIds);
-    }
-
-    getCheckpointItems(checkpoint) {
-      return getEntriesByKeys(checkpoint && checkpoint.itemKeys);
-    }
-
-    formatGroupEntryLabel(entry) {
-      if (!entry) {
-        return '';
-      }
-      return `${entry.groupLabel} / ${entry.label}`;
-    }
-
-    getGroupPickerSummary(moduleType) {
-      if (moduleType === 'secondaryQc') {
-        const entry = getCategoryEntry(this.settings.secondaryQc.categoryKey);
-        return entry ? `${entry.groupLabel} / ${entry.exportLabel}` : '请选择质检品类';
-      }
-      const entries = this.getSelectedGroupEntries(moduleType);
-      if (!entries.length) {
-        return '请选择品类编组';
-      }
-      if (entries.length === 1) {
-        return this.formatGroupEntryLabel(entries[0]);
-      }
-      return `已选 ${entries.length} 个编组`;
-    }
-
-    getGroupPickerHost(moduleType) {
-      return moduleType === 'secondaryQc' ? this.refs.secondaryQcGroups : this.refs.dailyGroups;
-    }
-
-    getGroupTriggerElement(moduleType) {
-      const host = this.getGroupPickerHost(moduleType);
-      return host ? host.querySelector('[data-role="group-trigger"]') : null;
-    }
-
-    getGroupMenuLayout(moduleType) {
-      const trigger = this.getGroupTriggerElement(moduleType);
-      if (!trigger) {
-        return null;
-      }
-      const rect = trigger.getBoundingClientRect();
-      const viewportPadding = 12;
-      const gap = 8;
-      const width = Math.min(
-        Math.max(Math.round(rect.width), 360),
-        Math.max(320, window.innerWidth - viewportPadding * 2)
-      );
-      const left = Math.min(
-        Math.max(viewportPadding, Math.round(rect.left)),
-        Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
-      );
-      const preferredHeight = 360;
-      const belowSpace = Math.max(160, Math.floor(window.innerHeight - rect.bottom - gap - viewportPadding));
-      const aboveSpace = Math.max(160, Math.floor(rect.top - gap - viewportPadding));
-      const openUpward = belowSpace < 220 && aboveSpace > belowSpace;
-
-      return {
-        left,
-        width,
-        maxHeight: Math.min(preferredHeight, openUpward ? aboveSpace : belowSpace),
-        top: openUpward ? null : Math.round(rect.bottom + gap),
-        bottom: openUpward ? Math.round(window.innerHeight - rect.top + gap) : null
-      };
-    }
-
-    renderFloatingGroupMenu() {
-      if (!this.refs.popupLayer) {
-        return;
-      }
-      const moduleType = this.runtime.openGroupMenu;
-      if (!moduleType || this.runtime.running || this.runtime.minimized) {
-        this.refs.popupLayer.innerHTML = '';
-        return;
-      }
-      const layout = this.getGroupMenuLayout(moduleType);
-      if (!layout) {
-        this.refs.popupLayer.innerHTML = '';
-        return;
-      }
-
-      const styleTokens = [
-        `--menu-left:${layout.left}px`,
-        `--menu-width:${layout.width}px`,
-        `--menu-max-height:${layout.maxHeight}px`,
-        layout.top === null ? 'top:auto' : `top:${layout.top}px`,
-        layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`
-      ];
-
-      if (moduleType === 'secondaryQc') {
-        const selectedKey = normalizeText(this.settings.secondaryQc.categoryKey);
-        this.refs.popupLayer.innerHTML = `
-          <div
-            class="ysp-daily-panel__group-menu"
-            data-role="group-menu"
-            data-module-type="secondaryQc"
-            role="listbox"
-            aria-label="质检品类选项"
-            style="${styleTokens.join(';')}"
-          >
-            ${CATEGORY_ENTRIES.map((entry) => {
-              const selectedClass = selectedKey === entry.key ? ' is-selected' : '';
-              return `
-                <button
-                  type="button"
-                  class="ysp-daily-panel__group-option${selectedClass}"
-                  data-theme="${escapeXml(entry.theme)}"
-                  data-role="category-option"
-                  data-category-key="${escapeXml(entry.key)}"
-                  ${this.runtime.running ? 'disabled' : ''}
-                >
-                  <span class="ysp-daily-panel__group-option-copy">
-                    <span class="ysp-daily-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span>
-                    <span class="ysp-daily-panel__group-option-label">${escapeXml(entry.exportLabel)}</span>
-                  </span>
-                  <span class="ysp-daily-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span>
-                </button>
-              `;
-            }).join('')}
-          </div>
-        `;
-        return;
-      }
-
-      const selected = new Set(this.getModuleSettings(moduleType).groupIds);
-      this.refs.popupLayer.innerHTML = `
-        <div
-          class="ysp-daily-panel__group-menu"
-          data-role="group-menu"
-          data-module-type="${escapeXml(moduleType)}"
-          role="listbox"
-          aria-label="品类编组选项"
-          style="${styleTokens.join(';')}"
-        >
-          ${SUBGROUP_ENTRIES.map((subgroup) => {
-            const selectedClass = selected.has(subgroup.id) ? ' is-selected' : '';
-            return `
-              <button
-                type="button"
-                class="ysp-daily-panel__group-option${selectedClass}"
-                data-theme="${escapeXml(subgroup.theme)}"
-                data-role="group-option"
-                data-group-id="${escapeXml(subgroup.id)}"
-                ${this.runtime.running ? 'disabled' : ''}
-              >
-                <span class="ysp-daily-panel__group-option-copy">
-                  <span class="ysp-daily-panel__group-option-meta">${escapeXml(subgroup.groupLabel)}</span>
-                  <span class="ysp-daily-panel__group-option-label">${escapeXml(subgroup.label)}</span>
-                </span>
-                <span class="ysp-daily-panel__group-option-check">${selected.has(subgroup.id) ? '已选' : '选择'}</span>
-              </button>
-            `;
-          }).join('')}
-        </div>
-      `;
-    }
-
-    async persistSettings() {
-      await storageSetCached({
-        [STORAGE_KEYS.settings]: cloneWorkbenchSettings(this.settings)
-      });
-    }
-
-    syncSettingsToInputs() {
-      const dailyMaxDate = getYesterdayDateString();
-      const secondaryQcMaxDate = getTodayDateString();
-      const daily = this.settings.daily;
-      const secondaryQc = this.settings.secondaryQc;
-
-      this.refs.dailyStartDate.max = dailyMaxDate;
-      this.refs.dailyEndDate.max = dailyMaxDate;
-      this.refs.dailyEndDate.min = daily.startDate || '';
-      this.refs.dailyStartDate.value = daily.startDate || '';
-      this.refs.dailyEndDate.value = daily.endDate || '';
-
-      this.refs.secondaryQcStartDate.max = secondaryQcMaxDate;
-      this.refs.secondaryQcEndDate.max = secondaryQcMaxDate;
-      this.refs.secondaryQcEndDate.min = secondaryQc.startDate || '';
-      this.refs.secondaryQcStartDate.value = secondaryQc.startDate || '';
-      this.refs.secondaryQcEndDate.value = secondaryQc.endDate || '';
-      this.refs.secondaryQcTargetCount.value = String(secondaryQc.targetCount || 10);
-      this.refs.secondaryQcParallelCount.value = String(
-        normalizeSecondaryQcParallelCount(secondaryQc.parallelCount, SECONDARY_QC_DEFAULT_PARALLEL_COUNT)
-      );
-      this.refs.secondaryQcModelMode.value = normalizeSecondaryQcModelMode(secondaryQc.modelMode);
-      this.refs.settingsInput.value = this.settingsDraft.secrets.dashscopeApiKey || '';
-    }
-
-    bindDateInput(input, handler) {
-      input.setAttribute('inputmode', 'none');
-      input.addEventListener('click', () => this.openDatePicker(input));
-      input.addEventListener('focus', () => {
-        window.setTimeout(() => this.openDatePicker(input), 0);
-      });
-      input.addEventListener('keydown', (event) => {
-        if (event.key === 'Tab') {
-          return;
-        }
-        event.preventDefault();
-        if (event.key === 'Enter' || event.key === ' ') {
-          this.openDatePicker(input);
-        }
-      });
-      input.addEventListener('beforeinput', (event) => event.preventDefault());
-      input.addEventListener('paste', (event) => event.preventDefault());
-      input.addEventListener('drop', (event) => event.preventDefault());
-      input.addEventListener('wheel', (event) => event.preventDefault(), { passive: false });
-      input.addEventListener('change', handler);
-    }
-
-    bindPanelEvents() {
-      if (this.handleOutsideInteraction) {
-        document.removeEventListener('pointerdown', this.handleOutsideInteraction, true);
-        document.removeEventListener('mousedown', this.handleOutsideInteraction, true);
-        document.removeEventListener('touchstart', this.handleOutsideInteraction, true);
-      }
-
-      this.handleOutsideInteraction = (event) => {
-        if (this.runtime.minimized || event.isTrusted === false) {
-          return;
-        }
-        const target = event.target;
-        if (!(target instanceof Node)) {
-          return;
-        }
-        if (this.refs.surface && this.refs.surface.contains(target)) {
-          return;
-        }
-        if (this.refs.popupLayer && this.refs.popupLayer.contains(target)) {
-          return;
-        }
-        if (this.refs.settingsMask && this.refs.settingsMask.contains(target)) {
-          return;
-        }
-        this.setMinimized(true);
-      };
-      document.addEventListener('pointerdown', this.handleOutsideInteraction, true);
-      document.addEventListener('mousedown', this.handleOutsideInteraction, true);
-      document.addEventListener('touchstart', this.handleOutsideInteraction, true);
-
-      this.refs.backdrop.addEventListener('click', () => this.setMinimized(true));
-      this.refs.minimize.addEventListener('click', () => this.setMinimized(true));
-      this.refs.dock.addEventListener('click', () => this.setMinimized(false));
-
-      this.refs.openSettings.addEventListener('click', () => this.openSettingsModal());
-      this.refs.closeSettings.addEventListener('click', () => this.closeSettingsModal());
-      this.refs.settingsMask.addEventListener('click', (event) => {
-        if (event.target === this.refs.settingsMask) {
-          this.closeSettingsModal();
-        }
-      });
-      this.refs.saveSettings.addEventListener('click', () => {
-        this.saveSettingsModal().catch((error) => this.failJob(error));
-      });
-
-      this.bindDateInput(this.refs.dailyStartDate, () => {
-        this.updateModuleDate('daily', 'startDate', this.refs.dailyStartDate.value);
-      });
-      this.bindDateInput(this.refs.dailyEndDate, () => {
-        this.updateModuleDate('daily', 'endDate', this.refs.dailyEndDate.value);
-      });
-      this.bindDateInput(this.refs.secondaryQcStartDate, () => {
-        this.updateModuleDate('secondaryQc', 'startDate', this.refs.secondaryQcStartDate.value);
-      });
-      this.bindDateInput(this.refs.secondaryQcEndDate, () => {
-        this.updateModuleDate('secondaryQc', 'endDate', this.refs.secondaryQcEndDate.value);
-      });
-
-      this.refs.secondaryQcTargetCount.addEventListener('change', () => {
-        this.settings.secondaryQc.targetCount = normalizePositiveInteger(
-          this.refs.secondaryQcTargetCount.value,
-          this.settings.secondaryQc.targetCount || 10,
-          1,
-          999
-        );
-        this.persistSettings().catch(() => undefined);
-        this.render();
-      });
-      this.refs.secondaryQcParallelCount.addEventListener('change', () => {
-        this.settings.secondaryQc.parallelCount = normalizeSecondaryQcParallelCount(
-          this.refs.secondaryQcParallelCount.value,
-          this.settings.secondaryQc.parallelCount
-        );
-        this.persistSettings().catch(() => undefined);
-        this.render();
-      });
-      this.refs.secondaryQcModelMode.addEventListener('change', () => {
-        this.settings.secondaryQc.modelMode = normalizeSecondaryQcModelMode(this.refs.secondaryQcModelMode.value);
-        this.persistSettings().catch(() => undefined);
-        this.render();
-      });
-
-      this.refs.dailyTab.addEventListener('click', () => this.setActiveModule('daily'));
-      this.refs.secondaryQcTab.addEventListener('click', () => this.setActiveModule('secondaryQc'));
-
-      this.refs.dailyGroups.addEventListener('click', (event) => this.handleGroupSelection(event, 'daily'));
-      this.refs.secondaryQcGroups.addEventListener('click', (event) => this.handleGroupSelection(event, 'secondaryQc'));
-      this.refs.popupLayer.addEventListener('click', (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return;
-        }
-        const moduleType = normalizeText(target.closest('[data-role="group-menu"]')?.getAttribute('data-module-type'));
-        if (moduleType !== 'daily' && moduleType !== 'secondaryQc') {
-          return;
-        }
-        this.handleGroupSelection(event, moduleType);
-      });
-      this.refs.surface.addEventListener('click', (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return;
-        }
-        if (target.closest('[data-role="group-picker"]')) {
-          return;
-        }
-        if (this.runtime.openGroupMenu) {
-          this.runtime.openGroupMenu = '';
-          this.render();
-        }
-      });
-      this.refs.surface.addEventListener('scroll', () => {
-        if (this.runtime.openGroupMenu) {
-          this.render();
-        }
-      }, true);
-      if (this.handleViewportChange) {
-        window.removeEventListener('resize', this.handleViewportChange);
-      }
-      this.handleViewportChange = () => {
-        if (this.runtime.openGroupMenu) {
-          this.render();
-        }
-      };
-      window.addEventListener('resize', this.handleViewportChange);
-
-      this.refs.startDaily.addEventListener('click', () => {
-        this.startDailyJob().catch((error) => this.failJob(error));
-      });
-      this.refs.startSecondaryQc.addEventListener('click', () => {
-        this.startSecondaryQcJob().catch((error) => this.failJob(error));
-      });
-      this.refs.pauseResume.addEventListener('click', () => {
-        this.handlePauseResumeAction().catch((error) => this.failJob(error));
-      });
-      this.refs.stop.addEventListener('click', () => {
-        this.stopCurrentJob().catch((error) => this.failJob(error));
-      });
-      this.refs.clearData.addEventListener('click', () => {
-        this.clearAllCachedData().catch((error) => this.failJob(error));
-      });
-      this.refs.downloads.addEventListener('click', (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return;
-        }
-        const role = target.closest('[data-download-role]')?.getAttribute('data-download-role');
-        if (role === 'daily') {
-          this.exportDailyReport();
-        }
-        if (role === 'secondaryQc') {
-          this.exportSecondaryQcResult();
-        }
-      });
-    }
-
-    handleGroupSelection(event, moduleType) {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) {
-        return;
-      }
-      const trigger = target.closest('[data-role="group-trigger"]');
-      if (trigger) {
-        if (this.runtime.running) {
-          return;
-        }
-        this.runtime.openGroupMenu = this.runtime.openGroupMenu === moduleType ? '' : moduleType;
-        this.render();
-        return;
-      }
-      if (this.runtime.running) {
-        return;
-      }
-      if (moduleType === 'secondaryQc') {
-        const categoryOption = target.closest('[data-role="category-option"]');
-        if (!categoryOption) {
-          return;
-        }
-        const categoryKey = normalizeText(categoryOption.getAttribute('data-category-key'));
-        if (!categoryKey) {
-          return;
-        }
-        this.settings.secondaryQc.categoryKey = this.settings.secondaryQc.categoryKey === categoryKey ? '' : categoryKey;
-        this.runtime.openGroupMenu = '';
-        this.persistSettings().catch(() => undefined);
-        this.render();
-        return;
-      }
-      const groupOption = target.closest('[data-role="group-option"]');
-      if (!groupOption) {
-        return;
-      }
-      const groupId = groupOption.getAttribute('data-group-id');
-      if (!groupId) {
-        return;
-      }
-      const groupIds = new Set(this.getModuleSettings(moduleType).groupIds);
-      if (groupIds.has(groupId)) {
-        groupIds.delete(groupId);
-      } else {
-        groupIds.add(groupId);
-      }
-      this.getModuleSettings(moduleType).groupIds = Array.from(groupIds);
-      this.persistSettings().catch(() => undefined);
-      this.render();
-    }
-
-    openDatePicker(input) {
-      if (!input || input.disabled) {
-        return;
-      }
-      if (typeof input.showPicker === 'function') {
-        try {
-          input.showPicker();
-          return;
-        } catch (error) {
-          // ignore
-        }
-      }
-      input.focus();
-    }
-
-    updateModuleDate(moduleType, key, value) {
-      const moduleSettings = this.getModuleSettings(moduleType);
-      const maxDate = moduleType === 'secondaryQc' ? getTodayDateString() : getYesterdayDateString();
-      const normalizedValue = normalizeDateInputValue(value, maxDate);
-      if (key === 'startDate') {
-        moduleSettings.startDate = moduleType === 'secondaryQc' ? normalizedValue : (normalizedValue || maxDate);
-        if (moduleSettings.endDate && moduleSettings.startDate && moduleSettings.endDate < moduleSettings.startDate) {
-          moduleSettings.endDate = '';
-        }
-      } else {
-        moduleSettings.endDate = normalizedValue;
-        if (moduleSettings.endDate && moduleSettings.startDate && moduleSettings.endDate < moduleSettings.startDate) {
-          moduleSettings.endDate = '';
-        }
-      }
-      this.persistSettings().catch(() => undefined);
-      this.render();
-    }
-
-    setMinimized(nextValue) {
-      this.runtime.minimized = Boolean(nextValue);
-      this.settings.ui.panelMinimized = this.runtime.minimized;
-      if (this.runtime.minimized) {
-        this.runtime.openGroupMenu = '';
-      }
-      this.persistSettings().catch(() => undefined);
-      this.render();
-    }
-
-    setActiveModule(moduleType) {
-      const nextModule = normalizeActiveModule(moduleType);
-      if (this.settings.ui.activeModule === nextModule) {
-        return;
-      }
-      this.settings.ui.activeModule = nextModule;
-      this.runtime.openGroupMenu = '';
-      this.persistSettings().catch(() => undefined);
-      this.render();
-    }
-
-    openSettingsModal() {
-      this.settingsDraft = cloneWorkbenchSettings(this.settings);
-      this.settingsModalOpen = true;
-      this.runtime.openGroupMenu = '';
-      this.syncSettingsToInputs();
-      this.render();
-      this.refs.settingsInput.focus();
-    }
-
-    closeSettingsModal() {
-      this.settingsModalOpen = false;
-      this.render();
-    }
-
-    async saveSettingsModal() {
-      this.settings.secrets.dashscopeApiKey = normalizeText(this.refs.settingsInput.value);
-      this.settingsDraft = cloneWorkbenchSettings(this.settings);
-      this.settingsModalOpen = false;
-      this.render();
-      await this.persistSettings();
-      this.pushLog('设置已保存');
-    }
-
-    renderGroupSelector(container, moduleType) {
-      const open = !this.runtime.running && this.runtime.openGroupMenu === moduleType;
-      const triggerSummary = this.getGroupPickerSummary(moduleType);
-
-      container.innerHTML = `
-        <div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker">
-          <button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}>
-            <span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span>
-            <span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span>
-          </button>
-        </div>
-      `;
-    }
-
-    renderStatus() {
-      const jobLabel = this.runtime.jobType === 'secondaryQc'
-        ? '质检模块'
-        : this.runtime.jobType === 'daily'
-          ? '日报'
-          : '空闲';
-      const pageText = isListPage()
-        ? '当前页面：列表页'
-        : isDetailPage()
-          ? '当前页面：详情页，只保留工作台显示；开始或继续任务请回列表页'
-          : '当前页面：其他页面';
-      this.refs.status.innerHTML = `
-        <div class="ysp-daily-panel__status-head">
-          <span class="ysp-daily-panel__label">当前状态</span>
-        </div>
-        <div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div>
-        <div class="ysp-daily-panel__status-subtext">任务类型：${escapeXml(jobLabel)}</div>
-        <div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>
-      `;
-    }
-
-    renderDownloads() {
-      const cards = [];
-      if (this.runtime.daily.report) {
-        cards.push(`
-          <div style="padding: 12px; border: 1px solid #d8e2ee; border-radius: 12px; background: #fff;">
-            <div style="font-weight: 700; color: #17324f;">日报结果</div>
-            <div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.daily.report))}</div>
-            <div class="ysp-daily-panel__actions" style="margin-top: 10px;">
-              <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="daily">下载日报</button>
-            </div>
-          </div>
-        `);
-      }
-      if (this.runtime.secondaryQc.report) {
-        cards.push(`
-          <div style="padding: 12px; border: 1px solid #d8e2ee; border-radius: 12px; background: #fff;">
-            <div style="font-weight: 700; color: #17324f;">二次质检结果</div>
-            <div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.secondaryQc.report))}</div>
-            <div style="margin-top: 4px; color: #6b7a90;">目标 ${this.runtime.secondaryQc.report.targetCount} 条，实际 ${this.runtime.secondaryQc.report.actualCount} 条</div>
-            <div class="ysp-daily-panel__actions" style="margin-top: 10px;">
-              <button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="secondaryQc">下载质检表</button>
-            </div>
-          </div>
-        `);
-      }
-      this.refs.downloadsCard.hidden = !cards.length;
-      this.refs.downloads.innerHTML = cards.join('');
-    }
-
-    renderLogs() {
-      if (!this.runtime.logs.length) {
-        this.refs.logs.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无日志</div>';
-        return;
-      }
-      this.refs.logs.innerHTML = this.runtime.logs
-        .map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(log)}</div>`)
-        .join('');
-      this.refs.logs.scrollTop = this.refs.logs.scrollHeight;
-    }
-
-    render() {
-      if (!this.panel) {
-        return;
-      }
-      if (this.runtime.running && this.runtime.openGroupMenu) {
-        this.runtime.openGroupMenu = '';
-      }
-      const listPageActive = isListPage();
-      if (this.runtime.running) {
-        enforcePageMuted({ pausePlayback: isDetailPage() });
-      } else {
-        releasePageMuted();
-      }
-      this.panel.classList.toggle('is-minimized', this.runtime.minimized);
-      this.panel.classList.toggle('is-settings-open', this.settingsModalOpen);
-      this.syncSettingsToInputs();
-      this.renderGroupSelector(this.refs.dailyGroups, 'daily');
-      this.renderGroupSelector(this.refs.secondaryQcGroups, 'secondaryQc');
-      this.renderFloatingGroupMenu();
-
-      const activeModule = normalizeActiveModule(this.settings.ui.activeModule);
-      this.refs.dailyModule.hidden = activeModule !== 'daily';
-      this.refs.secondaryQcModule.hidden = activeModule !== 'secondaryQc';
-      this.refs.dailyTab.classList.toggle('is-active', activeModule === 'daily');
-      this.refs.dailyTab.setAttribute('aria-selected', activeModule === 'daily' ? 'true' : 'false');
-      this.refs.secondaryQcTab.classList.toggle('is-active', activeModule === 'secondaryQc');
-      this.refs.secondaryQcTab.setAttribute('aria-selected', activeModule === 'secondaryQc' ? 'true' : 'false');
-
-      const disabled = this.runtime.running;
-      this.refs.dailyStartDate.disabled = disabled;
-      this.refs.dailyEndDate.disabled = disabled;
-      this.refs.secondaryQcStartDate.disabled = disabled;
-      this.refs.secondaryQcEndDate.disabled = disabled;
-      this.refs.secondaryQcTargetCount.disabled = disabled;
-      this.refs.secondaryQcParallelCount.disabled = disabled;
-      this.refs.secondaryQcModelMode.disabled = disabled;
-      this.refs.startDaily.disabled = disabled || !listPageActive;
-      this.refs.startSecondaryQc.disabled = disabled || !listPageActive;
-      this.refs.clearData.disabled = disabled;
-      this.refs.stop.disabled = !disabled;
-      const pausedTask = this.getPausedTaskMeta();
-      this.refs.pauseResume.disabled = !disabled && (!pausedTask || !listPageActive);
-      this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? `继续${pausedTask.label}` : '继续任务';
-      this.refs.pauseResume.classList.toggle('ysp-daily-panel__button--primary', !disabled && Boolean(pausedTask));
-      this.refs.startDaily.textContent = disabled && this.runtime.jobType === 'daily' ? '日报运行中' : '开始日报';
-      this.refs.startSecondaryQc.textContent = disabled && this.runtime.jobType === 'secondaryQc' ? '质检运行中' : '开始质检';
-
-      this.renderStatus();
-      this.renderDownloads();
-      this.renderLogs();
-    }
-
-    applySecondaryQcWorkerProgress(text, progressLogLines) {
-      const progressText = normalizeText(text);
-      const logLines = normalizeProgressLogLines(progressLogLines);
-      const mergedLines = [progressText, ...logLines].filter(Boolean).filter((line, index, array) => array.indexOf(line) === index);
-      if (!progressText && !mergedLines.length) {
-        return;
-      }
-      this.runtime.running = true;
-      this.runtime.jobType = 'secondaryQc';
-      if (progressText) {
-        this.runtime.statusText = progressText;
-      }
-      this.runtime.logs = mergeLogEntries(this.runtime.logs, mergedLines);
-      this.render();
-    }
-
-    pushLog(message) {
-      this.runtime.logs = mergeLogEntries(this.runtime.logs, [message]);
-      const checkpoint = this.getActiveCheckpoint();
-      if (checkpoint) {
-        checkpoint.logs = this.runtime.logs.slice();
-      }
-      this.renderLogs();
-      void this.persistActiveCheckpoint().catch(() => {});
-    }
-
-    ensureNotStopped() {
-      if (this.isCurrentJobStopRequested()) {
-        throw new Error('采集已结束');
-      }
-      if (this.runtime.pauseRequested) {
-        throw new Error('采集已暂停');
-      }
-    }
-
-    updateCheckpointStatus(text) {
-      const checkpoint = this.getActiveCheckpoint();
-      this.runtime.statusText = text;
-      if (checkpoint) {
-        checkpoint.statusText = text;
-      }
-      this.renderStatus();
-      void this.persistActiveCheckpoint().catch(() => {});
-    }
-
-    async saveCheckpoint(jobType) {
-      const checkpoint = jobType === 'secondaryQc' ? this.runtime.secondaryQc.checkpoint : this.runtime.daily.checkpoint;
-      if (!checkpoint) {
-        return;
-      }
-      checkpoint.updatedAt = new Date().toISOString();
-      await storageSetCached({
-        [this.getCheckpointStorageKey(jobType)]: checkpoint
-      });
-    }
-
-    async clearCheckpoint(jobType) {
-      await storageRemove(this.getCheckpointStorageKey(jobType));
-      if (jobType === 'secondaryQc') {
-        this.runtime.secondaryQc.checkpoint = null;
-      } else {
-        this.runtime.daily.checkpoint = null;
-      }
-    }
-
-    async clearAllCachedData() {
-      if (this.runtime.running) {
-        return;
-      }
-      const secondaryQcCheckpoint = this.runtime.secondaryQc.checkpoint;
-      const requestIds = uniqueTextList(
-        this.getSecondaryQcInflightEntries(secondaryQcCheckpoint).map((entry) => entry.requestId)
-      );
-      const clearKeys = [
-        STORAGE_KEYS.report,
-        STORAGE_KEYS.resultCache,
-        STORAGE_KEYS.dailyCheckpoint,
-        STORAGE_KEYS.secondaryQcReport,
-        STORAGE_KEYS.secondaryQcCheckpoint
-      ];
-      if (requestIds.length) {
-        clearKeys.push(...this.buildSecondaryQcWorkerStorageKeys(requestIds));
-      }
-      const confirmed = window.confirm('这只会清除工作台本地缓存、结果和任务进度，不会清空已保存的日期和 API Key。确认清除吗？');
-      if (!confirmed) {
-        return;
-      }
-      await storageRemove(clearKeys);
-      this.settingsDraft = cloneWorkbenchSettings(this.settings);
-      this.runtime.running = false;
-      this.runtime.jobType = '';
-      this.runtime.stopping = false;
-      this.runtime.pauseRequested = false;
-      this.runtime.statusText = '已清除本地缓存';
-      this.runtime.logs = [];
-      this.runtime.daily = {
-        checkpoint: null,
-        report: null,
-        resultCache: {}
-      };
-      this.runtime.secondaryQc = {
-        checkpoint: null,
-        report: null
-      };
-      this.syncSettingsToInputs();
-      this.render();
-    }
-
-    async stopCurrentJob() {
-      if (!this.runtime.running) {
-        return;
-      }
-      const jobType = this.runtime.jobType;
-      const checkpoint = this.getActiveCheckpoint();
-      const stoppedStatusText = '采集已结束，可以重新开始';
-      requestListJobAbort(this.runtime.listJobAbortToken);
-      this.runtime.stopping = true;
-      this.runtime.pauseRequested = false;
-      this.runtime.statusText = stoppedStatusText;
-      this.pushLog('采集已结束');
-      if (checkpoint) {
-        checkpoint.status = 'stopped';
-        checkpoint.statusText = stoppedStatusText;
-        if (jobType === 'secondaryQc') {
-          const secondaryQcRequestIds = uniqueTextList(
-            this.getSecondaryQcInflightEntries(checkpoint).map((entry) => entry.requestId)
-          );
-          checkpoint.inflightEntries = [];
-          await this.saveCheckpoint(jobType);
-          if (secondaryQcRequestIds.length) {
-            await this.stopSecondaryQcRequests(secondaryQcRequestIds);
-          }
-        } else {
-          await this.saveCheckpoint(jobType);
-        }
-      }
-      this.runtime.running = false;
-      this.runtime.jobType = '';
-      this.runtime.stopping = false;
-      this.runtime.pauseRequested = false;
-      this.render();
-    }
-
-    pauseCurrentJob() {
-      if (!this.runtime.running) {
-        return;
-      }
-      const checkpoint = this.getActiveCheckpoint();
-      const inflightCount = this.runtime.jobType === 'secondaryQc'
-        ? this.getSecondaryQcInflightEntries(checkpoint).length
-        : 0;
-      this.runtime.pauseRequested = true;
-      this.runtime.stopping = false;
-      this.runtime.statusText = inflightCount
-        ? `正在暂停当前任务，等待 ${inflightCount} 个进行中视频完成`
-        : '正在暂停当前任务';
-      this.pushLog(
-        inflightCount
-          ? `正在暂停当前任务，等待 ${inflightCount} 个进行中视频完成`
-          : '正在暂停当前任务'
-      );
-      this.render();
-    }
-
-    async handlePauseResumeAction() {
-      if (this.runtime.running) {
-        this.pauseCurrentJob();
-        return;
-      }
-      await this.resumePausedJob();
-    }
-
-    async resumePausedJob() {
-      if (this.runtime.running) {
-        return;
-      }
-      if (!isListPage()) {
-        throw new Error('继续任务请回到标准化列表页');
-      }
-      this.runtime.listJobAbortToken = beginListJobAbortSession();
-      const pausedTask = this.getPausedTaskMeta();
-      if (!pausedTask) {
-        throw new Error('当前没有可继续的暂停任务');
-      }
-      this.runtime.running = true;
-      this.runtime.jobType = pausedTask.jobType;
-      this.runtime.stopping = false;
-      this.runtime.pauseRequested = false;
-      this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS) : [];
-      pausedTask.checkpoint.status = 'running';
-      pausedTask.checkpoint.statusText = `正在继续${pausedTask.label}`;
-      this.runtime.statusText = pausedTask.checkpoint.statusText;
-      await this.saveCheckpoint(pausedTask.jobType);
-      this.pushLog(`继续${pausedTask.label}`);
-      this.render();
-      if (pausedTask.jobType === 'daily') {
-        await this.runDailyFromCheckpoint();
-        return;
-      }
-      await this.runSecondaryQcFromCheckpoint();
-    }
-
-    async tryResume() {
-      if (!this.runtime.running) {
-        this.render();
-        return;
-      }
-      if (this.runtime.jobType === 'daily' && this.runtime.daily.checkpoint && this.runtime.daily.checkpoint.status === 'running') {
-        this.pushLog('检测到未完成日报，正在继续');
-        await this.runDailyFromCheckpoint();
-        return;
-      }
-      if (this.runtime.jobType === 'secondaryQc' && this.runtime.secondaryQc.checkpoint && this.runtime.secondaryQc.checkpoint.status === 'running') {
-        this.pushLog('检测到未完成二次质检，正在继续');
-        await this.runSecondaryQcFromCheckpoint();
-        return;
-      }
-      this.runtime.running = false;
-      this.runtime.jobType = '';
-      this.render();
-    }
-
-    describeItem(item) {
-      return item.exportLabel;
-    }
-
-    isCurrentJobStopRequested() {
-      return isListJobAbortRequested(this.runtime.listJobAbortToken) || this.runtime.stopping;
-    }
-
+    destroy() { if (this.handleOutsideInteraction) { document.removeEventListener('pointerdown', this.handleOutsideInteraction, true); document.removeEventListener('mousedown', this.handleOutsideInteraction, true); document.removeEventListener('touchstart', this.handleOutsideInteraction, true); this.handleOutsideInteraction = null; } if (this.handleViewportChange) { window.removeEventListener('resize', this.handleViewportChange); this.handleViewportChange = null; } releasePageMuted(); if (this.panel && this.panel.isConnected) this.panel.remove(); this.panel = null; this.refs = {}; }
+    persistActiveCheckpoint() { const checkpoint = this.getActiveCheckpoint(); return checkpoint && this.runtime.jobType ? this.saveCheckpoint() : Promise.resolve(); }
+    getActiveCheckpoint() { return this.runtime.jobType === 'secondaryQc' ? this.runtime.checkpoint : null; }
+    getListAbortCheck() { const abortToken = this.runtime.listJobAbortToken; return () => isListJobAbortRequested(abortToken); }
+    getPausedTaskMeta() { return this.runtime.checkpoint && this.runtime.checkpoint.status === 'paused' ? { jobType: 'secondaryQc', label: '质检', checkpoint: this.runtime.checkpoint, updatedAt: this.runtime.checkpoint.updatedAt || this.runtime.checkpoint.startedAt || '' } : null; }
+    getSelectedEntries() { const categoryKey = normalizeText(this.settings.categoryKey); return categoryKey ? getEntriesByKeys([categoryKey]) : []; }
+    getCheckpointItems(checkpoint) { return getEntriesByKeys(checkpoint && checkpoint.itemKeys); }
+    getGroupPickerSummary() { const entry = getCategoryEntry(this.settings.categoryKey); return entry ? `${entry.groupLabel} / ${entry.exportLabel}` : '请选择质检品类'; }
+    getGroupTriggerElement() { return this.refs.secondaryQcGroups ? this.refs.secondaryQcGroups.querySelector('[data-role="group-trigger"]') : null; }
+    getGroupMenuLayout() { const trigger = this.getGroupTriggerElement(); if (!trigger) return null; const rect = trigger.getBoundingClientRect(); const viewportPadding = 12; const gap = 8; const width = Math.min(Math.max(Math.round(rect.width), 360), Math.max(320, window.innerWidth - viewportPadding * 2)); const left = Math.min(Math.max(viewportPadding, Math.round(rect.left)), Math.max(viewportPadding, window.innerWidth - width - viewportPadding)); const preferredHeight = 360; const belowSpace = Math.max(160, Math.floor(window.innerHeight - rect.bottom - gap - viewportPadding)); const aboveSpace = Math.max(160, Math.floor(rect.top - gap - viewportPadding)); const openUpward = belowSpace < 220 && aboveSpace > belowSpace; return { left, width, maxHeight: Math.min(preferredHeight, openUpward ? aboveSpace : belowSpace), top: openUpward ? null : Math.round(rect.bottom + gap), bottom: openUpward ? Math.round(window.innerHeight - rect.top + gap) : null }; }
+    renderFloatingGroupMenu() { if (!this.refs.popupLayer) return; if (!this.runtime.openGroupMenu || this.runtime.running || this.runtime.minimized) { this.refs.popupLayer.innerHTML = ''; return; } const layout = this.getGroupMenuLayout(); if (!layout) { this.refs.popupLayer.innerHTML = ''; return; } const styleTokens = [`--menu-left:${layout.left}px`, `--menu-width:${layout.width}px`, `--menu-max-height:${layout.maxHeight}px`, layout.top === null ? 'top:auto' : `top:${layout.top}px`, layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`]; const selectedKey = normalizeText(this.settings.categoryKey); this.refs.popupLayer.innerHTML = `<div class="ysp-daily-panel__group-menu" data-role="group-menu" role="listbox" aria-label="质检品类选项" style="${styleTokens.join(';')}">${CATEGORY_ENTRIES.map((entry) => { const selectedClass = selectedKey === entry.key ? ' is-selected' : ''; return `<button type="button" class="ysp-daily-panel__group-option${selectedClass}" data-theme="${escapeXml(entry.theme)}" data-role="category-option" data-category-key="${escapeXml(entry.key)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-option-copy"><span class="ysp-daily-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span><span class="ysp-daily-panel__group-option-label">${escapeXml(entry.exportLabel)}</span></span><span class="ysp-daily-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span></button>`; }).join('')}</div>`; }
+    async persistSettings() { await storageSetCached({ [STORAGE_KEYS.settings]: cloneWorkbenchSettings(this.settings) }); }
+    syncSettingsToInputs() { const maxDate = getTodayDateString(); this.refs.secondaryQcStartDate.max = maxDate; this.refs.secondaryQcEndDate.max = maxDate; this.refs.secondaryQcEndDate.min = this.settings.startDate || ''; this.refs.secondaryQcStartDate.value = this.settings.startDate || ''; this.refs.secondaryQcEndDate.value = this.settings.endDate || ''; this.refs.secondaryQcTargetCount.value = String(this.settings.targetCount || 10); this.refs.secondaryQcParallelCount.value = String(normalizeSecondaryQcParallelCount(this.settings.parallelCount, SECONDARY_QC_DEFAULT_PARALLEL_COUNT)); this.refs.secondaryQcModelMode.value = normalizeSecondaryQcModelMode(this.settings.modelMode); this.refs.settingsInput.value = this.settingsDraft.secrets.dashscopeApiKey || ''; }
+    bindDateInput(input, handler) { input.setAttribute('inputmode', 'none'); input.addEventListener('click', () => this.openDatePicker(input)); input.addEventListener('focus', () => window.setTimeout(() => this.openDatePicker(input), 0)); input.addEventListener('keydown', (event) => { if (event.key === 'Tab') return; event.preventDefault(); if (event.key === 'Enter' || event.key === ' ') this.openDatePicker(input); }); input.addEventListener('beforeinput', (event) => event.preventDefault()); input.addEventListener('paste', (event) => event.preventDefault()); input.addEventListener('drop', (event) => event.preventDefault()); input.addEventListener('wheel', (event) => event.preventDefault(), { passive: false }); input.addEventListener('change', handler); }
+    bindPanelEvents() { if (this.handleOutsideInteraction) { document.removeEventListener('pointerdown', this.handleOutsideInteraction, true); document.removeEventListener('mousedown', this.handleOutsideInteraction, true); document.removeEventListener('touchstart', this.handleOutsideInteraction, true); } this.handleOutsideInteraction = (event) => { if (this.runtime.minimized || event.isTrusted === false) return; const target = event.target; if (!(target instanceof Node)) return; if (this.refs.surface && this.refs.surface.contains(target)) return; if (this.refs.popupLayer && this.refs.popupLayer.contains(target)) return; if (this.refs.settingsMask && this.refs.settingsMask.contains(target)) return; this.setMinimized(true); }; document.addEventListener('pointerdown', this.handleOutsideInteraction, true); document.addEventListener('mousedown', this.handleOutsideInteraction, true); document.addEventListener('touchstart', this.handleOutsideInteraction, true); this.refs.backdrop.addEventListener('click', () => this.setMinimized(true)); this.refs.minimize.addEventListener('click', () => this.setMinimized(true)); this.refs.dock.addEventListener('click', () => this.setMinimized(false)); this.refs.openSettings.addEventListener('click', () => this.openSettingsModal()); this.refs.closeSettings.addEventListener('click', () => this.closeSettingsModal()); this.refs.settingsMask.addEventListener('click', (event) => { if (event.target === this.refs.settingsMask) this.closeSettingsModal(); }); this.refs.saveSettings.addEventListener('click', () => this.saveSettingsModal().catch((error) => this.failJob(error))); this.bindDateInput(this.refs.secondaryQcStartDate, () => this.updateDate('startDate', this.refs.secondaryQcStartDate.value)); this.bindDateInput(this.refs.secondaryQcEndDate, () => this.updateDate('endDate', this.refs.secondaryQcEndDate.value)); this.refs.secondaryQcTargetCount.addEventListener('change', () => { this.settings.targetCount = normalizePositiveInteger(this.refs.secondaryQcTargetCount.value, this.settings.targetCount || 10, 1, 999); this.persistSettings().catch(() => undefined); this.render(); }); this.refs.secondaryQcParallelCount.addEventListener('change', () => { this.settings.parallelCount = normalizeSecondaryQcParallelCount(this.refs.secondaryQcParallelCount.value, this.settings.parallelCount); this.persistSettings().catch(() => undefined); this.render(); }); this.refs.secondaryQcModelMode.addEventListener('change', () => { this.settings.modelMode = normalizeSecondaryQcModelMode(this.refs.secondaryQcModelMode.value); this.persistSettings().catch(() => undefined); this.render(); }); this.refs.secondaryQcGroups.addEventListener('click', (event) => this.handleGroupSelection(event)); this.refs.popupLayer.addEventListener('click', (event) => this.handleGroupSelection(event)); this.refs.surface.addEventListener('click', (event) => { const target = event.target; if (!(target instanceof HTMLElement) || target.closest('[data-role="group-picker"]')) return; if (this.runtime.openGroupMenu) { this.runtime.openGroupMenu = ''; this.render(); } }); this.refs.surface.addEventListener('scroll', () => { if (this.runtime.openGroupMenu) this.render(); }, true); if (this.handleViewportChange) window.removeEventListener('resize', this.handleViewportChange); this.handleViewportChange = () => { if (this.runtime.openGroupMenu) this.render(); }; window.addEventListener('resize', this.handleViewportChange); this.refs.startSecondaryQc.addEventListener('click', () => this.startSecondaryQcJob().catch((error) => this.failJob(error))); this.refs.pauseResume.addEventListener('click', () => this.handlePauseResumeAction().catch((error) => this.failJob(error))); this.refs.stop.addEventListener('click', () => this.stopCurrentJob().catch((error) => this.failJob(error))); this.refs.clearData.addEventListener('click', () => this.clearAllCachedData().catch((error) => this.failJob(error))); this.refs.downloads.addEventListener('click', (event) => { const target = event.target; if (target instanceof HTMLElement && target.closest('[data-download-role="secondaryQc"]')) this.exportSecondaryQcResult(); }); }
+    handleGroupSelection(event) { const target = event.target; if (!(target instanceof HTMLElement)) return; const trigger = target.closest('[data-role="group-trigger"]'); if (trigger) { if (this.runtime.running) return; this.runtime.openGroupMenu = this.runtime.openGroupMenu ? '' : 'secondaryQc'; this.render(); return; } if (this.runtime.running) return; const categoryOption = target.closest('[data-role="category-option"]'); if (!categoryOption) return; const categoryKey = normalizeText(categoryOption.getAttribute('data-category-key')); if (!categoryKey) return; this.settings.categoryKey = this.settings.categoryKey === categoryKey ? '' : categoryKey; this.runtime.openGroupMenu = ''; this.persistSettings().catch(() => undefined); this.render(); }
+    openDatePicker(input) { if (!input || input.disabled) return; if (typeof input.showPicker === 'function') { try { input.showPicker(); return; } catch (error) { } } input.focus(); }
+    updateDate(key, value) { const maxDate = getTodayDateString(); const normalizedValue = normalizeDateInputValue(value, maxDate); if (key === 'startDate') { this.settings.startDate = normalizedValue; if (this.settings.endDate && this.settings.startDate && this.settings.endDate < this.settings.startDate) this.settings.endDate = ''; } else { this.settings.endDate = normalizedValue; if (this.settings.endDate && this.settings.startDate && this.settings.endDate < this.settings.startDate) this.settings.endDate = ''; } this.persistSettings().catch(() => undefined); this.render(); }
+    setMinimized(nextValue) { this.runtime.minimized = Boolean(nextValue); this.settings.ui.panelMinimized = this.runtime.minimized; if (this.runtime.minimized) this.runtime.openGroupMenu = ''; this.persistSettings().catch(() => undefined); this.render(); }
+    openSettingsModal() { this.settingsDraft = cloneWorkbenchSettings(this.settings); this.settingsModalOpen = true; this.runtime.openGroupMenu = ''; this.syncSettingsToInputs(); this.render(); this.refs.settingsInput.focus(); }
+    closeSettingsModal() { this.settingsModalOpen = false; this.render(); }
+    async saveSettingsModal() { this.settings.secrets.dashscopeApiKey = normalizeText(this.refs.settingsInput.value); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.settingsModalOpen = false; this.render(); await this.persistSettings(); this.pushLog('设置已保存'); }
+    renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'secondaryQc'; const triggerSummary = this.getGroupPickerSummary(); this.refs.secondaryQcGroups.innerHTML = `<div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
+    renderStatus() { const pageText = isListPage() ? '当前页面：列表页' : isDetailPage() ? '当前页面：详情页，只保留质检处理；开始或继续任务请回列表页' : '当前页面：其他页面'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：二次质检</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
+    renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div style="padding: 12px; border: 1px solid #d8e2ee; border-radius: 12px; background: #fff;"><div style="font-weight: 700; color: #17324f;">二次质检结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div style="margin-top: 4px; color: #6b7a90;">目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条</div><div class="ysp-daily-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="secondaryQc">下载质检表</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
+    renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(log)}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
+    render() { if (!this.panel) return; if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = ''; const listPageActive = isListPage(); if (this.runtime.running) enforcePageMuted({ pausePlayback: isDetailPage() }); else releasePageMuted(); this.panel.classList.toggle('is-minimized', this.runtime.minimized); this.panel.classList.toggle('is-settings-open', this.settingsModalOpen); this.syncSettingsToInputs(); this.renderGroupSelector(); this.renderFloatingGroupMenu(); const disabled = this.runtime.running; this.refs.secondaryQcStartDate.disabled = disabled; this.refs.secondaryQcEndDate.disabled = disabled; this.refs.secondaryQcTargetCount.disabled = disabled; this.refs.secondaryQcParallelCount.disabled = disabled; this.refs.secondaryQcModelMode.disabled = disabled; this.refs.startSecondaryQc.disabled = disabled || !listPageActive; this.refs.clearData.disabled = disabled; this.refs.stop.disabled = !disabled; const pausedTask = this.getPausedTaskMeta(); this.refs.pauseResume.disabled = !disabled && (!pausedTask || !listPageActive); this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? '继续质检' : '继续任务'; this.refs.pauseResume.classList.toggle('ysp-daily-panel__button--primary', !disabled && Boolean(pausedTask)); this.refs.startSecondaryQc.textContent = disabled ? '质检运行中' : '开始质检'; this.renderStatus(); this.renderDownloads(); this.renderLogs(); }
+    applySecondaryQcWorkerProgress(text, progressLogLines) { const progressText = normalizeText(text); const logLines = normalizeProgressLogLines(progressLogLines); const mergedLines = [progressText, ...logLines].filter(Boolean).filter((line, index, array) => array.indexOf(line) === index); if (!progressText && !mergedLines.length) return; this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; if (progressText) this.runtime.statusText = progressText; this.runtime.logs = mergeLogEntries(this.runtime.logs, mergedLines); this.render(); }
+    pushLog(message) { this.runtime.logs = mergeLogEntries(this.runtime.logs, [message]); const checkpoint = this.getActiveCheckpoint(); if (checkpoint) checkpoint.logs = this.runtime.logs.slice(); this.renderLogs(); void this.persistActiveCheckpoint().catch(() => {}); }
+    updateCheckpointStatus(text) { const checkpoint = this.getActiveCheckpoint(); this.runtime.statusText = text; if (checkpoint) checkpoint.statusText = text; this.renderStatus(); void this.persistActiveCheckpoint().catch(() => {}); }
+    async saveCheckpoint() { if (!this.runtime.checkpoint) return; this.runtime.checkpoint.updatedAt = new Date().toISOString(); await storageSetCached({ [STORAGE_KEYS.checkpoint]: this.runtime.checkpoint }); }
+    async clearCheckpoint() { await storageRemove(STORAGE_KEYS.checkpoint); this.runtime.checkpoint = null; }
+    async clearAllCachedData() { if (this.runtime.running) return; const checkpoint = this.runtime.checkpoint; const requestIds = uniqueTextList(this.getSecondaryQcInflightEntries(checkpoint).map((entry) => entry.requestId)); const clearKeys = [STORAGE_KEYS.report, STORAGE_KEYS.checkpoint]; if (requestIds.length) clearKeys.push(...this.buildSecondaryQcWorkerStorageKeys(requestIds)); const confirmed = window.confirm('这只会清除质检本地缓存、结果和任务进度，不会清空已保存的日期和 API Key。确认清除吗？'); if (!confirmed) return; await storageRemove(clearKeys); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.statusText = '已清除本地缓存'; this.runtime.logs = []; this.runtime.checkpoint = null; this.runtime.report = null; this.syncSettingsToInputs(); this.render(); }
+    async stopCurrentJob() { if (!this.runtime.running) return; const checkpoint = this.getActiveCheckpoint(); const stoppedStatusText = '采集已结束，可以重新开始'; requestListJobAbort(this.runtime.listJobAbortToken); this.runtime.stopping = true; this.runtime.pauseRequested = false; this.runtime.statusText = stoppedStatusText; this.pushLog('采集已结束'); if (checkpoint) { checkpoint.status = 'stopped'; checkpoint.statusText = stoppedStatusText; const requestIds = uniqueTextList(this.getSecondaryQcInflightEntries(checkpoint).map((entry) => entry.requestId)); checkpoint.inflightEntries = []; await this.saveCheckpoint(); if (requestIds.length) await this.stopSecondaryQcRequests(requestIds); } this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.render(); }
+    pauseCurrentJob() { if (!this.runtime.running) return; const inflightCount = this.getSecondaryQcInflightEntries(this.runtime.checkpoint).length; this.runtime.pauseRequested = true; this.runtime.stopping = false; this.runtime.statusText = inflightCount ? `正在暂停当前任务，等待 ${inflightCount} 个进行中视频完成` : '正在暂停当前任务'; this.pushLog(this.runtime.statusText); this.render(); }
+    async handlePauseResumeAction() { if (this.runtime.running) { this.pauseCurrentJob(); return; } await this.resumePausedJob(); }
+    async resumePausedJob() { if (this.runtime.running) return; if (!isListPage()) throw new Error('继续任务请回到标准化列表页'); const pausedTask = this.getPausedTaskMeta(); if (!pausedTask) throw new Error('当前没有可继续的暂停任务'); this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS) : []; pausedTask.checkpoint.status = 'running'; pausedTask.checkpoint.statusText = '正在继续质检'; this.runtime.statusText = pausedTask.checkpoint.statusText; await this.saveCheckpoint(); this.pushLog('继续质检'); this.render(); await this.runSecondaryQcFromCheckpoint(); }
+    async tryResume() { if (!this.runtime.running) { this.render(); return; } if (this.runtime.jobType === 'secondaryQc' && this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.pushLog('检测到未完成二次质检，正在继续'); await this.runSecondaryQcFromCheckpoint(); return; } this.runtime.running = false; this.runtime.jobType = ''; this.render(); }
+    describeItem(item) { return item.exportLabel; }
+    isCurrentJobStopRequested() { return isListJobAbortRequested(this.runtime.listJobAbortToken) || this.runtime.stopping; }
     getSecondaryQcParallelCount(checkpoint) {
       return normalizeSecondaryQcParallelCount(
         checkpoint && checkpoint.parallelCount,
-        this.settings.secondaryQc.parallelCount
+        this.settings.parallelCount
       );
     }
 
@@ -6587,7 +4895,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     isSecondaryQcTargetReached(itemIndex, checkpoint) {
-      const activeCheckpoint = checkpoint || this.runtime.secondaryQc.checkpoint;
+      const activeCheckpoint = checkpoint || this.runtime.checkpoint;
       if (!activeCheckpoint) {
         return false;
       }
@@ -6601,7 +4909,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     getSecondaryQcDispatchCapacity(itemIndex, checkpoint) {
-      const activeCheckpoint = checkpoint || this.runtime.secondaryQc.checkpoint;
+      const activeCheckpoint = checkpoint || this.runtime.checkpoint;
       if (!activeCheckpoint) {
         return 0;
       }
@@ -6617,7 +4925,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     isSecondaryQcTaskReserved(taskId, checkpoint) {
-      const activeCheckpoint = checkpoint || this.runtime.secondaryQc.checkpoint;
+      const activeCheckpoint = checkpoint || this.runtime.checkpoint;
       const normalizedTaskId = normalizeText(taskId);
       if (!activeCheckpoint || !normalizedTaskId) {
         return false;
@@ -6627,7 +4935,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     updateSecondaryQcItemProgress(item, itemIndex, itemsLength) {
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       if (!checkpoint || !item) {
         return;
       }
@@ -6675,7 +4983,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         return [];
       }
       if (normalizedReason === 'quota_reached') {
-        const checkpoint = this.runtime.secondaryQc.checkpoint;
+        const checkpoint = this.runtime.checkpoint;
         if (checkpoint && checkpoint.rows.length >= checkpoint.targetCount) {
           this.pushLog(`总目标已满，已停止 ${requestIds.length} 个进行中的详情页`);
         } else if (item && Number.isInteger(itemIndex) && itemIndex >= 0) {
@@ -6683,18 +4991,18 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         }
       }
       await this.stopSecondaryQcRequests(requestIds);
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       if (checkpoint) {
         checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint)
           .filter((entry) => !requestIds.includes(entry.requestId));
-        await this.saveCheckpoint('secondaryQc');
+        await this.saveCheckpoint();
       }
       inflightTasks.clear();
       return requestIds;
     }
 
     async recoverSecondaryQcInflightState() {
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       const requestIds = uniqueTextList(
         this.getSecondaryQcInflightEntries(checkpoint).map((entry) => entry.requestId)
       );
@@ -6705,15 +5013,15 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await this.stopSecondaryQcRequests(requestIds);
       if (checkpoint) {
         checkpoint.inflightEntries = [];
-        await this.saveCheckpoint('secondaryQc');
+        await this.saveCheckpoint();
       }
     }
 
     async launchSecondaryQcRowTask(item, itemIndex, row, pageNumber, totalPages, cancelCheck) {
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
       const apiKey = normalizeText(this.settings.secrets.dashscopeApiKey);
-      const modelMode = normalizeSecondaryQcModelMode(this.settings.secondaryQc.modelMode);
+      const modelMode = normalizeSecondaryQcModelMode(this.settings.modelMode);
       const requestId = createRuntimeToken('qc');
       const requestKey = buildSecondaryQcWorkerRequestKey(requestId);
       const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
@@ -6748,7 +5056,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         itemKey: item.key,
         startedAt: new Date().toISOString()
       });
-      await this.saveCheckpoint('secondaryQc');
+      await this.saveCheckpoint();
 
       this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页已派发 ${row.taskId}`);
       openUrlInNewTab(detailUrl);
@@ -6805,7 +5113,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     async applySecondaryQcTaskResponse(descriptor, response) {
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       const row = descriptor.row;
       const itemIndex = descriptor.itemIndex;
       if (!response) {
@@ -6865,7 +5173,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     async handleSettledSecondaryQcTask(settled) {
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       const descriptor = settled && settled.descriptor ? settled.descriptor : null;
       const requestId = descriptor ? descriptor.requestId : '';
       const taskId = descriptor ? descriptor.taskId : '';
@@ -6874,7 +5182,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           .filter((entry) => entry.requestId !== requestId);
       }
       if (!descriptor) {
-        await this.saveCheckpoint('secondaryQc');
+        await this.saveCheckpoint();
         return;
       }
       if (!settled || settled.status === 'rejected') {
@@ -6888,7 +5196,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         if (message && message !== '采集已结束') {
           this.pushLog(`${prefixTaskError(taskId, message)}，已跳过当前条目`);
         }
-        await this.saveCheckpoint('secondaryQc');
+        await this.saveCheckpoint();
         return;
       }
 
@@ -6897,13 +5205,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       } catch (error) {
         const message = normalizeText(error && error.message ? error.message : String(error)) || '详情页处理失败';
         this.pushLog(`${prefixTaskError(taskId, message)}，已跳过当前条目`);
-        await this.saveCheckpoint('secondaryQc');
+        await this.saveCheckpoint();
         return;
       }
       if (checkpoint && !checkpoint.processedTaskIds.includes(taskId)) {
         checkpoint.processedTaskIds.push(taskId);
       }
-      await this.saveCheckpoint('secondaryQc');
+      await this.saveCheckpoint();
     }
 
     async waitForNextSecondaryQcTask(inflightTasks, item, itemIndex, itemsLength) {
@@ -6913,11 +5221,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const settled = await Promise.race(Array.from(inflightTasks.values()).map((descriptor) => descriptor.promise));
       inflightTasks.delete(settled.descriptor.requestId);
       if (this.isCurrentJobStopRequested()) {
-        const checkpoint = this.runtime.secondaryQc.checkpoint;
+        const checkpoint = this.runtime.checkpoint;
         if (checkpoint) {
           checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint)
             .filter((entry) => entry.requestId !== settled.descriptor.requestId);
-          await this.saveCheckpoint('secondaryQc');
+          await this.saveCheckpoint();
         }
         await this.cancelSecondaryQcInflightTasks(inflightTasks, 'manual_stop');
         throw new Error('采集已结束');
@@ -6925,7 +5233,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       try {
         await this.handleSettledSecondaryQcTask(settled);
         this.updateSecondaryQcItemProgress(item, itemIndex, itemsLength);
-        if (this.isSecondaryQcTargetReached(itemIndex, this.runtime.secondaryQc.checkpoint)) {
+        if (this.isSecondaryQcTargetReached(itemIndex, this.runtime.checkpoint)) {
           await this.cancelSecondaryQcInflightTasks(inflightTasks, 'quota_reached', item, itemIndex);
         }
       } catch (error) {
@@ -6935,7 +5243,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     async waitForSecondaryQcDispatchCapacity(inflightTasks, item, itemIndex, itemsLength) {
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       while (true) {
         if (this.isCurrentJobStopRequested()) {
           throw new Error('采集已结束');
@@ -6967,7 +5275,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     async drainSecondaryQcInflightTasks(inflightTasks, item, itemIndex, itemsLength) {
-      if (this.isSecondaryQcTargetReached(itemIndex, this.runtime.secondaryQc.checkpoint)) {
+      if (this.isSecondaryQcTargetReached(itemIndex, this.runtime.checkpoint)) {
         await this.cancelSecondaryQcInflightTasks(inflightTasks, 'quota_reached', item, itemIndex);
       }
       while (inflightTasks.size) {
@@ -6980,288 +5288,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       return this.runtime.pauseRequested ? 'paused' : 'done';
     }
 
-    getCachedDailyResult(date, item) {
-      const dayResults = this.runtime.daily.resultCache && this.runtime.daily.resultCache[date];
-      if (!dayResults || !dayResults[item.key]) {
-        return null;
-      }
-      const normalized = normalizeStoredResultRow({
-        ...dayResults[item.key],
-        key: item.key
-      });
-      return isReusableCachedResult(normalized) ? normalized : null;
-    }
-
-    async cacheDailyResult(date, item, result) {
-      if (!this.runtime.daily.resultCache[date]) {
-        this.runtime.daily.resultCache[date] = {};
-      }
-      this.runtime.daily.resultCache[date][item.key] = normalizeStoredResultRow({
-        ...result,
-        key: item.key
-      });
-      await storageSetCached({
-        [STORAGE_KEYS.resultCache]: this.runtime.daily.resultCache
-      });
-    }
-
-    async startDailyJob() {
-      if (this.runtime.running) {
-        return;
-      }
-      if (!isListPage()) {
-        throw new Error('日报只能在标准化列表页启动');
-      }
-      this.runtime.listJobAbortToken = beginListJobAbortSession();
-      const startDate = this.settings.daily.startDate;
-      const endDate = this.settings.daily.endDate || startDate;
-      const maxDate = getYesterdayDateString();
-      const groupIds = this.settings.daily.groupIds.slice();
-      const groups = this.getSelectedGroupEntries('daily');
-      const items = this.getSelectedEntries('daily');
-      if (!startDate) {
-        throw new Error('请先选择日报开始日期');
-      }
-      if (startDate > maxDate || endDate > maxDate) {
-        throw new Error('日期只能选择昨天及以前');
-      }
-      if (endDate < startDate) {
-        throw new Error('结束日期不能早于开始日期');
-      }
-      if (!groups.length) {
-        throw new Error('请至少选择一个日报编组');
-      }
-      const dateList = buildDateList(startDate, endDate);
-      if (!dateList.length) {
-        throw new Error('日报日期范围无效');
-      }
-
-      this.runtime.running = true;
-      this.runtime.jobType = 'daily';
-      this.runtime.stopping = false;
-      this.runtime.pauseRequested = false;
-      this.runtime.logs = [];
-      this.runtime.statusText = '正在准备日报';
-      this.runtime.daily.report = null;
-      this.runtime.daily.checkpoint = {
-        version: 4,
-        status: 'running',
-        startDate,
-        endDate,
-        dateList,
-        groupIds,
-        itemKeys: items.map((item) => item.key),
-        currentDateIndex: 0,
-        currentItemIndex: 0,
-        phase: 'std',
-        results: {},
-        logs: [],
-        startedAt: new Date().toISOString(),
-        statusText: '正在准备日报'
-      };
-      this.render();
-      await this.saveCheckpoint('daily');
-      this.pushLog(`开始日报：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，覆盖 ${items.length} 个子品类`);
-      await this.runDailyFromCheckpoint();
-    }
-
-    async runDailyFromCheckpoint(cancelCheck) {
-      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
-      await waitForPageReady(activeCancelCheck);
-      const checkpoint = this.runtime.daily.checkpoint;
-      if (!checkpoint || checkpoint.status !== 'running') {
-        this.runtime.running = false;
-        this.runtime.jobType = '';
-        this.render();
-        return;
-      }
-      const dateList = Array.isArray(checkpoint.dateList) && checkpoint.dateList.length
-        ? checkpoint.dateList
-        : buildDateList(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
-      checkpoint.dateList = dateList;
-      const items = this.getCheckpointItems(checkpoint);
-      if (!items.length || !dateList.length) {
-        throw new Error('当前日报任务没有可采集内容');
-      }
-
-      if (checkpoint.phase === 'resume-qc') {
-        const currentDate = dateList[checkpoint.currentDateIndex];
-        const item = items[checkpoint.currentItemIndex];
-        if (currentDate && item) {
-          const cachedResult = this.getCachedDailyResult(currentDate, item);
-          if (cachedResult) {
-            checkpoint.results[currentDate] = checkpoint.results[currentDate] || {};
-            checkpoint.results[currentDate][item.key] = cachedResult;
-            this.pushLog(`${currentDate} ${this.describeItem(item)}：已使用已保存结果`);
-            advanceDailyCheckpointCursor(checkpoint, items.length);
-            checkpoint.phase = 'std';
-            await this.saveCheckpoint('daily');
-            return this.runDailyFromCheckpoint(activeCancelCheck);
-          }
-          this.updateCheckpointStatus(
-            `正在继续 ${item.exportLabel}`
-          );
-          await this.runDailyQualityCheckForItem(currentDate, item, activeCancelCheck);
-          advanceDailyCheckpointCursor(checkpoint, items.length);
-          checkpoint.phase = 'std';
-          await this.saveCheckpoint('daily');
-        }
-      }
-
-      while (checkpoint.currentDateIndex < dateList.length) {
-        this.ensureNotStopped();
-        if (checkpoint.currentItemIndex >= items.length) {
-          checkpoint.currentDateIndex += 1;
-          checkpoint.currentItemIndex = 0;
-          continue;
-        }
-        const currentDate = dateList[checkpoint.currentDateIndex];
-        const item = items[checkpoint.currentItemIndex];
-        checkpoint.results[currentDate] = checkpoint.results[currentDate] || {};
-        checkpoint.results[currentDate][item.key] = checkpoint.results[currentDate][item.key] || createEmptyResult(item);
-
-        const cachedResult = this.getCachedDailyResult(currentDate, item);
-        if (cachedResult) {
-          checkpoint.results[currentDate][item.key] = cachedResult;
-          this.pushLog(`${currentDate} ${this.describeItem(item)}：已使用已保存结果`);
-          advanceDailyCheckpointCursor(checkpoint, items.length);
-          checkpoint.phase = 'std';
-          await this.saveCheckpoint('daily');
-          continue;
-        }
-
-        checkpoint.phase = 'std';
-        this.updateCheckpointStatus(
-          `正在采集 ${item.exportLabel}`
-        );
-        await this.saveCheckpoint('daily');
-        await this.runDailyStandardizationForItem(currentDate, item, activeCancelCheck);
-
-        checkpoint.phase = 'resume-qc';
-        this.updateCheckpointStatus(
-          `正在继续 ${item.exportLabel}`
-        );
-        await this.saveCheckpoint('daily');
-        this.pushLog(`${currentDate} ${this.describeItem(item)}：标准化已完成，正在继续质检`);
-        window.location.reload();
-        return;
-      }
-
-      await this.completeDailyJob();
-    }
-
-    async runDailyStandardizationForItem(date, item, cancelCheck) {
-      this.ensureNotStopped();
-      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
-      const checkpoint = this.runtime.daily.checkpoint;
-      const result = checkpoint.results[date][item.key] || createEmptyResult(item);
-      const range = buildDateRange(date);
-
-      await prepareListQueryFilters(item, {
-        cancelCheck: activeCancelCheck,
-        dateLabel: '创建时间',
-        range,
-        onCategorySelected: () => {
-          this.pushLog(`已选择品类：${this.describeItem(item)}`);
-        }
-      });
-
-      this.pushLog(`${date} ${this.describeItem(item)}：读取入库量`);
-      result.inboundCount = await clickQueryAndReadCount(activeCancelCheck);
-      this.pushLog(`${date} ${this.describeItem(item)}：入库量 ${result.inboundCount}`);
-
-      await applySelectFilter('标准化状态', '标准化通过', activeCancelCheck);
-      result.stdPassCount = await clickQueryAndReadCount(activeCancelCheck);
-      this.pushLog(`${date} ${this.describeItem(item)}：标准化通过 ${result.stdPassCount}`);
-
-      await applySelectFilter('标准化状态', '标准化拒绝', activeCancelCheck);
-      result.stdRejectCount = await clickQueryAndReadCount(activeCancelCheck);
-      result.stdTotalCount = result.stdPassCount + result.stdRejectCount;
-      result.stdRejectRate = calculateRatio(result.stdRejectCount, result.stdTotalCount);
-      this.pushLog(`${date} ${this.describeItem(item)}：标准化拒绝 ${result.stdRejectCount}`);
-
-      checkpoint.results[date][item.key] = {
-        ...result,
-        key: item.key,
-        category: item.exportLabel,
-        label: item.exportLabel,
-        groupLabel: item.groupLabel,
-        subgroupLabel: item.subgroupLabel,
-        theme: item.theme,
-        collectionCompleted: false
-      };
-      await this.saveCheckpoint('daily');
-    }
-
-    async runDailyQualityCheckForItem(date, item, cancelCheck) {
-      this.ensureNotStopped();
-      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
-      const checkpoint = this.runtime.daily.checkpoint;
-      const result = checkpoint.results[date][item.key] || createEmptyResult(item);
-      const range = buildDateRange(date);
-
-      await prepareListQueryFilters(item, {
-        cancelCheck: activeCancelCheck,
-        dateLabel: '修改时间',
-        range,
-        onCategorySelected: () => {
-          this.pushLog(`已选择品类：${this.describeItem(item)}`);
-        }
-      });
-
-      await applySelectFilter('质检状态', '质检通过', activeCancelCheck);
-      result.qcPassCount = await clickQueryAndReadCount(activeCancelCheck);
-      this.pushLog(`${date} ${this.describeItem(item)}：质检通过 ${result.qcPassCount}`);
-
-      await applySelectFilter('质检状态', '质检拒绝', activeCancelCheck);
-      result.qcRejectCount = await clickQueryAndReadCount(activeCancelCheck);
-      result.qcTotalCount = result.qcPassCount + result.qcRejectCount;
-      result.qcRejectRate = calculateRatio(result.qcRejectCount, result.qcTotalCount);
-      this.pushLog(`${date} ${this.describeItem(item)}：质检拒绝 ${result.qcRejectCount}`);
-
-      checkpoint.results[date][item.key] = {
-        ...result,
-        key: item.key,
-        category: item.exportLabel,
-        label: item.exportLabel,
-        groupLabel: item.groupLabel,
-        subgroupLabel: item.subgroupLabel,
-        theme: item.theme,
-        collectionCompleted: true
-      };
-      await this.cacheDailyResult(date, item, checkpoint.results[date][item.key]);
-      await this.saveCheckpoint('daily');
-    }
-
-    async completeDailyJob() {
-      const checkpoint = this.runtime.daily.checkpoint;
-      const items = this.getCheckpointItems(checkpoint);
-      const dateList = Array.isArray(checkpoint.dateList) && checkpoint.dateList.length
-        ? checkpoint.dateList
-        : buildDateList(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
-      const report = {
-        version: 1,
-        date: checkpoint.startDate,
-        startDate: checkpoint.startDate,
-        endDate: checkpoint.endDate || checkpoint.startDate,
-        itemKeys: items.map((item) => item.key),
-        columns: buildReportColumns(items),
-        rows: buildDailyReportRows(dateList, items, checkpoint.results),
-        generatedAt: new Date().toISOString()
-      };
-
-      this.runtime.daily.report = report;
-      await storageSetCached({ [STORAGE_KEYS.report]: report });
-      await this.clearCheckpoint('daily');
-      this.runtime.running = false;
-      this.runtime.jobType = '';
-      this.runtime.stopping = false;
-      this.runtime.pauseRequested = false;
-      this.runtime.statusText = '日报采集完成，可以下载结果了';
-      this.pushLog(`日报采集完成，已生成 ${dateList.length} 天结果`);
-      this.render();
-    }
-
     async startSecondaryQcJob() {
       if (this.runtime.running) {
         return;
@@ -7270,18 +5296,18 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (!isListPage()) {
         throw new Error('二次质检只能在标准化列表页启动');
       }
-      const startDate = normalizeText(this.settings.secondaryQc.startDate);
-      const endDate = normalizeText(this.settings.secondaryQc.endDate);
-      const targetCount = normalizePositiveInteger(this.settings.secondaryQc.targetCount, 10, 1, 999);
+      const startDate = normalizeText(this.settings.startDate);
+      const endDate = normalizeText(this.settings.endDate);
+      const targetCount = normalizePositiveInteger(this.settings.targetCount, 10, 1, 999);
       const parallelCountInputValue = this.refs.secondaryQcParallelCount
         ? this.refs.secondaryQcParallelCount.value
-        : this.settings.secondaryQc.parallelCount;
+        : this.settings.parallelCount;
       const parallelCount = normalizeSecondaryQcParallelCount(
         parallelCountInputValue,
         SECONDARY_QC_DEFAULT_PARALLEL_COUNT
       );
       const maxDate = getTodayDateString();
-      const categoryKey = normalizeText(this.settings.secondaryQc.categoryKey);
+      const categoryKey = normalizeText(this.settings.categoryKey);
       const items = this.getSelectedEntries('secondaryQc');
       const apiKey = normalizeText(this.settings.secrets.dashscopeApiKey);
       if (!startDate) {
@@ -7302,7 +5328,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (!apiKey) {
         throw new Error('请先在设置里填写 DASHSCOPE_API_KEY');
       }
-      this.settings.secondaryQc.parallelCount = parallelCount;
+      this.settings.parallelCount = parallelCount;
       if (this.refs.secondaryQcParallelCount) {
         this.refs.secondaryQcParallelCount.value = String(parallelCount);
       }
@@ -7313,14 +5339,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
       this.runtime.logs = [];
-      this.runtime.secondaryQc.report = null;
+      this.runtime.report = null;
       this.runtime.statusText = '正在准备二次质检';
-      this.runtime.secondaryQc.checkpoint = {
+      this.runtime.checkpoint = {
         version: 3,
         status: 'running',
         startDate,
         endDate,
-        groupIds: this.settings.secondaryQc.groupIds.slice(),
+        groupIds: uniqueTextList(items.map((item) => item.subgroupId)),
         itemKeys: items.map((item) => item.key),
         targetCount,
         itemTargetCounts: buildSecondaryQcItemTargetCounts(items.length, targetCount),
@@ -7336,9 +5362,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         statusText: '正在准备二次质检'
       };
       this.render();
-      await this.saveCheckpoint('secondaryQc');
+      await this.saveCheckpoint();
       this.pushLog(
-        `开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，品类 ${items[0].exportLabel}，目标 ${targetCount} 条，并发 ${parallelCount}，模型 ${getSecondaryQcModelModeLabel(this.settings.secondaryQc.modelMode)}`
+        `开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，品类 ${items[0].exportLabel}，目标 ${targetCount} 条，并发 ${parallelCount}，模型 ${getSecondaryQcModelModeLabel(this.settings.modelMode)}`
       );
       await this.runSecondaryQcFromCheckpoint();
     }
@@ -7346,7 +5372,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     async runSecondaryQcFromCheckpoint(cancelCheck) {
       const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
       await waitForPageReady(activeCancelCheck);
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       if (!checkpoint || checkpoint.status !== 'running') {
         this.runtime.running = false;
         this.runtime.jobType = '';
@@ -7382,33 +5408,33 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         if (!itemTargetCount) {
           this.pushLog(`${this.describeItem(item)}：分配 0 条，跳过`);
           checkpoint.currentItemIndex += 1;
-          await this.saveCheckpoint('secondaryQc');
+          await this.saveCheckpoint();
           continue;
         }
         if (itemRecordedCount >= itemTargetCount) {
           checkpoint.currentItemIndex += 1;
-          await this.saveCheckpoint('secondaryQc');
+          await this.saveCheckpoint();
           continue;
         }
         this.updateSecondaryQcItemProgress(item, itemIndex, items.length);
-        await this.saveCheckpoint('secondaryQc');
+        await this.saveCheckpoint();
         const itemStatus = await this.processSecondaryQcItem(item, itemIndex, activeCancelCheck);
         if (checkpoint.rows.length >= checkpoint.targetCount) {
           break;
         }
         if (itemStatus === 'paused') {
-          await this.saveCheckpoint('secondaryQc');
+          await this.saveCheckpoint();
           throw new Error('采集已暂停');
         }
         checkpoint.currentItemIndex += 1;
-        await this.saveCheckpoint('secondaryQc');
+        await this.saveCheckpoint();
       }
 
       await this.completeSecondaryQcJob();
     }
 
     async processSecondaryQcItem(item, itemIndex, cancelCheck) {
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
       const range = buildDatePeriodRange(checkpoint.startDate, checkpoint.endDate || checkpoint.startDate);
       const itemTargetCount = checkpoint.itemTargetCounts[itemIndex] || 0;
@@ -7481,7 +5507,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     async scanCurrentSecondaryQcPage(item, itemIndex, pageNumber, totalPages, inflightTasks, cancelCheck) {
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       const localSeen = new Set();
       const body = getListBodyScrollElement();
       if (body) {
@@ -7554,7 +5580,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
 
     async completeSecondaryQcJob() {
-      const checkpoint = this.runtime.secondaryQc.checkpoint;
+      const checkpoint = this.runtime.checkpoint;
       const rows = checkpoint.rows.slice(0, checkpoint.targetCount);
       const report = {
         version: 1,
@@ -7566,11 +5592,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         rows: createSecondaryQcExportRows(rows),
         generatedAt: new Date().toISOString()
       };
-      this.runtime.secondaryQc.report = report;
+      this.runtime.report = report;
       await storageSetCached({
-        [STORAGE_KEYS.secondaryQcReport]: report
+        [STORAGE_KEYS.report]: report
       });
-      await this.clearCheckpoint('secondaryQc');
+      await this.clearCheckpoint();
       this.runtime.running = false;
       this.runtime.jobType = '';
       this.runtime.stopping = false;
@@ -7595,7 +5621,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           : stopped
             ? '采集已结束，可以重新开始'
             : `任务遇到问题：${message}`;
-        await this.saveCheckpoint(this.runtime.jobType || 'daily');
+        await this.saveCheckpoint();
       }
       this.runtime.running = false;
       this.runtime.stopping = false;
@@ -7616,23 +5642,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.render();
     }
 
-    exportDailyReport() {
-      if (!this.runtime.daily.report) {
-        this.pushLog('当前没有可下载的日报');
-        return;
-      }
-      downloadReport(this.runtime.daily.report);
-      this.pushLog(`已导出日报：${formatReportPeriod(this.runtime.daily.report)}`);
-    }
-
-    exportSecondaryQcResult() {
-      if (!this.runtime.secondaryQc.report) {
-        this.pushLog('当前没有可下载的二次质检结果');
-        return;
-      }
-      exportSecondaryQcReport(this.runtime.secondaryQc.report);
-      this.pushLog(`已导出二次质检结果：目标 ${this.runtime.secondaryQc.report.targetCount} 条，实际 ${this.runtime.secondaryQc.report.actualCount} 条`);
-    }
+    exportSecondaryQcResult() { if (!this.runtime.report) { this.pushLog('当前没有可下载的二次质检结果'); return; } exportSecondaryQcReport(this.runtime.report); this.pushLog(`已导出二次质检结果：目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条`); }
   }
 
   let app = null;
@@ -7642,134 +5652,30 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   let activeWorkerRequestId = '';
   let activeMediaWorkerRequestId = '';
 
-  async function ensureWorkbenchMounted() {
-    if (!isSupportedPage()) {
-      if (app) {
-        app.destroy();
-        app = null;
-      }
-      return 'destroyed';
-    }
-    await waitForBodyReady();
-    if (!app) {
-      app = new YspWorkbenchApp();
-      await app.init();
-      return 'created';
-    }
-    if (!document.getElementById('ysp-daily-panel-root')) {
-      app.mountPanel();
-      if (isListPage()) {
-        await app.tryResume();
-      } else {
-        app.render();
-      }
-      return 'remounted';
-    }
-    return 'noop';
-  }
-
-  async function ensureDetailWorkerHandled() {
-    if (!isDetailPage()) {
-      activeWorkerRequestId = '';
-      return;
-    }
-    const requestId = getSecondaryQcWorkerRequestIdFromLocation();
-    if (!requestId || requestId === activeWorkerRequestId) {
-      return;
-    }
-    activeWorkerRequestId = requestId;
-    await runSecondaryQcDetailWorker(requestId);
-  }
-
-  async function ensureYangshipinMediaWorkerHandled() {
-    if (!isYangshipinMediaWorkerPage()) {
-      activeMediaWorkerRequestId = '';
-      return;
-    }
-    const requestId = getSecondaryQcMediaWorkerRequestIdFromLocation();
-    if (!requestId || requestId === activeMediaWorkerRequestId) {
-      return;
-    }
-    activeMediaWorkerRequestId = requestId;
-    await runSecondaryQcMediaWorker(requestId);
-  }
+  async function ensureSecondaryQcMounted() { if (!isSupportedPage()) { if (app) { app.destroy(); app = null; } return 'destroyed'; } await waitForBodyReady(); if (!app) { app = new YspSecondaryQcApp(); await app.init(); return 'created'; } if (!document.getElementById('ysp-secondary-qc-panel-root')) { app.mountPanel(); if (isListPage()) await app.tryResume(); else app.render(); return 'remounted'; } return 'noop'; }
+  async function ensureDetailWorkerHandled() { if (!isDetailPage()) { activeWorkerRequestId = ''; return; } const requestId = getSecondaryQcWorkerRequestIdFromLocation(); if (!requestId || requestId === activeWorkerRequestId) return; activeWorkerRequestId = requestId; await runSecondaryQcDetailWorker(requestId); }
+  async function ensureYangshipinMediaWorkerHandled() { if (!isYangshipinMediaWorkerPage()) { activeMediaWorkerRequestId = ''; return; } const requestId = getSecondaryQcMediaWorkerRequestIdFromLocation(); if (!requestId || requestId === activeMediaWorkerRequestId) return; activeMediaWorkerRequestId = requestId; await runSecondaryQcMediaWorker(requestId); }
 
   async function runBootstrap() {
-    if (booting) {
-      return;
-    }
+    if (booting) return;
     booting = true;
     try {
-      if (isYangshipinMediaWorkerPage()) {
-        lastPageKind = 'media';
-        await ensureYangshipinMediaWorkerHandled();
-        return;
-      }
-      if (!isSupportedPage()) {
-        lastPageKind = 'unsupported';
-        if (app) {
-          app.destroy();
-          app = null;
-        }
-        return;
-      }
+      if (isYangshipinMediaWorkerPage()) { lastPageKind = 'media'; await ensureYangshipinMediaWorkerHandled(); return; }
+      if (!isSupportedPage()) { lastPageKind = 'unsupported'; if (app) { app.destroy(); app = null; } return; }
       const currentPageKind = isDetailPage() ? 'detail' : 'list';
-      const mountState = await ensureWorkbenchMounted();
-      if (isDetailPage()) {
-        lastPageKind = currentPageKind;
-        await ensureDetailWorkerHandled();
-        return;
-      }
-      if (currentPageKind === 'list' && lastPageKind !== 'list' && mountState === 'noop' && app) {
-        await app.tryResume();
-      }
+      const mountState = await ensureSecondaryQcMounted();
+      if (isDetailPage()) { lastPageKind = currentPageKind; await ensureDetailWorkerHandled(); return; }
+      if (currentPageKind === 'list' && lastPageKind !== 'list' && mountState === 'noop' && app) await app.tryResume();
       lastPageKind = currentPageKind;
     } catch (error) {
-      console.error('[央视频标准化工作台]', error);
+      console.error('[央视频二次质检助手]', error);
     } finally {
       booting = false;
     }
   }
 
-  function queueBootstrap() {
-    window.setTimeout(() => {
-      runBootstrap();
-    }, 60);
-  }
-
-  function installRouteHooks() {
-    const methods = ['pushState', 'replaceState'];
-    for (const method of methods) {
-      const original = history[method];
-      history[method] = function wrappedHistoryMethod(...args) {
-        const result = original.apply(this, args);
-        window.dispatchEvent(new Event('ysp:location-change'));
-        return result;
-      };
-    }
-
-    const onLocationChange = () => {
-      if (location.href === lastHref && document.getElementById('ysp-daily-panel-root')) {
-        return;
-      }
-      lastHref = location.href;
-      queueBootstrap();
-    };
-
-    window.addEventListener('popstate', onLocationChange);
-    window.addEventListener('hashchange', onLocationChange);
-    window.addEventListener('ysp:location-change', onLocationChange);
-
-    const observer = new MutationObserver(() => {
-      if (!isSupportedPage()) {
-        return;
-      }
-      if (!document.getElementById('ysp-daily-panel-root')) {
-        queueBootstrap();
-      }
-    });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-  }
+  function queueBootstrap() { window.setTimeout(() => runBootstrap(), 60); }
+  function installRouteHooks() { const methods = ['pushState', 'replaceState']; for (const method of methods) { const original = history[method]; history[method] = function wrappedHistoryMethod(...args) { const result = original.apply(this, args); window.dispatchEvent(new Event('ysp:secondary-qc-location-change')); return result; }; } const onLocationChange = () => { if (location.href === lastHref && document.getElementById('ysp-secondary-qc-panel-root')) return; lastHref = location.href; queueBootstrap(); }; window.addEventListener('popstate', onLocationChange); window.addEventListener('hashchange', onLocationChange); window.addEventListener('ysp:secondary-qc-location-change', onLocationChange); const observer = new MutationObserver(() => { if (!isSupportedPage()) return; if (!document.getElementById('ysp-secondary-qc-panel-root')) queueBootstrap(); }); observer.observe(document.documentElement, { childList: true, subtree: true }); }
 
   installRouteHooks();
   runBootstrap();

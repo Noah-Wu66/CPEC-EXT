@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         央视频标签库采集器
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.5
+// @version      1.2.8
 // @description  通过标准化列表接口采集成品视频标签，并保存在浏览器本地数据库
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
 // @match        https://std.video.cloud.cctv.com/*
-// @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp-dev/ysp-tag-library-crawler.user.js
-// @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp-dev/ysp-tag-library-crawler.user.js
+// @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp/tags.user.js
+// @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp/tags.user.js
 // @grant        GM_addStyle
 // @grant        GM_info
 // @run-at       document-idle
@@ -543,14 +543,17 @@
         '备注'
       ]
     ];
-    tags.forEach((tag) => {
-      rows.push([
-        tag.name,
-        tag.id,
-        tag.type,
-        tag.comment
-      ]);
-    });
+    tags
+      .slice()
+      .sort((a, b) => Number(a.id) - Number(b.id))
+      .forEach((tag) => {
+        rows.push([
+          tag.name,
+          tag.id,
+          tag.type,
+          tag.comment
+        ]);
+      });
     return rows.map((row) => row.map(escapeCsv).join(',')).join('\n');
   }
 
