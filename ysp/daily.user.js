@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频日报采集器
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.3.2
+// @version      2.3.3
 // @description  在标准化系统页面采集日报数据，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1272,6 +1272,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     checkpoint: 'yspDailyReportApiCheckpointV1'
   };
   const MAX_LOGS = 200;
+  const API_REQUEST_INTERVAL_MS = 500;
   const API_ENDPOINTS = {
     categoryList: '/api/category/category/list',
     taskList: '/api/api/task/list/std'
@@ -2377,7 +2378,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.handleOutsideInteraction = null;
       this.handleViewportChange = null;
       this.settings = createDefaultWorkbenchSettings();
-      this.runtime = { minimized: false, running: false, openGroupMenu: '', jobType: '', listJobAbortToken: 0, activeAbortController: null, stopping: false, pauseRequested: false, statusText: '等待开始', logs: [], checkpoint: null, report: null, resultCache: {} };
+      this.runtime = { minimized: false, running: false, openGroupMenu: '', jobType: '', listJobAbortToken: 0, activeAbortController: null, lastApiRequestAt: 0, stopping: false, pauseRequested: false, statusText: '等待开始', logs: [], checkpoint: null, report: null, resultCache: {} };
       this.refs = {};
     }
 
@@ -2415,6 +2416,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.runtime.jobType = '';
       this.runtime.listJobAbortToken = 0;
       this.runtime.activeAbortController = null;
+      this.runtime.lastApiRequestAt = 0;
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
       if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') {
@@ -2582,6 +2584,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.runtime.running = false;
       this.runtime.jobType = '';
       this.runtime.activeAbortController = null;
+      this.runtime.lastApiRequestAt = 0;
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
       this.runtime.statusText = '已清除本地缓存';
@@ -2611,6 +2614,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.runtime.running = false;
       this.runtime.jobType = '';
       this.runtime.activeAbortController = null;
+      this.runtime.lastApiRequestAt = 0;
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
       this.render();
@@ -2626,15 +2630,28 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.render();
     }
     async handlePauseResumeAction() { if (this.runtime.running) { this.pauseCurrentJob(); return; } await this.resumePausedJob(); }
-    async resumePausedJob() { if (this.runtime.running) return; if (!isListPage()) throw new Error('继续任务请回到标准化列表页'); const pausedTask = this.getPausedTaskMeta(); if (!pausedTask) throw new Error('当前没有可继续的暂停任务'); this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.running = true; this.runtime.jobType = 'daily'; this.runtime.activeAbortController = null; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS) : []; pausedTask.checkpoint.status = 'running'; pausedTask.checkpoint.statusText = '正在继续日报'; this.runtime.statusText = pausedTask.checkpoint.statusText; await this.saveCheckpoint(); this.pushLog('继续日报'); this.render(); await this.runDailyFromCheckpoint(); }
+    async resumePausedJob() { if (this.runtime.running) return; if (!isListPage()) throw new Error('继续任务请回到标准化列表页'); const pausedTask = this.getPausedTaskMeta(); if (!pausedTask) throw new Error('当前没有可继续的暂停任务'); this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.running = true; this.runtime.jobType = 'daily'; this.runtime.activeAbortController = null; this.runtime.lastApiRequestAt = 0; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS) : []; pausedTask.checkpoint.status = 'running'; pausedTask.checkpoint.statusText = '正在继续日报'; this.runtime.statusText = pausedTask.checkpoint.statusText; await this.saveCheckpoint(); this.pushLog('继续日报'); this.render(); await this.runDailyFromCheckpoint(); }
     async tryResume() { if (!this.runtime.running) { this.render(); return; } if (this.runtime.jobType === 'daily' && this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.pushLog('检测到未完成日报，正在继续'); await this.runDailyFromCheckpoint(); return; } this.runtime.running = false; this.runtime.jobType = ''; this.render(); }
     describeItem(item) { return item.exportLabel; }
     isCurrentJobStopRequested() { return isListJobAbortRequested(this.runtime.listJobAbortToken) || this.runtime.stopping; }
     abortActiveApiRequest() { if (this.runtime.activeAbortController) this.runtime.activeAbortController.abort(); }
+    async waitForApiRequestSlot() {
+      this.ensureNotStopped();
+      const lastRequestAt = Number(this.runtime.lastApiRequestAt || 0);
+      const waitMs = Math.max(0, API_REQUEST_INTERVAL_MS - (Date.now() - lastRequestAt));
+      const waitUntil = Date.now() + waitMs;
+      while (Date.now() < waitUntil) {
+        this.ensureNotStopped();
+        await sleep(Math.min(50, waitUntil - Date.now()));
+      }
+      this.ensureNotStopped();
+      this.runtime.lastApiRequestAt = Date.now();
+    }
     beginApiRequest() { this.ensureNotStopped(); const controller = new AbortController(); this.runtime.activeAbortController = controller; return controller; }
     finishApiRequest(controller) { if (this.runtime.activeAbortController === controller) this.runtime.activeAbortController = null; }
 
     async requestApiJson(endpoint, params) {
+      await this.waitForApiRequestSlot();
       const controller = this.beginApiRequest();
       try {
         const payload = await fetchApiJson(endpoint, params, { signal: controller.signal });
@@ -2741,6 +2758,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.runtime.running = true;
       this.runtime.jobType = 'daily';
       this.runtime.activeAbortController = null;
+      this.runtime.lastApiRequestAt = 0;
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
       this.runtime.logs = [];
