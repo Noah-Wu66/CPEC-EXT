@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频日报采集器
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.3.1
+// @version      2.3.2
 // @description  在标准化系统页面采集日报数据，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1363,6 +1363,18 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const mm = String(date.getMinutes()).padStart(2, '0');
     const ss = String(date.getSeconds()).padStart(2, '0');
     return `${hh}:${mm}:${ss}`;
+  }
+
+  function mergeLogEntries(currentLogs, messages) {
+    const logs = Array.isArray(currentLogs) ? currentLogs.slice() : [];
+    const messageList = Array.isArray(messages) ? messages : [messages];
+    for (const message of messageList) {
+      const text = normalizeText(message);
+      if (text) {
+        logs.push(`[${formatClock(new Date())}] ${text}`);
+      }
+    }
+    return logs.slice(-MAX_LOGS);
   }
 
   function formatDisplayDate(dateString) {
