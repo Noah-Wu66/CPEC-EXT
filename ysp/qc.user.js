@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.0.2
+// @version      1.0.3
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -18,13 +18,14 @@
 // @grant        GM_addStyle
 // @grant        GM_info
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @connect      dashscope.aliyuncs.com
 // @connect      yangshipin.cn
 // @connect      www.yangshipin.cn
 // @connect      m.yangshipin.cn
 // @connect      w.yangshipin.cn
 // @connect      mp4playcloud-cdn.ysp.cctv.cn
-// @run-at       document-idle
+// @run-at       document-start
 // ==/UserScript==
 
 (function () {
@@ -36,6 +37,11 @@
   window.__YSP_SECONDARY_QC__ = true;
 
   const SCRIPT_VERSION = GM_info.script.version;
+  const YANGSHIPIN_VIDEO_INFO_API_PATH = '/v1/player/get_video_info';
+  let latestYangshipinVideoInfoResponse = null;
+  const yangshipinVideoInfoResponseListeners = [];
+
+  installYangshipinVideoInfoCaptureHook();
   const PANEL_STYLE = `
 #ysp-secondary-qc-panel-root {
   position: fixed;
@@ -1780,6 +1786,105 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return ['yangshipin.cn', 'www.yangshipin.cn', 'm.yangshipin.cn', 'w.yangshipin.cn'].includes(location.hostname)
       && location.pathname.startsWith('/video')
       && Boolean(getSecondaryQcMediaWorkerRequestIdFromLocation());
+  }
+
+  function getYangshipinPageWindow() {
+    if (typeof unsafeWindow === 'object' && unsafeWindow) {
+      return unsafeWindow;
+    }
+    return null;
+  }
+
+  function getYangshipinRequestUrl(input) {
+    if (typeof input === 'string') {
+      return input;
+    }
+    if (input && typeof input.url === 'string') {
+      return input.url;
+    }
+    return '';
+  }
+
+  function isYangshipinVideoInfoRequestUrl(url) {
+    const requestUrl = normalizeText(url);
+    if (!requestUrl) {
+      return false;
+    }
+    try {
+      return new URL(requestUrl, location.href).pathname === YANGSHIPIN_VIDEO_INFO_API_PATH;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function captureYangshipinVideoInfoResponse(responseText) {
+    const normalizedResponseText = String(responseText || '').trim();
+    if (!normalizedResponseText) {
+      return;
+    }
+    latestYangshipinVideoInfoResponse = {
+      responseText: normalizedResponseText,
+      receivedAt: Date.now()
+    };
+    yangshipinVideoInfoResponseListeners.slice().forEach((listener) => {
+      try {
+        listener(latestYangshipinVideoInfoResponse);
+      } catch (error) {
+        // ignore listener errors
+      }
+    });
+  }
+
+  function installYangshipinVideoInfoCaptureHook() {
+    if (!isYangshipinMediaWorkerPage()) {
+      return;
+    }
+    const pageWindow = getYangshipinPageWindow();
+    if (!pageWindow || pageWindow.__YSP_SECONDARY_QC_VIDEO_INFO_CAPTURE__) {
+      return;
+    }
+    pageWindow.__YSP_SECONDARY_QC_VIDEO_INFO_CAPTURE__ = true;
+
+    const originalFetch = pageWindow.fetch;
+    if (typeof originalFetch === 'function') {
+      pageWindow.fetch = function patchedYangshipinVideoInfoFetch(input, init) {
+        const requestUrl = getYangshipinRequestUrl(input);
+        const responsePromise = originalFetch.apply(this, arguments);
+        if (isYangshipinVideoInfoRequestUrl(requestUrl)) {
+          responsePromise.then((response) => {
+            if (!response || typeof response.clone !== 'function') {
+              return;
+            }
+            response.clone().text()
+              .then(captureYangshipinVideoInfoResponse)
+              .catch(() => undefined);
+          }).catch(() => undefined);
+        }
+        return responsePromise;
+      };
+    }
+
+    const xhrPrototype = pageWindow.XMLHttpRequest && pageWindow.XMLHttpRequest.prototype;
+    if (xhrPrototype && typeof xhrPrototype.open === 'function' && typeof xhrPrototype.send === 'function') {
+      const originalOpen = xhrPrototype.open;
+      const originalSend = xhrPrototype.send;
+      xhrPrototype.open = function patchedYangshipinVideoInfoXhrOpen(method, url) {
+        this.__yspSecondaryQcVideoInfoUrl = getYangshipinRequestUrl(url);
+        return originalOpen.apply(this, arguments);
+      };
+      xhrPrototype.send = function patchedYangshipinVideoInfoXhrSend() {
+        if (isYangshipinVideoInfoRequestUrl(this.__yspSecondaryQcVideoInfoUrl)) {
+          this.addEventListener('load', () => {
+            try {
+              captureYangshipinVideoInfoResponse(this.responseText);
+            } catch (error) {
+              // ignore unreadable xhr response
+            }
+          });
+        }
+        return originalSend.apply(this, arguments);
+      };
+    }
   }
 
   function isListPage() {
@@ -4118,64 +4223,104 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
   }
 
-  function getMediaSourceUrl(element) {
-    if (!(element instanceof HTMLMediaElement)) {
-      return '';
+  function buildYangshipinVideoUrlFromPlayInfo(responseText, expectedVid) {
+    let payload = null;
+    try {
+      payload = typeof responseText === 'string' ? JSON.parse(responseText) : responseText;
+    } catch (error) {
+      throw new Error('播放接口返回内容不是有效 JSON');
     }
-    const sourceElement = element.querySelector('source[src]');
-    const candidates = [
-      element.currentSrc,
-      element.src,
-      element.getAttribute('src'),
-      sourceElement ? sourceElement.getAttribute('src') : ''
-    ];
-    for (const candidate of candidates) {
-      const mediaUrl = normalizeMediaSourceUrl(candidate);
-      if (mediaUrl) {
-        return mediaUrl;
-      }
+    const data = payload && payload.data;
+    if (!data || typeof data !== 'object') {
+      throw new Error('播放接口未返回视频数据');
     }
-    return '';
+    if (Number(data.code) !== 0) {
+      throw new Error(normalizeText(data.message || payload.msg) || '播放接口返回错误');
+    }
+    const videoItem = data.vl && Array.isArray(data.vl.vi) ? data.vl.vi[0] : null;
+    if (!videoItem || typeof videoItem !== 'object') {
+      throw new Error('播放接口未返回视频文件信息');
+    }
+    const responseVid = normalizeText(videoItem.vid);
+    const normalizedExpectedVid = normalizeText(expectedVid);
+    if (normalizedExpectedVid && responseVid && responseVid !== normalizedExpectedVid) {
+      throw new Error('播放接口返回的 VID 与当前视频不一致');
+    }
+    const urlItem = videoItem.ul && Array.isArray(videoItem.ul.ui) ? videoItem.ul.ui[0] : null;
+    const baseUrl = normalizeText(urlItem && urlItem.url);
+    const fileName = normalizeText(videoItem.fn);
+    const fvkey = normalizeText(videoItem.fvkey);
+    const extendedParam = normalizeText(data.extended_param);
+    if (!baseUrl || !fileName || !fvkey || !extendedParam) {
+      throw new Error('播放接口返回的视频地址参数不完整');
+    }
+    const pathSeparator = baseUrl.endsWith('/') || fileName.startsWith('/') ? '' : '/';
+    const videoUrl = normalizeMediaSourceUrl(`${baseUrl}${pathSeparator}${fileName}?vkey=${encodeURIComponent(fvkey)}${extendedParam}`);
+    if (!videoUrl) {
+      throw new Error('播放接口拼出的地址不可用');
+    }
+    return videoUrl;
   }
 
-  function getYangshipinVideoElements(videoVid) {
+  async function waitForYangshipinVideoInfoUrl(videoVid, cancelCheck) {
     const normalizedVid = normalizeText(videoVid);
-    const candidates = [];
-    if (normalizedVid) {
-      const explicitVideo = document.getElementById(`myvideo${normalizedVid}`);
-      if (explicitVideo instanceof HTMLMediaElement) {
-        candidates.push(explicitVideo);
+    const startedAt = Date.now();
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timer = 0;
+      const cleanup = () => {
+        if (timer) {
+          window.clearInterval(timer);
+          timer = 0;
+        }
+        const listenerIndex = yangshipinVideoInfoResponseListeners.indexOf(onCapturedResponse);
+        if (listenerIndex >= 0) {
+          yangshipinVideoInfoResponseListeners.splice(listenerIndex, 1);
+        }
+      };
+      const rejectOnce = (error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+      const resolveOnce = (videoUrl) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(videoUrl);
+      };
+      const handleCapturedResponse = (capturedResponse) => {
+        if (settled || !capturedResponse) {
+          return;
+        }
+        try {
+          resolveOnce(buildYangshipinVideoUrlFromPlayInfo(capturedResponse.responseText, normalizedVid));
+        } catch (error) {
+          rejectOnce(error);
+        }
+      };
+      function onCapturedResponse(capturedResponse) {
+        handleCapturedResponse(capturedResponse);
       }
-      const explicitContainer = document.getElementById(`vodbox${normalizedVid}`);
-      if (explicitContainer instanceof Element) {
-        candidates.push(...Array.from(explicitContainer.querySelectorAll('video')));
+
+      yangshipinVideoInfoResponseListeners.push(onCapturedResponse);
+      if (latestYangshipinVideoInfoResponse) {
+        handleCapturedResponse(latestYangshipinVideoInfoResponse);
       }
-    }
-    candidates.push(...Array.from(document.querySelectorAll('video[id^="myvideo"]')));
-    candidates.push(...Array.from(document.querySelectorAll('[id^="vodbox"] video')));
-    candidates.push(...Array.from(document.querySelectorAll('video')));
-    return candidates.filter((element, index, array) => {
-      return element instanceof HTMLMediaElement && array.indexOf(element) === index;
+      timer = window.setInterval(() => {
+        if (settled) {
+          return;
+        }
+        if (cancelCheck && cancelCheck()) {
+          rejectOnce(new Error('视频地址任务已取消'));
+          return;
+        }
+        if (Date.now() - startedAt >= DETAIL_PAGE_TIMEOUT) {
+          rejectOnce(new Error('未获取到播放接口返回'));
+        }
+      }, 250);
     });
-  }
-
-  function getYangshipinDirectVideoUrl(videoVid) {
-    const mediaElements = getYangshipinVideoElements(videoVid);
-    const visibleElement = mediaElements.find((element) => {
-      return isVisible(element) && getMediaSourceUrl(element);
-    });
-    if (visibleElement) {
-      return getMediaSourceUrl(visibleElement);
-    }
-    const anyElement = mediaElements.find((element) => getMediaSourceUrl(element));
-    return anyElement ? getMediaSourceUrl(anyElement) : '';
-  }
-
-  async function waitForYangshipinDirectVideoUrl(videoVid, cancelCheck) {
-    return waitFor(() => {
-      const mediaUrl = getYangshipinDirectVideoUrl(videoVid);
-      return mediaUrl || '';
-    }, DETAIL_PAGE_TIMEOUT, '未获取到视频地址', { cancelCheck });
   }
 
   async function fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck) {
@@ -4398,7 +4543,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         throw new Error('未提供视频 VID');
       }
 
-      const videoUrl = await waitForYangshipinDirectVideoUrl(videoVid, cancelCheck);
+      const videoUrl = await waitForYangshipinVideoInfoUrl(videoVid, cancelCheck);
 
       responsePayload = {
         status: 'completed',
