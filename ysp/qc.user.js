@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.0.5
+// @version      1.0.7
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -21,6 +21,7 @@
 // @grant        unsafeWindow
 // @connect      dashscope.aliyuncs.com
 // @connect      ark.cn-beijing.volces.com
+// @connect      std.video.cloud.cctv.com
 // @connect      yangshipin.cn
 // @connect      www.yangshipin.cn
 // @connect      m.yangshipin.cn
@@ -1307,14 +1308,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const ARK_CHAT_URL = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
   const SECONDARY_QC_MODEL = 'doubao-seed-2-0-lite-260215';
   const SECONDARY_QC_MODEL_LABEL = 'Doubao-Seed-2.0-lite';
+  const SECONDARY_QC_LIST_PAGE_SIZE = 50;
   const TAG_LIBRARY_MAX_OPTIONS_PER_KEYWORD = 30;
   const TAG_LIBRARY_IDB_NAME = 'yspSecondaryQcTagLibraryV2';
   const TAG_LIBRARY_IDB_STORE = 'csv';
   const TAG_LIBRARY_CACHE_KEY = 'active';
   const YANGSHIPIN_VIDEO_WORKER_URL = 'https://yangshipin.cn/video/home';
-  const SECONDARY_QC_MIN_PARALLEL_COUNT = 1;
-  const SECONDARY_QC_MAX_PARALLEL_COUNT = 5;
-  const SECONDARY_QC_DEFAULT_PARALLEL_COUNT = 2;
   const TAG_LIBRARY_MEMORY_CACHE = {
     library: null,
     loadingPromise: null
@@ -1327,7 +1326,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       startDate: '',
       endDate: '',
       targetCount: 10,
-      parallelCount: SECONDARY_QC_DEFAULT_PARALLEL_COUNT,
       categoryKey: '',
       tagLibraryFileName: '',
       tagLibraryUploadedAt: '',
@@ -1350,11 +1348,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return numberValue;
   }
 
-  function normalizeSecondaryQcParallelCount(value, fallbackValue) {
-    const safeFallback = normalizePositiveInteger(fallbackValue, SECONDARY_QC_DEFAULT_PARALLEL_COUNT, SECONDARY_QC_MIN_PARALLEL_COUNT, SECONDARY_QC_MAX_PARALLEL_COUNT);
-    return normalizePositiveInteger(value, safeFallback, SECONDARY_QC_MIN_PARALLEL_COUNT, SECONDARY_QC_MAX_PARALLEL_COUNT);
-  }
-
   function normalizeWorkbenchSettings(rawSettings) {
     const defaults = createDefaultWorkbenchSettings();
     if (!rawSettings || typeof rawSettings !== 'object' || rawSettings.version !== defaults.version) return defaults;
@@ -1371,7 +1364,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       startDate,
       endDate,
       targetCount: normalizePositiveInteger(rawSettings.targetCount, defaults.targetCount, 1, 999),
-      parallelCount: normalizeSecondaryQcParallelCount(rawSettings.parallelCount, defaults.parallelCount),
       categoryKey: normalizeSelectedKeys([rawSettings.categoryKey])[0] || '',
       tagLibraryFileName: normalizeText(rawSettings.tagLibraryFileName),
       tagLibraryUploadedAt: normalizeText(rawSettings.tagLibraryUploadedAt),
@@ -2153,6 +2145,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         && getFormItemByLabel('创建时间')
         && getFormItemByLabel('修改时间');
     }, PAGE_READY_TIMEOUT, '页面还在加载，请稍后再试', { cancelCheck });
+  }
+
+  async function waitForSecondaryQcListApiReady(cancelCheck) {
+    await waitFor(() => {
+      return getStdAdminToken() && getStdVueUserId();
+    }, PAGE_READY_TIMEOUT, '标准化系统登录信息还在加载，请稍后再试', { cancelCheck });
   }
 
   function formatReportPeriod(report) {
@@ -3262,6 +3260,34 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return parseUserBadgeName(container ? container.textContent : '');
   }
 
+  function getCookieValue(name) {
+    const normalizedName = normalizeText(name);
+    if (!normalizedName) {
+      return '';
+    }
+    const prefix = `${encodeURIComponent(normalizedName)}=`;
+    const pairs = String(document.cookie || '').split(';');
+    for (const pair of pairs) {
+      const trimmed = pair.trim();
+      if (trimmed.startsWith(prefix)) {
+        return decodeURIComponent(trimmed.slice(prefix.length));
+      }
+    }
+    return '';
+  }
+
+  function getStdAdminToken() {
+    return normalizeText(getCookieValue('std_admin_token'));
+  }
+
+  function getStdVueUserId() {
+    const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+    const app = pageWindow.$vueApp;
+    const globals = app && app.config && app.config.globalProperties;
+    const userInfo = globals && globals.userInfo;
+    return normalizeText(userInfo && userInfo.userID);
+  }
+
   function buildDatePeriodRange(startDateString, endDateString) {
     const startDate = normalizeText(startDateString);
     const endDate = normalizeText(endDateString) || startDate;
@@ -3271,6 +3297,130 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       start: new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0),
       end: new Date(endYear, endMonth - 1, endDay + 1, 0, 0, 0, 0)
     };
+  }
+
+  function buildSecondaryQcListApiUrl(params) {
+    const search = new URLSearchParams();
+    Object.keys(params || {}).forEach((key) => {
+      const value = params[key];
+      search.set(key, value === undefined || value === null ? '' : String(value));
+    });
+    return `${location.origin}/api/api/task/list/std?${search.toString()}`;
+  }
+
+  function buildSecondaryQcListApiParams(range, pageNumber) {
+    const token = getStdAdminToken();
+    const userId = getStdVueUserId();
+    if (!token) {
+      throw new Error('未读取到标准化系统登录凭证，请重新登录后再开始质检');
+    }
+    if (!userId) {
+      throw new Error('未读取到标准化系统用户信息，请刷新页面后再开始质检');
+    }
+    if (!range || !(range.start instanceof Date) || !(range.end instanceof Date)) {
+      throw new Error('二次质检日期范围无效');
+    }
+    return {
+      token,
+      params: {
+        select_type: 2,
+        create_time_begin: formatDateTime(range.start),
+        create_time_end: formatDateTime(range.end),
+        state: 87,
+        check: 2,
+        type: 2,
+        category: '',
+        limit: 10000,
+        allnum_op: 1,
+        page: Math.max(1, Math.trunc(Number(pageNumber) || 1)),
+        page_size: SECONDARY_QC_LIST_PAGE_SIZE,
+        oaname: userId,
+        otype: 'json',
+        jsonp: 'no',
+        rtx: userId
+      }
+    };
+  }
+
+  function normalizeSecondaryQcListPageResponse(responseText) {
+    let parsed = null;
+    try {
+      parsed = JSON.parse(responseText || '{}');
+    } catch (error) {
+      throw new Error('列表接口返回不是有效 JSON');
+    }
+    const code = Number(parsed && parsed.code);
+    if (Number.isFinite(code) && code !== 0 && code !== 200) {
+      throw new Error(normalizeText(parsed.message || parsed.msg) || `列表接口返回错误：${code}`);
+    }
+    if (!parsed || !Array.isArray(parsed.data)) {
+      throw new Error('列表接口返回结构异常：缺少 data');
+    }
+    const totalRecords = Math.max(0, Math.trunc(Number(parsed.total) || 0));
+    const totalPages = Math.trunc(Number(parsed.total_page));
+    if (totalRecords > 0 && (!Number.isFinite(totalPages) || totalPages < 1)) {
+      throw new Error('列表接口返回结构异常：缺少 total_page');
+    }
+    return {
+      records: parsed.data,
+      totalRecords,
+      totalPages: totalRecords > 0 ? totalPages : 0
+    };
+  }
+
+  async function requestSecondaryQcListPage(range, pageNumber, cancelCheck) {
+    const request = buildSecondaryQcListApiParams(range, pageNumber);
+    let response = null;
+    try {
+      response = await gmXmlhttpRequestPromise({
+        method: 'GET',
+        url: buildSecondaryQcListApiUrl(request.params),
+        headers: {
+          Accept: 'application/json, text/plain, */*',
+          'X-Token': request.token
+        },
+        timeout: QUERY_TIMEOUT,
+        withCredentials: true,
+        cancelCheck
+      });
+    } catch (error) {
+      if (cancelCheck && cancelCheck()) {
+        throw new Error('采集已结束');
+      }
+      throw error;
+    }
+    if (!response || response.status >= 400) {
+      throw new Error(`列表接口请求失败：${response ? response.status : '未知状态'}`);
+    }
+    return {
+      pageNumber: Math.max(1, Math.trunc(Number(pageNumber) || 1)),
+      ...normalizeSecondaryQcListPageResponse(response.responseText || '')
+    };
+  }
+
+  function normalizeSecondaryQcApiRow(record) {
+    if (!record || typeof record !== 'object') {
+      return null;
+    }
+    const taskId = normalizeText(record.vid);
+    if (!taskId) {
+      return null;
+    }
+    return {
+      taskId,
+      standardOperator: normalizeText(record.operator),
+      qcStatus: normalizeText(record.check),
+      state: normalizeText(record.state),
+      type: normalizeText(record.type),
+      fields: record
+    };
+  }
+
+  function isSecondaryQcApiRowCandidate(row, item) {
+    return row
+      && normalizeText(row.type) === normalizeText(item && item.queryLabel)
+      && normalizeText(row.state) === '标准化通过'
+      && normalizeText(row.qcStatus) === '质检通过';
   }
 
   function createSecondaryQcExportRows(records) {
@@ -4244,10 +4394,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     if (!['running', 'paused', 'stopped', 'error'].includes(normalizeText(checkpoint.status))) {
       return null;
     }
-    const parallelCount = normalizeSecondaryQcParallelCount(
-      checkpoint.parallelCount,
-      SECONDARY_QC_DEFAULT_PARALLEL_COUNT
-    );
     const inflightEntries = normalizeSecondaryQcInflightEntries(checkpoint.inflightEntries, itemKeys);
     return {
       ...checkpoint,
@@ -4260,7 +4406,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       targetCount,
       itemTargetCounts,
       itemRecordedCounts,
-      parallelCount,
       inflightEntries,
       processedTaskIds: uniqueTextList(checkpoint.processedTaskIds),
       rows,
@@ -5267,11 +5412,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       root.innerHTML = `
         <div class="ysp-daily-panel__backdrop"></div><div class="ysp-daily-panel__popup-layer" data-role="popup-layer"></div>
         <div class="ysp-daily-panel"><div class="ysp-daily-panel__header"><div class="ysp-daily-panel__header-top"><div><div class="ysp-daily-panel__title">央视频二次质检助手</div></div><div class="ysp-daily-panel__header-actions"><button type="button" class="ysp-daily-panel__header-chip" data-role="open-settings">设置</button><div class="ysp-daily-panel__header-chip">v${SCRIPT_VERSION}</div><button type="button" class="ysp-daily-panel__header-chip" data-role="minimize">收起</button></div></div></div>
-          <div class="ysp-daily-panel__body"><div class="ysp-daily-panel__main"><section class="ysp-daily-panel__module"><div class="ysp-daily-panel__module-body"><div class="ysp-daily-panel__field-grid"><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-start-date"><span class="ysp-daily-panel__date-caption">开始周期</span><input id="ysp-secondary-qc-start-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-end-date"><span class="ysp-daily-panel__date-caption">结束周期</span><input id="ysp-secondary-qc-end-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-target-count"><span class="ysp-daily-panel__date-caption">质检条数</span><input id="ysp-secondary-qc-target-count" class="ysp-daily-panel__input" type="number" min="1" max="999" step="1" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-parallel-count"><span class="ysp-daily-panel__date-caption">并发数</span><input id="ysp-secondary-qc-parallel-count" class="ysp-daily-panel__input" type="number" min="${SECONDARY_QC_MIN_PARALLEL_COUNT}" max="${SECONDARY_QC_MAX_PARALLEL_COUNT}" step="1" /></label></div><div class="ysp-daily-panel__field"><span class="ysp-daily-panel__label">质检品类</span><div data-role="secondary-qc-groups"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-secondary-qc">开始质检</button></div></div></section></div><div class="ysp-daily-panel__side"><div class="ysp-daily-panel__status" data-role="status"></div><div class="ysp-daily-panel__log-card"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">运行日志</span></div><div class="ysp-daily-panel__log-list" data-role="logs"></div></div><div class="ysp-daily-panel__result-card" data-role="downloads-card" hidden><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">下载中心</span></div><div class="ysp-daily-panel__download-list" data-role="downloads"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button><button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button></div></div></div></div>
+          <div class="ysp-daily-panel__body"><div class="ysp-daily-panel__main"><section class="ysp-daily-panel__module"><div class="ysp-daily-panel__module-body"><div class="ysp-daily-panel__field-grid"><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-start-date"><span class="ysp-daily-panel__date-caption">开始周期</span><input id="ysp-secondary-qc-start-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-end-date"><span class="ysp-daily-panel__date-caption">结束周期</span><input id="ysp-secondary-qc-end-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-target-count"><span class="ysp-daily-panel__date-caption">质检条数</span><input id="ysp-secondary-qc-target-count" class="ysp-daily-panel__input" type="number" min="1" max="999" step="1" /></label></div><div class="ysp-daily-panel__field"><span class="ysp-daily-panel__label">质检品类</span><div data-role="secondary-qc-groups"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-secondary-qc">开始质检</button></div></div></section></div><div class="ysp-daily-panel__side"><div class="ysp-daily-panel__status" data-role="status"></div><div class="ysp-daily-panel__log-card"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">运行日志</span></div><div class="ysp-daily-panel__log-list" data-role="logs"></div></div><div class="ysp-daily-panel__result-card" data-role="downloads-card" hidden><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">下载中心</span></div><div class="ysp-daily-panel__download-list" data-role="downloads"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button><button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button></div></div></div></div>
         <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button><div class="ysp-daily-panel__modal-mask" data-role="settings-mask"><div class="ysp-daily-panel__modal"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">设置</span></div><label class="ysp-daily-panel__date-field" for="ysp-settings-ark-api-key"><span class="ysp-daily-panel__date-caption">ARK_API_KEY（本地保存）</span><input id="ysp-settings-ark-api-key" class="ysp-daily-panel__input" type="password" placeholder="请输入火山方舟模型 Key" /></label><label class="ysp-daily-panel__date-field" for="ysp-settings-tag-library-file"><span class="ysp-daily-panel__date-caption">上传标签库 CSV（本地保存）</span><input id="ysp-settings-tag-library-file" class="ysp-daily-panel__input" type="file" accept=".csv,text/csv" /></label><div class="ysp-daily-panel__status-subtext" data-role="tag-library-file-status"></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清理缓存</button></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="save-settings">保存设置</button><button type="button" class="ysp-daily-panel__button" data-role="close-settings">关闭</button></div></div></div>`;
       document.body.appendChild(root);
       this.panel = root;
-      this.refs = { backdrop: root.querySelector('.ysp-daily-panel__backdrop'), popupLayer: root.querySelector('[data-role="popup-layer"]'), surface: root.querySelector('.ysp-daily-panel'), dock: root.querySelector('[data-role="dock"]'), minimize: root.querySelector('[data-role="minimize"]'), openSettings: root.querySelector('[data-role="open-settings"]'), settingsMask: root.querySelector('[data-role="settings-mask"]'), settingsInput: root.querySelector('#ysp-settings-ark-api-key'), tagLibraryFileInput: root.querySelector('#ysp-settings-tag-library-file'), tagLibraryFileStatus: root.querySelector('[data-role="tag-library-file-status"]'), saveSettings: root.querySelector('[data-role="save-settings"]'), closeSettings: root.querySelector('[data-role="close-settings"]'), secondaryQcStartDate: root.querySelector('#ysp-secondary-qc-start-date'), secondaryQcEndDate: root.querySelector('#ysp-secondary-qc-end-date'), secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'), secondaryQcParallelCount: root.querySelector('#ysp-secondary-qc-parallel-count'), secondaryQcGroups: root.querySelector('[data-role="secondary-qc-groups"]'), startSecondaryQc: root.querySelector('[data-role="start-secondary-qc"]'), pauseResume: root.querySelector('[data-role="pause-resume"]'), stop: root.querySelector('[data-role="stop"]'), clearData: root.querySelector('[data-role="clear-data"]'), status: root.querySelector('[data-role="status"]'), downloadsCard: root.querySelector('[data-role="downloads-card"]'), downloads: root.querySelector('[data-role="downloads"]'), logs: root.querySelector('[data-role="logs"]') };
+      this.refs = { backdrop: root.querySelector('.ysp-daily-panel__backdrop'), popupLayer: root.querySelector('[data-role="popup-layer"]'), surface: root.querySelector('.ysp-daily-panel'), dock: root.querySelector('[data-role="dock"]'), minimize: root.querySelector('[data-role="minimize"]'), openSettings: root.querySelector('[data-role="open-settings"]'), settingsMask: root.querySelector('[data-role="settings-mask"]'), settingsInput: root.querySelector('#ysp-settings-ark-api-key'), tagLibraryFileInput: root.querySelector('#ysp-settings-tag-library-file'), tagLibraryFileStatus: root.querySelector('[data-role="tag-library-file-status"]'), saveSettings: root.querySelector('[data-role="save-settings"]'), closeSettings: root.querySelector('[data-role="close-settings"]'), secondaryQcStartDate: root.querySelector('#ysp-secondary-qc-start-date'), secondaryQcEndDate: root.querySelector('#ysp-secondary-qc-end-date'), secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'), secondaryQcGroups: root.querySelector('[data-role="secondary-qc-groups"]'), startSecondaryQc: root.querySelector('[data-role="start-secondary-qc"]'), pauseResume: root.querySelector('[data-role="pause-resume"]'), stop: root.querySelector('[data-role="stop"]'), clearData: root.querySelector('[data-role="clear-data"]'), status: root.querySelector('[data-role="status"]'), downloadsCard: root.querySelector('[data-role="downloads-card"]'), downloads: root.querySelector('[data-role="downloads"]'), logs: root.querySelector('[data-role="logs"]') };
       this.bindPanelEvents();
       this.syncSettingsToInputs();
       this.render();
@@ -5289,9 +5434,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     getGroupMenuLayout() { const trigger = this.getGroupTriggerElement(); if (!trigger) return null; const rect = trigger.getBoundingClientRect(); const viewportPadding = 12; const gap = 8; const width = Math.min(Math.max(Math.round(rect.width), 360), Math.max(320, window.innerWidth - viewportPadding * 2)); const left = Math.min(Math.max(viewportPadding, Math.round(rect.left)), Math.max(viewportPadding, window.innerWidth - width - viewportPadding)); const preferredHeight = 360; const belowSpace = Math.max(160, Math.floor(window.innerHeight - rect.bottom - gap - viewportPadding)); const aboveSpace = Math.max(160, Math.floor(rect.top - gap - viewportPadding)); const openUpward = belowSpace < 220 && aboveSpace > belowSpace; return { left, width, maxHeight: Math.min(preferredHeight, openUpward ? aboveSpace : belowSpace), top: openUpward ? null : Math.round(rect.bottom + gap), bottom: openUpward ? Math.round(window.innerHeight - rect.top + gap) : null }; }
     renderFloatingGroupMenu() { if (!this.refs.popupLayer) return; if (!this.runtime.openGroupMenu || this.runtime.running || this.runtime.minimized) { this.refs.popupLayer.innerHTML = ''; return; } const layout = this.getGroupMenuLayout(); if (!layout) { this.refs.popupLayer.innerHTML = ''; return; } const styleTokens = [`--menu-left:${layout.left}px`, `--menu-width:${layout.width}px`, `--menu-max-height:${layout.maxHeight}px`, layout.top === null ? 'top:auto' : `top:${layout.top}px`, layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`]; const selectedKey = normalizeText(this.settings.categoryKey); this.refs.popupLayer.innerHTML = `<div class="ysp-daily-panel__group-menu" data-role="group-menu" role="listbox" aria-label="质检品类选项" style="${styleTokens.join(';')}">${CATEGORY_ENTRIES.map((entry) => { const selectedClass = selectedKey === entry.key ? ' is-selected' : ''; return `<button type="button" class="ysp-daily-panel__group-option${selectedClass}" data-theme="${escapeXml(entry.theme)}" data-role="category-option" data-category-key="${escapeXml(entry.key)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-option-copy"><span class="ysp-daily-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span><span class="ysp-daily-panel__group-option-label">${escapeXml(entry.exportLabel)}</span></span><span class="ysp-daily-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span></button>`; }).join('')}</div>`; }
     async persistSettings() { await storageSetCached({ [STORAGE_KEYS.settings]: cloneWorkbenchSettings(this.settings) }); }
-    syncSettingsToInputs() { const maxDate = getTodayDateString(); this.refs.secondaryQcStartDate.max = maxDate; this.refs.secondaryQcEndDate.max = maxDate; this.refs.secondaryQcEndDate.min = this.settings.startDate || ''; this.refs.secondaryQcStartDate.value = this.settings.startDate || ''; this.refs.secondaryQcEndDate.value = this.settings.endDate || ''; this.refs.secondaryQcTargetCount.value = String(this.settings.targetCount || 10); this.refs.secondaryQcParallelCount.value = String(normalizeSecondaryQcParallelCount(this.settings.parallelCount, SECONDARY_QC_DEFAULT_PARALLEL_COUNT)); this.refs.settingsInput.value = this.settingsDraft.secrets.arkApiKey || ''; if (this.refs.tagLibraryFileInput) this.refs.tagLibraryFileInput.value = ''; if (this.refs.tagLibraryFileStatus) { const fileName = normalizeText(this.settingsDraft.tagLibraryFileName); const count = Math.max(0, Math.trunc(Number(this.settingsDraft.tagLibraryCount) || 0)); this.refs.tagLibraryFileStatus.textContent = fileName ? `已上传：${fileName}${count ? `，${count} 条` : ''}` : '未上传标签库'; } }
+    syncSettingsToInputs() { const maxDate = getTodayDateString(); this.refs.secondaryQcStartDate.max = maxDate; this.refs.secondaryQcEndDate.max = maxDate; this.refs.secondaryQcEndDate.min = this.settings.startDate || ''; this.refs.secondaryQcStartDate.value = this.settings.startDate || ''; this.refs.secondaryQcEndDate.value = this.settings.endDate || ''; this.refs.secondaryQcTargetCount.value = String(this.settings.targetCount || 10); this.refs.settingsInput.value = this.settingsDraft.secrets.arkApiKey || ''; if (this.refs.tagLibraryFileInput) this.refs.tagLibraryFileInput.value = ''; if (this.refs.tagLibraryFileStatus) { const fileName = normalizeText(this.settingsDraft.tagLibraryFileName); const count = Math.max(0, Math.trunc(Number(this.settingsDraft.tagLibraryCount) || 0)); this.refs.tagLibraryFileStatus.textContent = fileName ? `已上传：${fileName}${count ? `，${count} 条` : ''}` : '未上传标签库'; } }
     bindDateInput(input, handler) { input.setAttribute('inputmode', 'none'); input.addEventListener('click', () => this.openDatePicker(input)); input.addEventListener('focus', () => window.setTimeout(() => this.openDatePicker(input), 0)); input.addEventListener('keydown', (event) => { if (event.key === 'Tab') return; event.preventDefault(); if (event.key === 'Enter' || event.key === ' ') this.openDatePicker(input); }); input.addEventListener('beforeinput', (event) => event.preventDefault()); input.addEventListener('paste', (event) => event.preventDefault()); input.addEventListener('drop', (event) => event.preventDefault()); input.addEventListener('wheel', (event) => event.preventDefault(), { passive: false }); input.addEventListener('change', handler); }
-    bindPanelEvents() { if (this.handleOutsideInteraction) { document.removeEventListener('pointerdown', this.handleOutsideInteraction, true); document.removeEventListener('mousedown', this.handleOutsideInteraction, true); document.removeEventListener('touchstart', this.handleOutsideInteraction, true); } this.handleOutsideInteraction = (event) => { if (this.runtime.minimized || event.isTrusted === false) return; const target = event.target; if (!(target instanceof Node)) return; if (this.refs.surface && this.refs.surface.contains(target)) return; if (this.refs.popupLayer && this.refs.popupLayer.contains(target)) return; if (this.refs.settingsMask && this.refs.settingsMask.contains(target)) return; this.setMinimized(true); }; document.addEventListener('pointerdown', this.handleOutsideInteraction, true); document.addEventListener('mousedown', this.handleOutsideInteraction, true); document.addEventListener('touchstart', this.handleOutsideInteraction, true); this.refs.backdrop.addEventListener('click', () => this.setMinimized(true)); this.refs.minimize.addEventListener('click', () => this.setMinimized(true)); this.refs.dock.addEventListener('click', () => this.setMinimized(false)); this.refs.openSettings.addEventListener('click', () => this.openSettingsModal()); this.refs.closeSettings.addEventListener('click', () => this.closeSettingsModal()); this.refs.settingsMask.addEventListener('click', (event) => { if (event.target === this.refs.settingsMask) this.closeSettingsModal(); }); this.refs.saveSettings.addEventListener('click', () => this.saveSettingsModal().catch((error) => this.failJob(error))); this.bindDateInput(this.refs.secondaryQcStartDate, () => this.updateDate('startDate', this.refs.secondaryQcStartDate.value)); this.bindDateInput(this.refs.secondaryQcEndDate, () => this.updateDate('endDate', this.refs.secondaryQcEndDate.value)); this.refs.secondaryQcTargetCount.addEventListener('change', () => { this.settings.targetCount = normalizePositiveInteger(this.refs.secondaryQcTargetCount.value, this.settings.targetCount || 10, 1, 999); this.persistSettings().catch(() => undefined); this.render(); }); this.refs.secondaryQcParallelCount.addEventListener('change', () => { this.settings.parallelCount = normalizeSecondaryQcParallelCount(this.refs.secondaryQcParallelCount.value, this.settings.parallelCount); this.persistSettings().catch(() => undefined); this.render(); }); this.refs.secondaryQcGroups.addEventListener('click', (event) => this.handleGroupSelection(event)); this.refs.popupLayer.addEventListener('click', (event) => this.handleGroupSelection(event)); this.refs.surface.addEventListener('click', (event) => { const target = event.target; if (!(target instanceof HTMLElement) || target.closest('[data-role="group-picker"]')) return; if (this.runtime.openGroupMenu) { this.runtime.openGroupMenu = ''; this.render(); } }); this.refs.surface.addEventListener('scroll', () => { if (this.runtime.openGroupMenu) this.render(); }, true); if (this.handleViewportChange) window.removeEventListener('resize', this.handleViewportChange); this.handleViewportChange = () => { if (this.runtime.openGroupMenu) this.render(); }; window.addEventListener('resize', this.handleViewportChange); this.refs.startSecondaryQc.addEventListener('click', () => this.startSecondaryQcJob().catch((error) => this.failJob(error))); this.refs.pauseResume.addEventListener('click', () => this.handlePauseResumeAction().catch((error) => this.failJob(error))); this.refs.stop.addEventListener('click', () => this.stopCurrentJob().catch((error) => this.failJob(error))); this.refs.clearData.addEventListener('click', () => this.clearAllCachedData().catch((error) => this.failJob(error))); this.refs.downloads.addEventListener('click', (event) => { const target = event.target; if (target instanceof HTMLElement && target.closest('[data-download-role="secondaryQc"]')) this.exportSecondaryQcResult(); }); }
+    bindPanelEvents() { if (this.handleOutsideInteraction) { document.removeEventListener('pointerdown', this.handleOutsideInteraction, true); document.removeEventListener('mousedown', this.handleOutsideInteraction, true); document.removeEventListener('touchstart', this.handleOutsideInteraction, true); } this.handleOutsideInteraction = (event) => { if (this.runtime.minimized || event.isTrusted === false) return; const target = event.target; if (!(target instanceof Node)) return; if (this.refs.surface && this.refs.surface.contains(target)) return; if (this.refs.popupLayer && this.refs.popupLayer.contains(target)) return; if (this.refs.settingsMask && this.refs.settingsMask.contains(target)) return; this.setMinimized(true); }; document.addEventListener('pointerdown', this.handleOutsideInteraction, true); document.addEventListener('mousedown', this.handleOutsideInteraction, true); document.addEventListener('touchstart', this.handleOutsideInteraction, true); this.refs.backdrop.addEventListener('click', () => this.setMinimized(true)); this.refs.minimize.addEventListener('click', () => this.setMinimized(true)); this.refs.dock.addEventListener('click', () => this.setMinimized(false)); this.refs.openSettings.addEventListener('click', () => this.openSettingsModal()); this.refs.closeSettings.addEventListener('click', () => this.closeSettingsModal()); this.refs.settingsMask.addEventListener('click', (event) => { if (event.target === this.refs.settingsMask) this.closeSettingsModal(); }); this.refs.saveSettings.addEventListener('click', () => this.saveSettingsModal().catch((error) => this.failJob(error))); this.bindDateInput(this.refs.secondaryQcStartDate, () => this.updateDate('startDate', this.refs.secondaryQcStartDate.value)); this.bindDateInput(this.refs.secondaryQcEndDate, () => this.updateDate('endDate', this.refs.secondaryQcEndDate.value)); this.refs.secondaryQcTargetCount.addEventListener('change', () => { this.settings.targetCount = normalizePositiveInteger(this.refs.secondaryQcTargetCount.value, this.settings.targetCount || 10, 1, 999); this.persistSettings().catch(() => undefined); this.render(); }); this.refs.secondaryQcGroups.addEventListener('click', (event) => this.handleGroupSelection(event)); this.refs.popupLayer.addEventListener('click', (event) => this.handleGroupSelection(event)); this.refs.surface.addEventListener('click', (event) => { const target = event.target; if (!(target instanceof HTMLElement) || target.closest('[data-role="group-picker"]')) return; if (this.runtime.openGroupMenu) { this.runtime.openGroupMenu = ''; this.render(); } }); this.refs.surface.addEventListener('scroll', () => { if (this.runtime.openGroupMenu) this.render(); }, true); if (this.handleViewportChange) window.removeEventListener('resize', this.handleViewportChange); this.handleViewportChange = () => { if (this.runtime.openGroupMenu) this.render(); }; window.addEventListener('resize', this.handleViewportChange); this.refs.startSecondaryQc.addEventListener('click', () => this.startSecondaryQcJob().catch((error) => this.failJob(error))); this.refs.pauseResume.addEventListener('click', () => this.handlePauseResumeAction().catch((error) => this.failJob(error))); this.refs.stop.addEventListener('click', () => this.stopCurrentJob().catch((error) => this.failJob(error))); this.refs.clearData.addEventListener('click', () => this.clearAllCachedData().catch((error) => this.failJob(error))); this.refs.downloads.addEventListener('click', (event) => { const target = event.target; if (target instanceof HTMLElement && target.closest('[data-download-role="secondaryQc"]')) this.exportSecondaryQcResult(); }); }
     handleGroupSelection(event) { const target = event.target; if (!(target instanceof HTMLElement)) return; const trigger = target.closest('[data-role="group-trigger"]'); if (trigger) { if (this.runtime.running) return; this.runtime.openGroupMenu = this.runtime.openGroupMenu ? '' : 'secondaryQc'; this.render(); return; } if (this.runtime.running) return; const categoryOption = target.closest('[data-role="category-option"]'); if (!categoryOption) return; const categoryKey = normalizeText(categoryOption.getAttribute('data-category-key')); if (!categoryKey) return; this.settings.categoryKey = this.settings.categoryKey === categoryKey ? '' : categoryKey; this.runtime.openGroupMenu = ''; this.persistSettings().catch(() => undefined); this.render(); }
     openDatePicker(input) { if (!input || input.disabled) return; if (typeof input.showPicker === 'function') { try { input.showPicker(); return; } catch (error) { } } input.focus(); }
     updateDate(key, value) { const maxDate = getTodayDateString(); const normalizedValue = normalizeDateInputValue(value, maxDate); if (key === 'startDate') { this.settings.startDate = normalizedValue; if (this.settings.endDate && this.settings.startDate && this.settings.endDate < this.settings.startDate) this.settings.endDate = ''; } else { this.settings.endDate = normalizedValue; if (this.settings.endDate && this.settings.startDate && this.settings.endDate < this.settings.startDate) this.settings.endDate = ''; } this.persistSettings().catch(() => undefined); this.render(); }
@@ -5303,7 +5448,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     renderStatus() { const pageText = isListPage() ? '当前页面：列表页' : isDetailPage() ? '当前页面：详情页，只保留质检处理；开始或继续任务请回列表页' : '当前页面：其他页面'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：二次质检</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
     renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div style="padding: 12px; border: 1px solid #d8e2ee; border-radius: 12px; background: #fff;"><div style="font-weight: 700; color: #17324f;">二次质检结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div style="margin-top: 4px; color: #6b7a90;">目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条</div><div class="ysp-daily-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="secondaryQc">下载质检表</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
     renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(log)}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
-    render() { if (!this.panel) return; if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = ''; const listPageActive = isListPage(); if (this.runtime.running) enforcePageMuted({ pausePlayback: isDetailPage() }); else releasePageMuted(); this.panel.classList.toggle('is-minimized', this.runtime.minimized); this.panel.classList.toggle('is-settings-open', this.settingsModalOpen); this.syncSettingsToInputs(); this.renderGroupSelector(); this.renderFloatingGroupMenu(); const disabled = this.runtime.running; this.refs.secondaryQcStartDate.disabled = disabled; this.refs.secondaryQcEndDate.disabled = disabled; this.refs.secondaryQcTargetCount.disabled = disabled; this.refs.secondaryQcParallelCount.disabled = disabled; this.refs.startSecondaryQc.disabled = disabled || !listPageActive; this.refs.clearData.disabled = disabled; this.refs.stop.disabled = !disabled; const pausedTask = this.getPausedTaskMeta(); this.refs.pauseResume.disabled = !disabled && (!pausedTask || !listPageActive); this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? '继续质检' : '继续任务'; this.refs.pauseResume.classList.toggle('ysp-daily-panel__button--primary', !disabled && Boolean(pausedTask)); this.refs.startSecondaryQc.textContent = disabled ? '质检运行中' : '开始质检'; this.renderStatus(); this.renderDownloads(); this.renderLogs(); }
+    render() { if (!this.panel) return; if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = ''; const listPageActive = isListPage(); if (this.runtime.running) enforcePageMuted({ pausePlayback: isDetailPage() }); else releasePageMuted(); this.panel.classList.toggle('is-minimized', this.runtime.minimized); this.panel.classList.toggle('is-settings-open', this.settingsModalOpen); this.syncSettingsToInputs(); this.renderGroupSelector(); this.renderFloatingGroupMenu(); const disabled = this.runtime.running; this.refs.secondaryQcStartDate.disabled = disabled; this.refs.secondaryQcEndDate.disabled = disabled; this.refs.secondaryQcTargetCount.disabled = disabled; this.refs.startSecondaryQc.disabled = disabled || !listPageActive; this.refs.clearData.disabled = disabled; this.refs.stop.disabled = !disabled; const pausedTask = this.getPausedTaskMeta(); this.refs.pauseResume.disabled = !disabled && (!pausedTask || !listPageActive); this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? '继续质检' : '继续任务'; this.refs.pauseResume.classList.toggle('ysp-daily-panel__button--primary', !disabled && Boolean(pausedTask)); this.refs.startSecondaryQc.textContent = disabled ? '质检运行中' : '开始质检'; this.renderStatus(); this.renderDownloads(); this.renderLogs(); }
     applySecondaryQcWorkerProgress(text, progressLogLines) { const progressText = normalizeText(text); const logLines = normalizeProgressLogLines(progressLogLines); const mergedLines = [progressText, ...logLines].filter(Boolean).filter((line, index, array) => array.indexOf(line) === index); if (!progressText && !mergedLines.length) return; this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; if (progressText) this.runtime.statusText = progressText; this.runtime.logs = mergeLogEntries(this.runtime.logs, mergedLines); this.render(); }
     pushLog(message) { this.runtime.logs = mergeLogEntries(this.runtime.logs, [message]); const checkpoint = this.getActiveCheckpoint(); if (checkpoint) checkpoint.logs = this.runtime.logs.slice(); this.renderLogs(); void this.persistActiveCheckpoint().catch(() => {}); }
     updateCheckpointStatus(text) { const checkpoint = this.getActiveCheckpoint(); this.runtime.statusText = text; if (checkpoint) checkpoint.statusText = text; this.renderStatus(); void this.persistActiveCheckpoint().catch(() => {}); }
@@ -5317,22 +5462,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     async tryResume() { if (!this.runtime.running) { this.render(); return; } if (this.runtime.jobType === 'secondaryQc' && this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.pushLog('检测到未完成二次质检，正在继续'); await this.runSecondaryQcFromCheckpoint(); return; } this.runtime.running = false; this.runtime.jobType = ''; this.render(); }
     describeItem(item) { return item.exportLabel; }
     isCurrentJobStopRequested() { return isListJobAbortRequested(this.runtime.listJobAbortToken) || this.runtime.stopping; }
-    getSecondaryQcParallelCount(checkpoint) {
-      return normalizeSecondaryQcParallelCount(
-        checkpoint && checkpoint.parallelCount,
-        this.settings.parallelCount
-      );
-    }
-
     getSecondaryQcInflightEntries(checkpoint) {
       return Array.isArray(checkpoint && checkpoint.inflightEntries) ? checkpoint.inflightEntries : [];
-    }
-
-    getSecondaryQcInflightCountForItem(itemKey, checkpoint) {
-      const normalizedItemKey = normalizeText(itemKey);
-      return this.getSecondaryQcInflightEntries(checkpoint)
-        .filter((entry) => entry.itemKey === normalizedItemKey)
-        .length;
     }
 
     isSecondaryQcTargetReached(itemIndex, checkpoint) {
@@ -5349,22 +5480,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       return (activeCheckpoint.itemRecordedCounts[itemIndex] || 0) >= (activeCheckpoint.itemTargetCounts[itemIndex] || 0);
     }
 
-    getSecondaryQcDispatchCapacity(itemIndex, checkpoint) {
-      const activeCheckpoint = checkpoint || this.runtime.checkpoint;
-      if (!activeCheckpoint) {
-        return 0;
-      }
-      const parallelCount = this.getSecondaryQcParallelCount(activeCheckpoint);
-      const itemKey = normalizeText(activeCheckpoint.itemKeys[itemIndex]);
-      const inflightTotalCount = this.getSecondaryQcInflightEntries(activeCheckpoint).length;
-      const inflightItemCount = this.getSecondaryQcInflightCountForItem(itemKey, activeCheckpoint);
-      const remainingTotalCount = activeCheckpoint.targetCount - activeCheckpoint.rows.length - inflightTotalCount;
-      const remainingItemCount = (activeCheckpoint.itemTargetCounts[itemIndex] || 0)
-        - (activeCheckpoint.itemRecordedCounts[itemIndex] || 0)
-        - inflightItemCount;
-      return Math.max(0, Math.min(parallelCount - inflightTotalCount, remainingTotalCount, remainingItemCount));
-    }
-
     isSecondaryQcTaskReserved(taskId, checkpoint) {
       const activeCheckpoint = checkpoint || this.runtime.checkpoint;
       const normalizedTaskId = normalizeText(taskId);
@@ -5375,13 +5490,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         || this.getSecondaryQcInflightEntries(activeCheckpoint).some((entry) => entry.taskId === normalizedTaskId);
     }
 
-    updateSecondaryQcItemProgress(item, itemIndex, itemsLength) {
+    updateSecondaryQcItemProgress(item) {
       const checkpoint = this.runtime.checkpoint;
       if (!checkpoint || !item) {
         return;
       }
-      const inflightCount = this.getSecondaryQcInflightEntries(checkpoint).length;
-      const parallelCount = this.getSecondaryQcParallelCount(checkpoint);
       this.updateCheckpointStatus(
         `正在质检 ${item.exportLabel}`
       );
@@ -5405,41 +5518,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       for (const requestId of normalizedRequestIds) {
         await requestSecondaryQcWorkerStop(requestId);
       }
-    }
-
-    async cancelSecondaryQcInflightTasks(inflightTasks, reason, item, itemIndex) {
-      if (!(inflightTasks instanceof Map) || !inflightTasks.size) {
-        return [];
-      }
-      const normalizedReason = normalizeText(reason) || 'cancelled';
-      const requestIds = uniqueTextList(Array.from(inflightTasks.values()).map((descriptor) => {
-        if (!descriptor || !descriptor.requestId) {
-          return '';
-        }
-        descriptor.stopRequested = true;
-        return descriptor.requestId;
-      }));
-      if (!requestIds.length) {
-        inflightTasks.clear();
-        return [];
-      }
-      if (normalizedReason === 'quota_reached') {
-        const checkpoint = this.runtime.checkpoint;
-        if (checkpoint && checkpoint.rows.length >= checkpoint.targetCount) {
-          this.pushLog(`总目标已满，已停止 ${requestIds.length} 个进行中的详情页`);
-        } else if (item && Number.isInteger(itemIndex) && itemIndex >= 0) {
-          this.pushLog(`${this.describeItem(item)}：已达到本品类目标，已停止 ${requestIds.length} 个进行中的详情页`);
-        }
-      }
-      await this.stopSecondaryQcRequests(requestIds);
-      const checkpoint = this.runtime.checkpoint;
-      if (checkpoint) {
-        checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint)
-          .filter((entry) => !requestIds.includes(entry.requestId));
-        await this.saveCheckpoint();
-      }
-      inflightTasks.clear();
-      return requestIds;
     }
 
     async recoverSecondaryQcInflightState() {
@@ -5497,7 +5575,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       });
       await this.saveCheckpoint();
 
-      this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页已派发 ${row.taskId}`);
+      this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页开始质检 ${row.taskId}`);
       openUrlInNewTab(detailUrl);
 
       descriptor.promise = (async () => {
@@ -5647,77 +5725,21 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await this.saveCheckpoint();
     }
 
-    async waitForNextSecondaryQcTask(inflightTasks, item, itemIndex, itemsLength) {
-      if (!inflightTasks.size) {
-        return;
-      }
-      const settled = await Promise.race(Array.from(inflightTasks.values()).map((descriptor) => descriptor.promise));
-      inflightTasks.delete(settled.descriptor.requestId);
+    async runSecondaryQcRowTask(item, itemIndex, row, pageNumber, totalPages, cancelCheck) {
+      const descriptor = await this.launchSecondaryQcRowTask(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
+      this.updateSecondaryQcItemProgress(item);
+      const settled = await descriptor.promise;
       if (this.isCurrentJobStopRequested()) {
         const checkpoint = this.runtime.checkpoint;
         if (checkpoint) {
           checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint)
-            .filter((entry) => entry.requestId !== settled.descriptor.requestId);
+            .filter((entry) => entry.requestId !== descriptor.requestId);
           await this.saveCheckpoint();
         }
-        await this.cancelSecondaryQcInflightTasks(inflightTasks, 'manual_stop');
         throw new Error('采集已结束');
       }
-      try {
-        await this.handleSettledSecondaryQcTask(settled);
-        this.updateSecondaryQcItemProgress(item, itemIndex, itemsLength);
-        if (this.isSecondaryQcTargetReached(itemIndex, this.runtime.checkpoint)) {
-          await this.cancelSecondaryQcInflightTasks(inflightTasks, 'quota_reached', item, itemIndex);
-        }
-      } catch (error) {
-        await this.cancelSecondaryQcInflightTasks(inflightTasks, 'fatal_error');
-        throw error;
-      }
-    }
-
-    async waitForSecondaryQcDispatchCapacity(inflightTasks, item, itemIndex, itemsLength) {
-      const checkpoint = this.runtime.checkpoint;
-      while (true) {
-        if (this.isCurrentJobStopRequested()) {
-          throw new Error('采集已结束');
-        }
-        if (!checkpoint) {
-          throw new Error('当前二次质检任务不存在');
-        }
-        if (
-          checkpoint.rows.length >= checkpoint.targetCount
-          || (checkpoint.itemRecordedCounts[itemIndex] || 0) >= (checkpoint.itemTargetCounts[itemIndex] || 0)
-        ) {
-          return 'done';
-        }
-        if (this.runtime.pauseRequested) {
-          if (!inflightTasks.size) {
-            return 'paused';
-          }
-          await this.waitForNextSecondaryQcTask(inflightTasks, item, itemIndex, itemsLength);
-          continue;
-        }
-        if (this.getSecondaryQcDispatchCapacity(itemIndex, checkpoint) > 0) {
-          return 'ready';
-        }
-        if (!inflightTasks.size) {
-          return 'done';
-        }
-        await this.waitForNextSecondaryQcTask(inflightTasks, item, itemIndex, itemsLength);
-      }
-    }
-
-    async drainSecondaryQcInflightTasks(inflightTasks, item, itemIndex, itemsLength) {
-      if (this.isSecondaryQcTargetReached(itemIndex, this.runtime.checkpoint)) {
-        await this.cancelSecondaryQcInflightTasks(inflightTasks, 'quota_reached', item, itemIndex);
-      }
-      while (inflightTasks.size) {
-        if (this.isCurrentJobStopRequested()) {
-          await this.cancelSecondaryQcInflightTasks(inflightTasks, 'manual_stop');
-          throw new Error('采集已结束');
-        }
-        await this.waitForNextSecondaryQcTask(inflightTasks, item, itemIndex, itemsLength);
-      }
+      await this.handleSettledSecondaryQcTask(settled);
+      this.updateSecondaryQcItemProgress(item);
       return this.runtime.pauseRequested ? 'paused' : 'done';
     }
 
@@ -5732,13 +5754,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const startDate = normalizeText(this.settings.startDate);
       const endDate = normalizeText(this.settings.endDate);
       const targetCount = normalizePositiveInteger(this.settings.targetCount, 10, 1, 999);
-      const parallelCountInputValue = this.refs.secondaryQcParallelCount
-        ? this.refs.secondaryQcParallelCount.value
-        : this.settings.parallelCount;
-      const parallelCount = normalizeSecondaryQcParallelCount(
-        parallelCountInputValue,
-        SECONDARY_QC_DEFAULT_PARALLEL_COUNT
-      );
       const maxDate = getTodayDateString();
       const categoryKey = normalizeText(this.settings.categoryKey);
       const items = this.getSelectedEntries('secondaryQc');
@@ -5761,10 +5776,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (!apiKey) {
         throw new Error('请先在设置里填写 ARK_API_KEY');
       }
-      this.settings.parallelCount = parallelCount;
-      if (this.refs.secondaryQcParallelCount) {
-        this.refs.secondaryQcParallelCount.value = String(parallelCount);
-      }
       await this.persistSettings();
 
       this.runtime.running = true;
@@ -5784,7 +5795,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         targetCount,
         itemTargetCounts: buildSecondaryQcItemTargetCounts(items.length, targetCount),
         itemRecordedCounts: new Array(items.length).fill(0),
-        parallelCount,
         currentItemIndex: 0,
         inflightEntries: [],
         processedTaskIds: [],
@@ -5800,14 +5810,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.pushLog(`标签库已加载：${tagLibrary.count} 条`);
       await this.saveCheckpoint();
       this.pushLog(
-        `开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，品类 ${items[0].exportLabel}，目标 ${targetCount} 条，并发 ${parallelCount}，模型 ${SECONDARY_QC_MODEL_LABEL}`
+        `开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，品类 ${items[0].exportLabel}，目标 ${targetCount} 条，顺序执行，模型 ${SECONDARY_QC_MODEL_LABEL}`
       );
       await this.runSecondaryQcFromCheckpoint();
     }
 
     async runSecondaryQcFromCheckpoint(cancelCheck) {
       const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
-      await waitForPageReady(activeCancelCheck);
+      await waitForSecondaryQcListApiReady(activeCancelCheck);
       const checkpoint = this.runtime.checkpoint;
       if (!checkpoint || checkpoint.status !== 'running') {
         this.runtime.running = false;
@@ -5815,7 +5825,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         this.render();
         return;
       }
-      checkpoint.parallelCount = this.getSecondaryQcParallelCount(checkpoint);
       const items = this.getCheckpointItems(checkpoint);
       if (!items.length) {
         throw new Error('当前二次质检任务没有可处理的品类');
@@ -5852,7 +5861,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           await this.saveCheckpoint();
           continue;
         }
-        this.updateSecondaryQcItemProgress(item, itemIndex, items.length);
+        this.updateSecondaryQcItemProgress(item);
         await this.saveCheckpoint();
         const itemStatus = await this.processSecondaryQcItem(item, itemIndex, activeCancelCheck);
         if (checkpoint.rows.length >= checkpoint.targetCount) {
@@ -5882,58 +5891,50 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         return 'paused';
       }
 
-      await prepareListQueryFilters(item, {
-        cancelCheck: activeCancelCheck,
-        dateLabel: '创建时间',
-        range,
-        filters: [
-          { label: '标准化状态', value: '标准化通过' }
-        ],
-        onCategorySelected: () => {
-          this.pushLog(`已选择品类：${this.describeItem(item)}`);
-        }
-      });
-
-      const queryCount = await clickQueryAndReadCount(activeCancelCheck);
-      if (!queryCount) {
-        this.pushLog(`${this.describeItem(item)}：当前筛选下没有数据`);
+      this.pushLog(`${this.describeItem(item)}：正在通过接口读取标准化列表`);
+      const firstPage = await requestSecondaryQcListPage(range, 1, activeCancelCheck);
+      if (!firstPage.totalRecords) {
+        this.pushLog(`${this.describeItem(item)}：接口当前筛选下没有数据`);
         return 'done';
       }
 
-      const pageSize = getPagerPageSize() || 50;
-      const totalRecords = getPagerTotalRecords() || queryCount;
-      const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
-      this.pushLog(`${this.describeItem(item)}：命中 ${totalRecords} 条，本品类目标 ${itemTargetCount} 条，共 ${totalPages} 页，开始从最后一页倒序扫描`);
-
-      await gotoListPageNumber(totalPages, activeCancelCheck);
-      const inflightTasks = new Map();
+      const totalPages = firstPage.totalPages;
+      let matchedCandidateCount = 0;
+      this.pushLog(`${this.describeItem(item)}：接口返回 ${firstPage.totalRecords} 条，本品类目标 ${itemTargetCount} 条，共 ${totalPages} 页，开始倒序筛选`);
 
       for (let pageNumber = totalPages; pageNumber >= 1; pageNumber -= 1) {
+        if (this.isCurrentJobStopRequested()) {
+          throw new Error('采集已结束');
+        }
         if ((checkpoint.itemRecordedCounts[itemIndex] || 0) >= itemTargetCount || checkpoint.rows.length >= checkpoint.targetCount) {
           break;
         }
         if (this.runtime.pauseRequested) {
           break;
         }
-        if (getPagerCurrentPage() !== pageNumber) {
-          await gotoListPageNumber(pageNumber, activeCancelCheck);
-        }
-        const pageStatus = await this.scanCurrentSecondaryQcPage(
+        this.pushLog(`${this.describeItem(item)}：正在读取接口第 ${pageNumber}/${totalPages} 页`);
+        const pageResult = pageNumber === 1
+          ? firstPage
+          : await requestSecondaryQcListPage(range, pageNumber, activeCancelCheck);
+        const pageStatus = await this.processSecondaryQcApiPage(
           item,
           itemIndex,
+          pageResult.records,
           pageNumber,
           totalPages,
-          inflightTasks,
           activeCancelCheck
         );
-        if (pageStatus === 'paused') {
+        matchedCandidateCount += pageStatus.candidateCount;
+        if (pageStatus.status === 'paused') {
           break;
         }
       }
 
-      const drainStatus = await this.drainSecondaryQcInflightTasks(inflightTasks, item, itemIndex, checkpoint.itemKeys.length);
+      if (!matchedCandidateCount) {
+        this.pushLog(`${this.describeItem(item)}：接口返回数据里没有符合当前品类和状态的视频`);
+      }
       if (
-        drainStatus === 'paused'
+        this.runtime.pauseRequested
         && checkpoint.rows.length < checkpoint.targetCount
         && (checkpoint.itemRecordedCounts[itemIndex] || 0) < itemTargetCount
       ) {
@@ -5942,77 +5943,44 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       return 'done';
     }
 
-    async scanCurrentSecondaryQcPage(item, itemIndex, pageNumber, totalPages, inflightTasks, cancelCheck) {
+    async processSecondaryQcApiPage(item, itemIndex, records, pageNumber, totalPages, cancelCheck) {
       const checkpoint = this.runtime.checkpoint;
-      const localSeen = new Set();
-      const body = getListBodyScrollElement();
-      if (body) {
-        await scrollListBodyTo(body.scrollHeight);
-      }
-
-      let reachedTop = false;
-      while (
-        !reachedTop
-        && checkpoint.rows.length < checkpoint.targetCount
-        && (checkpoint.itemRecordedCounts[itemIndex] || 0) < (checkpoint.itemTargetCounts[itemIndex] || 0)
-      ) {
+      const pageSeen = new Set();
+      let candidateCount = 0;
+      const rows = (Array.isArray(records) ? records : [])
+        .map((record) => normalizeSecondaryQcApiRow(record))
+        .filter(Boolean);
+      for (let index = rows.length - 1; index >= 0; index -= 1) {
         if (this.isCurrentJobStopRequested()) {
           throw new Error('采集已结束');
         }
         if (this.runtime.pauseRequested) {
           break;
         }
-        const rows = parseCurrentListRows().filter((row) => row && row.taskId);
-        for (let index = rows.length - 1; index >= 0; index -= 1) {
-          if (this.isCurrentJobStopRequested()) {
-            throw new Error('采集已结束');
-          }
-          if (this.runtime.pauseRequested) {
-            break;
-          }
-          if (
-            checkpoint.rows.length >= checkpoint.targetCount
-            || (checkpoint.itemRecordedCounts[itemIndex] || 0) >= (checkpoint.itemTargetCounts[itemIndex] || 0)
-          ) {
-            return 'done';
-          }
-          const row = rows[index];
-          if (!row.taskId || localSeen.has(row.taskId) || this.isSecondaryQcTaskReserved(row.taskId, checkpoint)) {
-            continue;
-          }
-          localSeen.add(row.taskId);
-          const dispatchState = await this.waitForSecondaryQcDispatchCapacity(
-            inflightTasks,
-            item,
-            itemIndex,
-            checkpoint.itemKeys.length
-          );
-          if (dispatchState === 'paused') {
-            return 'paused';
-          }
-          if (dispatchState === 'done') {
-            return 'done';
-          }
-          const descriptor = await this.launchSecondaryQcRowTask(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
-          inflightTasks.set(descriptor.requestId, descriptor);
-          this.updateSecondaryQcItemProgress(item, itemIndex, checkpoint.itemKeys.length);
+        if (
+          checkpoint.rows.length >= checkpoint.targetCount
+          || (checkpoint.itemRecordedCounts[itemIndex] || 0) >= (checkpoint.itemTargetCounts[itemIndex] || 0)
+        ) {
+          return { status: 'done', candidateCount };
         }
-
-        if (this.runtime.pauseRequested) {
-          break;
+        const row = rows[index];
+        if (!isSecondaryQcApiRowCandidate(row, item)) {
+          continue;
         }
-        if (!body) {
-          break;
+        candidateCount += 1;
+        if (pageSeen.has(row.taskId) || this.isSecondaryQcTaskReserved(row.taskId, checkpoint)) {
+          continue;
         }
-        if (body.scrollTop <= 0) {
-          reachedTop = true;
-          break;
+        pageSeen.add(row.taskId);
+        const taskStatus = await this.runSecondaryQcRowTask(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
+        if (taskStatus === 'paused') {
+          return { status: 'paused', candidateCount };
         }
-        const nextTop = Math.max(0, body.scrollTop - Math.max(200, Math.floor(body.clientHeight * 0.8)));
-        reachedTop = nextTop === body.scrollTop || nextTop === 0;
-        await scrollListBodyTo(nextTop);
+        if (this.isSecondaryQcTargetReached(itemIndex, checkpoint)) {
+          return { status: 'done', candidateCount };
+        }
       }
-      return this.runtime.pauseRequested ? 'paused' : 'continue';
+      return { status: this.runtime.pauseRequested ? 'paused' : 'continue', candidateCount };
     }
 
     async completeSecondaryQcJob() {
