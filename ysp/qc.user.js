@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.16
+// @version      1.1.20
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1326,6 +1326,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     settings: 'yspSecondaryQcSettingsV1',
     report: 'yspSecondaryQcReportV1',
     checkpoint: 'yspSecondaryQcCheckpointV1',
+    seenTaskIds: 'yspSecondaryQcSeenTaskIdsV1',
     pendingStart: 'yspSecondaryQcPendingStartV1',
     closeTabsSignal: 'yspSecondaryQcCloseTabsSignalV1',
     workerRequestPrefix: 'yspSecondaryQcWorkerRequestV1:',
@@ -2103,6 +2104,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const text = normalizeText(key);
       return text === STORAGE_KEYS.report
         || text === STORAGE_KEYS.checkpoint
+        || text === STORAGE_KEYS.seenTaskIds
         || cachePrefixes.some((prefix) => text.startsWith(prefix));
     });
     if (cacheKeys.length) {
@@ -2555,29 +2557,28 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
       '<fonts count="2">',
-      '<font><sz val="11"/><color rgb="FF1E293B"/><name val="Microsoft YaHei"/></font>',
-      '<font><b/><sz val="11"/><color rgb="FF102A43"/><name val="Microsoft YaHei"/></font>',
+      '<font><b/><sz val="10"/><color rgb="FF000000"/><name val="宋体"/><charset val="134"/></font>',
+      '<font><sz val="11"/><color rgb="FF000000"/><name val="SimSun"/><charset val="134"/></font>',
       '</fonts>',
-      '<fills count="3">',
+      '<fills count="2">',
       '<fill><patternFill patternType="none"/></fill>',
       '<fill><patternFill patternType="gray125"/></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFE7EEF6"/><bgColor indexed="64"/></patternFill></fill>',
       '</fills>',
       '<borders count="2">',
       '<border><left/><right/><top/><bottom/><diagonal/></border>',
       '<border>',
-      '<left style="thin"><color rgb="FFD4DEE8"/></left>',
-      '<right style="thin"><color rgb="FFD4DEE8"/></right>',
-      '<top style="thin"><color rgb="FFD4DEE8"/></top>',
-      '<bottom style="thin"><color rgb="FFD4DEE8"/></bottom>',
+      '<left style="thin"><color rgb="FF000000"/></left>',
+      '<right style="thin"><color rgb="FF000000"/></right>',
+      '<top style="thin"><color rgb="FF000000"/></top>',
+      '<bottom style="thin"><color rgb="FF000000"/></bottom>',
       '<diagonal/>',
       '</border>',
       '</borders>',
       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
       '<cellXfs count="3">',
       '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>',
-      '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+      '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
       '</cellXfs>',
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>',
       '</styleSheet>'
@@ -2598,7 +2599,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const headerCells = columns.map((column, index) => {
       return inlineCell(makeCellRef(index + 1, 1), column.label || column.key || '', 1);
     });
-    rowXml.push(`<row r="1" ht="24" customHeight="1">${headerCells.join('')}</row>`);
+    rowXml.push(`<row r="1" ht="23" customHeight="1">${headerCells.join('')}</row>`);
 
     rows.forEach((record, rowIndex) => {
       const cellXml = columns.map((column, columnIndex) => {
@@ -2607,14 +2608,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           : '';
         return inlineCell(makeCellRef(columnIndex + 1, rowIndex + 2), rawValue === null || rawValue === undefined ? '' : String(rawValue), 2);
       });
-      rowXml.push(`<row r="${rowIndex + 2}" ht="22" customHeight="1">${cellXml.join('')}</row>`);
+      rowXml.push(`<row r="${rowIndex + 2}" ht="20" customHeight="1">${cellXml.join('')}</row>`);
     });
 
     return [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
-      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
-      '<sheetFormatPr defaultRowHeight="20"/>',
+      '<sheetViews><sheetView zoomScale="85" zoomScaleNormal="85" workbookViewId="0"><selection activeCell="A1" sqref="A1:E1"/></sheetView></sheetViews>',
+      '<sheetFormatPr defaultColWidth="9" defaultRowHeight="13.5"/>',
       columnXml.join(''),
       `<sheetData>${rowXml.join('')}</sheetData>`,
       '</worksheet>'
@@ -3819,7 +3820,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     generatedMinutes.sort((left, right) => left - right);
     return rows.map((row, index) => {
       const minutes = generatedMinutes[index];
-      const hh = String(Math.floor(minutes / 60)).padStart(2, '0');
+      const hh = String(Math.floor(minutes / 60));
       const mm = String(minutes % 60).padStart(2, '0');
       return {
         vid: row.vid || '',
@@ -3837,11 +3838,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       {
         sheetName: '二次质检',
         columns: [
-          { key: 'vid', label: 'vid', width: 16 },
-          { key: 'time', label: '时间', width: 12 },
-          { key: 'missingTags', label: '漏打标签', width: 34 },
-          { key: 'standardOperator', label: '标准化操作人', width: 18 },
-          { key: 'qcOperator', label: '质检人', width: 16 }
+          { key: 'vid', label: 'id', width: 35.2666666666667 },
+          { key: 'time', label: '时间（记录本地时间）', width: 21.1 },
+          { key: 'missingTags', label: '问题描述', width: 73.5083333333333 },
+          { key: 'standardOperator', label: '标准化操作人', width: 16.6416666666667 },
+          { key: 'qcOperator', label: '质检人', width: 18.1 }
         ],
         rows
       },
@@ -4824,6 +4825,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     };
   }
 
+  function normalizeSecondaryQcSeenTaskIds(value) {
+    return uniqueTextList(Array.isArray(value) ? value : []);
+  }
+
   function normalizeSecondaryQcCheckpoint(checkpoint) {
     if (
       !checkpoint
@@ -4900,7 +4905,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   function buildMissingTagRecordText(tags) {
     const normalizedTags = normalizeTagArray(tags);
-    return normalizedTags.join('、');
+    return normalizedTags.length ? `补打 ${normalizedTags.join(' ')}` : '';
   }
 
   function normalizeTextArray(value) {
@@ -5928,13 +5933,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.settingsModalOpen = false;
       this.settingsDraft = createDefaultWorkbenchSettings();
       this.settings = createDefaultWorkbenchSettings();
-      this.runtime = { minimized: false, running: false, openGroupMenu: '', jobType: '', listJobAbortToken: 0, stopping: false, pauseRequested: false, settingsSaving: false, settingsSavingText: '', statusText: '等待开始', logs: [], checkpoint: null, report: null };
+      this.runtime = { minimized: false, running: false, openGroupMenu: '', jobType: '', listJobAbortToken: 0, stopping: false, pauseRequested: false, settingsSaving: false, settingsSavingText: '', statusText: '等待开始', logs: [], checkpoint: null, report: null, seenTaskIds: [], seenTaskIdSet: new Set() };
       this.refs = {};
     }
 
     async init() { if (!isSupportedPage()) return; injectPanelStyle(); await this.clearExpiredCache(); await this.loadState(); this.mountPanel(); if (isListPage()) { await this.tryResume(); await this.tryStartPendingSecondaryQcJob(); } }
     async clearExpiredCache() { const state = await storageGet(STORAGE_KEYS.checkpoint); const checkpoint = state[STORAGE_KEYS.checkpoint]; const cutoffDate = getQuarterCutoffDateString(new Date()); const dateValue = checkpoint && normalizeText(checkpoint.updatedAt || checkpoint.startedAt).slice(0, 10); if (dateValue && isDateExpiredByQuarter(dateValue, cutoffDate)) await storageRemove(STORAGE_KEYS.checkpoint); }
-    async loadState() { const state = await storageGet([STORAGE_KEYS.settings, STORAGE_KEYS.report, STORAGE_KEYS.checkpoint]); this.settings = normalizeWorkbenchSettings(state[STORAGE_KEYS.settings]); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.runtime.minimized = Boolean(this.settings.ui.panelMinimized); this.runtime.report = normalizeSecondaryQcReport(state[STORAGE_KEYS.report]); this.runtime.checkpoint = normalizeSecondaryQcCheckpoint(state[STORAGE_KEYS.checkpoint]); this.runtime.logs = []; this.runtime.statusText = '等待开始'; this.runtime.running = false; this.runtime.jobType = ''; this.runtime.listJobAbortToken = 0; this.runtime.stopping = false; this.runtime.pauseRequested = false; if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '检测到未完成二次质检，正在准备继续'); return; } if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'paused') { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '存在已暂停质检，可点击继续任务'); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; return; } if (this.runtime.checkpoint && this.runtime.checkpoint.statusText) { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; } }
+    async loadState() { const state = await storageGet([STORAGE_KEYS.settings, STORAGE_KEYS.report, STORAGE_KEYS.checkpoint, STORAGE_KEYS.seenTaskIds]); this.settings = normalizeWorkbenchSettings(state[STORAGE_KEYS.settings]); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.runtime.minimized = Boolean(this.settings.ui.panelMinimized); this.runtime.report = normalizeSecondaryQcReport(state[STORAGE_KEYS.report]); this.runtime.checkpoint = normalizeSecondaryQcCheckpoint(state[STORAGE_KEYS.checkpoint]); this.runtime.seenTaskIds = normalizeSecondaryQcSeenTaskIds(state[STORAGE_KEYS.seenTaskIds]); this.runtime.seenTaskIdSet = new Set(this.runtime.seenTaskIds); this.runtime.logs = []; this.runtime.statusText = '等待开始'; this.runtime.running = false; this.runtime.jobType = ''; this.runtime.listJobAbortToken = 0; this.runtime.stopping = false; this.runtime.pauseRequested = false; if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '检测到未完成二次质检，正在准备继续'); return; } if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'paused') { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '存在已暂停质检，可点击继续任务'); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; return; } if (this.runtime.checkpoint && this.runtime.checkpoint.statusText) { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; } }
 
     mountPanel() {
       const existing = document.getElementById('ysp-secondary-qc-panel-root');
@@ -6109,11 +6114,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
     async clearNonConfigCacheData() {
       if (this.runtime.running) return;
-      const confirmed = window.confirm('这会清除任务进度、下载结果、临时记录和当前日志，不会清理配置 XLSX、标签库、品类规则和密钥。确认清理吗？');
+      const confirmed = window.confirm('这会清除任务进度、下载结果、临时记录、历史已看过视频记录和当前日志，不会清理配置 XLSX、标签库、品类规则和密钥。确认清理吗？');
       if (!confirmed) return;
       await clearNonConfigCacheStorage();
       this.runtime.report = null;
       this.runtime.checkpoint = null;
+      this.runtime.seenTaskIds = [];
+      this.runtime.seenTaskIdSet = new Set();
       this.runtime.logs = [];
       this.runtime.statusText = '缓存已清理';
       this.runtime.jobType = '';
@@ -6204,6 +6211,30 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     isCurrentJobStopRequested() { return isListJobAbortRequested(this.runtime.listJobAbortToken) || this.runtime.stopping; }
     getSecondaryQcInflightEntries(checkpoint) {
       return Array.isArray(checkpoint && checkpoint.inflightEntries) ? checkpoint.inflightEntries : [];
+    }
+
+    isSecondaryQcTaskSeen(taskId) {
+      const normalizedTaskId = normalizeText(taskId);
+      return Boolean(normalizedTaskId && this.runtime.seenTaskIdSet && this.runtime.seenTaskIdSet.has(normalizedTaskId));
+    }
+
+    async rememberSecondaryQcTaskSeen(taskId) {
+      const normalizedTaskId = normalizeText(taskId);
+      if (!normalizedTaskId) {
+        return;
+      }
+      if (!this.runtime.seenTaskIdSet) {
+        this.runtime.seenTaskIds = normalizeSecondaryQcSeenTaskIds(this.runtime.seenTaskIds);
+        this.runtime.seenTaskIdSet = new Set(this.runtime.seenTaskIds);
+      }
+      if (this.runtime.seenTaskIdSet.has(normalizedTaskId)) {
+        return;
+      }
+      this.runtime.seenTaskIdSet.add(normalizedTaskId);
+      this.runtime.seenTaskIds = this.runtime.seenTaskIds.concat(normalizedTaskId);
+      await storageSetCached({
+        [STORAGE_KEYS.seenTaskIds]: this.runtime.seenTaskIds
+      });
     }
 
     isSecondaryQcTargetReached(itemIndex, checkpoint) {
@@ -6470,6 +6501,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (checkpoint && !checkpoint.processedTaskIds.includes(taskId)) {
         checkpoint.processedTaskIds.push(taskId);
       }
+      await this.rememberSecondaryQcTaskSeen(taskId);
       await this.saveCheckpoint();
     }
 
@@ -6665,6 +6697,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       const totalPages = firstPage.totalPages;
       let matchedCandidateCount = 0;
+      let historicalSeenCount = 0;
       this.pushLog(`${this.describeItem(item)}：标准化列表共有 ${firstPage.totalRecords} 条，本品类目标 ${itemTargetCount} 条，共 ${totalPages} 页，将从最新视频开始筛选`);
 
       for (let pageNumber = totalPages; pageNumber >= 1; pageNumber -= 1) {
@@ -6690,6 +6723,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           activeCancelCheck
         );
         matchedCandidateCount += pageStatus.candidateCount;
+        historicalSeenCount += pageStatus.historicalSeenCount || 0;
         if (pageStatus.status === 'paused') {
           break;
         }
@@ -6697,6 +6731,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       if (!matchedCandidateCount) {
         this.pushLog(`${this.describeItem(item)}：标准化列表里没有符合当前品类和状态的视频`);
+      }
+      if (historicalSeenCount) {
+        this.pushLog(`${this.describeItem(item)}：已跳过历史看过视频 ${historicalSeenCount} 条`);
       }
       if (
         this.runtime.pauseRequested
@@ -6715,6 +6752,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const rows = (Array.isArray(records) ? records : [])
         .map((record) => normalizeSecondaryQcApiRow(record))
         .filter(Boolean);
+      let historicalSeenCount = 0;
       for (let index = rows.length - 1; index >= 0; index -= 1) {
         if (this.isCurrentJobStopRequested()) {
           throw new Error('任务已结束');
@@ -6726,26 +6764,34 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           checkpoint.rows.length >= checkpoint.targetCount
           || (checkpoint.itemRecordedCounts[itemIndex] || 0) >= (checkpoint.itemTargetCounts[itemIndex] || 0)
         ) {
-          return { status: 'done', candidateCount };
+          return { status: 'done', candidateCount, historicalSeenCount };
         }
         const row = rows[index];
         if (!isSecondaryQcApiRowCandidate(row, item)) {
           continue;
         }
         candidateCount += 1;
-        if (pageSeen.has(row.taskId) || this.isSecondaryQcTaskReserved(row.taskId, checkpoint)) {
+        if (pageSeen.has(row.taskId)) {
+          continue;
+        }
+        if (this.isSecondaryQcTaskSeen(row.taskId)) {
+          historicalSeenCount += 1;
+          pageSeen.add(row.taskId);
+          continue;
+        }
+        if (this.isSecondaryQcTaskReserved(row.taskId, checkpoint)) {
           continue;
         }
         pageSeen.add(row.taskId);
         const taskStatus = await this.runSecondaryQcRowTask(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
         if (taskStatus === 'paused') {
-          return { status: 'paused', candidateCount };
+          return { status: 'paused', candidateCount, historicalSeenCount };
         }
         if (this.isSecondaryQcTargetReached(itemIndex, checkpoint)) {
-          return { status: 'done', candidateCount };
+          return { status: 'done', candidateCount, historicalSeenCount };
         }
       }
-      return { status: this.runtime.pauseRequested ? 'paused' : 'continue', candidateCount };
+      return { status: this.runtime.pauseRequested ? 'paused' : 'continue', candidateCount, historicalSeenCount };
     }
 
     async completeSecondaryQcJob() {
