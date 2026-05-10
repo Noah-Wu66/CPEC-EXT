@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频日报采集器
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.3.3
+// @version      2.3.4
 // @description  在标准化系统页面采集日报数据，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1264,6 +1264,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     '质检拒绝',
     '质检拒绝率'
   ];
+  const METRIC_COLUMN_WIDTH_PATTERNS = [
+    ['9.63333333333333', '12.6333333333333', '12.1', '11.6333333333333', '13.1', '9.63333333333333', '9.63333333333333', '9.63333333333333', '11.1'],
+    ['9.63333333333333', '12.1', '12.9', '13', '14.1', '10.7666666666667', '9.63333333333333', '9.63333333333333', '12'],
+    ['9.63333333333333', '13.9', '12.6333333333333', '13', '14.9', '9.63333333333333', '10.1', '9.63333333333333', '13.6333333333333']
+  ];
 
   const STORAGE_KEYS = {
     settings: 'yspDailyReportSettingsV1',
@@ -2025,50 +2030,61 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   function buildColumnsXml(columns) {
     const parts = ['<cols>'];
-    const totalColumns = 1 + columns.length * METRIC_HEADERS.length;
-    for (let index = 1; index <= totalColumns; index += 1) {
-      const width = index === 1 ? 12 : (index - 2) % METRIC_HEADERS.length >= 4 ? 13 : 11;
-      parts.push(`<col min="${index}" max="${index}" width="${width}" customWidth="1"/>`);
+    parts.push('<col min="1" max="1" width="13.1" style="1" customWidth="1"/>');
+    for (let groupIndex = 0; groupIndex < columns.length; groupIndex += 1) {
+      const widths = METRIC_COLUMN_WIDTH_PATTERNS[groupIndex % METRIC_COLUMN_WIDTH_PATTERNS.length];
+      for (let metricIndex = 0; metricIndex < METRIC_HEADERS.length; metricIndex += 1) {
+        const columnIndex = 2 + groupIndex * METRIC_HEADERS.length + metricIndex;
+        const styleId = metricIndex === 4 || metricIndex === 8 ? 2 : 1;
+        parts.push(`<col min="${columnIndex}" max="${columnIndex}" width="${widths[metricIndex]}" style="${styleId}" customWidth="1"/>`);
+      }
     }
     parts.push('</cols>');
     return parts.join('');
   }
 
-  function getColumnStyleIds(theme) {
-    if (theme === 'knowledge') {
-      return { top: 2, sub: 3 };
-    }
-    if (theme === 'culture') {
-      return { top: 6, sub: 7 };
-    }
-    return { top: 4, sub: 5 };
+  function getTopHeaderStyleId(columnIndex) {
+    return columnIndex % 2 === 0 ? 4 : 5;
+  }
+
+  function getMetricHeaderStyleId(metricIndex) {
+    return metricIndex === 4 || metricIndex === 8 ? 7 : 6;
+  }
+
+  function getMetricValueStyleId(metricIndex) {
+    return metricIndex === 4 || metricIndex === 8 ? 9 : 3;
   }
 
   function buildWorksheetXml(report) {
     const columns = Array.isArray(report.columns) ? report.columns : [];
     const dateRows = Array.isArray(report.rows) ? report.rows : [];
     const rows = [];
-    const merges = ['A1:A2'];
+    const merges = [];
+    const totalColumns = 1 + columns.length * METRIC_HEADERS.length;
+    const lastRowNumber = Math.max(2, dateRows.length + 2);
+    const dimensionRef = `A1:${makeCellRef(totalColumns, lastRowNumber)}`;
 
-    const topRow = [inlineCell('A1', '时间', 1)];
+    const topRow = [inlineCell('A1', '', 3)];
     let column = 2;
-    for (const item of columns) {
-      const styleIds = getColumnStyleIds(item.theme);
-      topRow.push(inlineCell(makeCellRef(column, 1), item.label, styleIds.top));
+    columns.forEach((item, columnIndex) => {
+      const styleId = getTopHeaderStyleId(columnIndex);
+      topRow.push(inlineCell(makeCellRef(column, 1), item.label, styleId));
+      for (let metricIndex = 1; metricIndex < METRIC_HEADERS.length; metricIndex += 1) {
+        topRow.push(inlineCell(makeCellRef(column + metricIndex, 1), '', styleId));
+      }
       merges.push(`${makeCellRef(column, 1)}:${makeCellRef(column + METRIC_HEADERS.length - 1, 1)}`);
       column += METRIC_HEADERS.length;
-    }
-    rows.push(`<row r="1" ht="24" customHeight="1">${topRow.join('')}</row>`);
+    });
+    rows.push(`<row r="1" ht="22.5" customHeight="1" spans="1:${totalColumns}">${topRow.join('')}</row>`);
 
-    const secondRowCells = [inlineCell('A2', '', 1)];
+    const secondRowCells = [inlineCell('A2', '时间', 6)];
     for (const item of columns) {
-      const styleIds = getColumnStyleIds(item.theme);
       for (let index = 0; index < METRIC_HEADERS.length; index += 1) {
         const ref = makeCellRef(secondRowCells.length + 1, 2);
-        secondRowCells.push(inlineCell(ref, METRIC_HEADERS[index], styleIds.sub));
+        secondRowCells.push(inlineCell(ref, METRIC_HEADERS[index], getMetricHeaderStyleId(index)));
       }
     }
-    rows.push(`<row r="2" ht="22" customHeight="1">${secondRowCells.join('')}</row>`);
+    rows.push(`<row r="2" ht="20.15" customHeight="1" spans="1:${totalColumns}">${secondRowCells.join('')}</row>`);
 
     dateRows.forEach((reportRow, rowIndex) => {
       const worksheetRowNumber = rowIndex + 3;
@@ -2087,25 +2103,26 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         const qcRejectRateRef = makeCellRef(baseColumn + 8, worksheetRowNumber);
 
         dataCells.push(
-          numberCell(inboundRef, Number(result.inboundCount || 0), 9),
-          formulaCell(stdTotalRef, `${stdPassRef}+${stdRejectRef}`, result.stdTotalCount || 0, 9),
-          numberCell(stdPassRef, Number(result.stdPassCount || 0), 9),
-          numberCell(stdRejectRef, Number(result.stdRejectCount || 0), 9),
-          formulaCell(stdRejectRateRef, `IF(${stdTotalRef}=0,0,${stdRejectRef}/${stdTotalRef})`, result.stdRejectRate || 0, 10),
-          formulaCell(qcTotalRef, `${qcPassRef}+${qcRejectRef}`, result.qcTotalCount || 0, 9),
-          numberCell(qcPassRef, Number(result.qcPassCount || 0), 9),
-          numberCell(qcRejectRef, Number(result.qcRejectCount || 0), 9),
-          formulaCell(qcRejectRateRef, `IF(${qcTotalRef}=0,0,${qcRejectRef}/${qcTotalRef})`, result.qcRejectRate || 0, 10)
+          numberCell(inboundRef, Number(result.inboundCount || 0), getMetricValueStyleId(0)),
+          formulaCell(stdTotalRef, `${stdPassRef}+${stdRejectRef}`, result.stdTotalCount || 0, getMetricValueStyleId(1)),
+          numberCell(stdPassRef, Number(result.stdPassCount || 0), getMetricValueStyleId(2)),
+          numberCell(stdRejectRef, Number(result.stdRejectCount || 0), getMetricValueStyleId(3)),
+          formulaCell(stdRejectRateRef, `IF(${stdTotalRef}=0,0,${stdRejectRef}/${stdTotalRef})`, result.stdRejectRate || 0, getMetricValueStyleId(4)),
+          formulaCell(qcTotalRef, `${qcPassRef}+${qcRejectRef}`, result.qcTotalCount || 0, getMetricValueStyleId(5)),
+          numberCell(qcPassRef, Number(result.qcPassCount || 0), getMetricValueStyleId(6)),
+          numberCell(qcRejectRef, Number(result.qcRejectCount || 0), getMetricValueStyleId(7)),
+          formulaCell(qcRejectRateRef, `IF(${qcTotalRef}=0,0,${qcRejectRef}/${qcTotalRef})`, result.qcRejectRate || 0, getMetricValueStyleId(8))
         );
       });
-      rows.push(`<row r="${worksheetRowNumber}" ht="22" customHeight="1">${dataCells.join('')}</row>`);
+      rows.push(`<row r="${worksheetRowNumber}" customFormat="1" spans="1:${totalColumns}">${dataCells.join('')}</row>`);
     });
 
     return [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
-      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="2" topLeftCell="A3" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
-      '<sheetFormatPr defaultRowHeight="20"/>',
+      `<dimension ref="${dimensionRef}"/>`,
+      '<sheetViews><sheetView zoomScale="90" zoomScaleNormal="90" workbookViewId="0"><selection activeCell="A1" sqref="A1"/></sheetView></sheetViews>',
+      '<sheetFormatPr defaultColWidth="9.63333333333333" defaultRowHeight="13.5"/>',
       buildColumnsXml(columns),
       `<sheetData>${rows.join('')}</sheetData>`,
       `<mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${ref}"/>`).join('')}</mergeCells>`,
@@ -2117,7 +2134,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
       '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
-      '<sheets><sheet name="日报数据" sheetId="1" r:id="rId1"/></sheets>',
+      '<sheets><sheet name="原始数据" sheetId="1" r:id="rId1"/></sheets>',
       '</workbook>'
     ].join('');
   }
@@ -2158,37 +2175,36 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
-      '<fonts count="2">',
-      '<font><sz val="11"/><color rgb="FF17212B"/><name val="Microsoft YaHei"/></font>',
-      '<font><b/><sz val="11"/><color rgb="FF17212B"/><name val="Microsoft YaHei"/></font>',
+      '<numFmts count="1"><numFmt numFmtId="176" formatCode="yyyy/m/d;@"/></numFmts>',
+      '<fonts count="4">',
+      '<font><sz val="11"/><name val="宋体"/><charset val="134"/></font>',
+      '<font><sz val="11"/><color rgb="FF000000"/><name val="宋体"/><charset val="134"/></font>',
+      '<font><b/><sz val="14"/><color rgb="FF000000"/><name val="宋体"/><charset val="134"/></font>',
+      '<font><b/><sz val="11"/><color rgb="FF000000"/><name val="宋体"/><charset val="134"/></font>',
       '</fonts>',
-      '<fills count="8">',
+      '<fills count="4">',
       '<fill><patternFill patternType="none"/></fill>',
       '<fill><patternFill patternType="gray125"/></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFF1E0"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFF8E9"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFDCEAF8"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFEEF5FC"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFF4DFD8"/><bgColor indexed="64"/></patternFill></fill>',
-      '<fill><patternFill patternType="solid"><fgColor rgb="FFFBECE6"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFF4B082"/><bgColor indexed="64"/></patternFill></fill>',
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF9DC2E5"/><bgColor indexed="64"/></patternFill></fill>',
       '</fills>',
       '<borders count="2">',
       '<border><left/><right/><top/><bottom/><diagonal/></border>',
-      '<border><left style="thin"><color rgb="FFD7E1EA"/></left><right style="thin"><color rgb="FFD7E1EA"/></right><top style="thin"><color rgb="FFD7E1EA"/></top><bottom style="thin"><color rgb="FFD7E1EA"/></bottom><diagonal/></border>',
+      '<border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border>',
       '</borders>',
       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
       '<cellXfs count="11">',
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>',
-      '<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="1" fillId="7" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"><alignment vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="10" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="10" fontId="3" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="176" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
+      '<xf numFmtId="10" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
       '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
-      '<xf numFmtId="10" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>',
       '</cellXfs>',
       '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>',
       '</styleSheet>'
