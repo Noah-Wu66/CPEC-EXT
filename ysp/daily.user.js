@@ -1124,6 +1124,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     flex-direction: column;
   }
 }
+
+.ysp-daily-panel__download-card {
+  padding: 12px;
+  border: 1px solid #d8e2ee;
+  border-radius: 16px;
+  background: #fff;
+}
   `;
 
   const CATEGORY_GROUPS = [
@@ -1331,6 +1338,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   function cloneWorkbenchSettings(settings) {
     return normalizeWorkbenchSettings(JSON.parse(JSON.stringify(settings || createDefaultWorkbenchSettings())));
   }
+  /* ===================================================================
+   *  SHARED UTILITIES -- keep identical across tags/daily/qc
+   *  Last synced: 2026-05-11
+   * =================================================================== */
+
   function injectPanelStyle() {
     GM_addStyle(PANEL_STYLE);
   }
@@ -1360,7 +1372,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   }
 
   function normalizeText(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim();
+    return String(value == null ? '' : value)
+      .replace(/\s+/g, ' ')
+      .replace(/ /g, ' ')
+      .trim();
   }
 
   function escapeXml(value) {
@@ -1438,6 +1453,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     date.setHours(0, 0, 0, 0);
     return formatInputDate(date);
   }
+
+  /* =================================================================== */
 
   function buildDateList(startDateString, endDateString) {
     const startDate = normalizeText(startDateString);
@@ -1818,7 +1835,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   async function waitFor(checker, timeoutMs, message, options) {
     const cancelCheck = options && typeof options.cancelCheck === 'function' ? options.cancelCheck : null;
-    const cancelMessage = normalizeText(options && options.cancelMessage) || '采集已结束';
+    const cancelMessage = normalizeText(options && options.cancelMessage) || '任务已结束';
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       if (cancelCheck && cancelCheck()) {
@@ -2627,11 +2644,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     setMinimized(nextValue) { if (this.runtime.running && nextValue) return; this.runtime.minimized = Boolean(nextValue); this.settings.ui.panelMinimized = this.runtime.minimized; if (this.runtime.minimized) this.runtime.openGroupMenu = ''; this.persistSettings().catch(() => undefined); this.render(); }
     renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'daily'; const triggerSummary = this.getGroupPickerSummary(); this.refs.dailyGroups.innerHTML = `<div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
     renderStatus() { const pageText = isListPage() ? '当前页面：列表页' : '当前页面：其他页面'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：日报</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
-    renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div style="padding: 12px; border: 1px solid #d8e2ee; border-radius: 12px; background: #fff;"><div style="font-weight: 700; color: #17324f;">日报结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div class="ysp-daily-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="daily">下载日报</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
+    renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div class="ysp-daily-panel__download-card"><div style="font-weight: 700; color: #17324f;">日报结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div class="ysp-daily-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="daily">下载日报</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
     renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(log)}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
     render() { if (!this.panel) return; if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = ''; const listPageActive = isListPage(); const disabled = this.runtime.running; this.panel.classList.toggle('is-running', disabled); this.panel.classList.toggle('is-minimized', !disabled && this.runtime.minimized); this.syncSettingsToInputs(); this.renderGroupSelector(); this.renderFloatingGroupMenu(); this.refs.dailyStartDate.disabled = disabled; this.refs.dailyEndDate.disabled = disabled; this.refs.startDaily.disabled = disabled || !listPageActive; this.refs.clearData.disabled = disabled; this.refs.minimize.disabled = disabled; this.refs.stop.disabled = !disabled; const pausedTask = this.getPausedTaskMeta(); this.refs.pauseResume.disabled = !disabled && (!pausedTask || !listPageActive); this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? '继续日报' : '继续任务'; this.refs.pauseResume.classList.toggle('ysp-daily-panel__button--primary', !disabled && Boolean(pausedTask)); this.refs.startDaily.textContent = disabled ? '日报运行中' : '开始日报'; this.renderStatus(); this.renderDownloads(); this.renderLogs(); }
     pushLog(message) { this.runtime.logs = mergeLogEntries(this.runtime.logs, [message]); const checkpoint = this.getActiveCheckpoint(); if (checkpoint) checkpoint.logs = this.runtime.logs.slice(); this.renderLogs(); void this.persistActiveCheckpoint().catch(() => {}); }
-    ensureNotStopped() { if (this.isCurrentJobStopRequested()) throw new Error('采集已结束'); if (this.runtime.pauseRequested) throw new Error('采集已暂停'); }
+    ensureNotStopped() { if (this.isCurrentJobStopRequested()) throw new Error('任务已结束'); if (this.runtime.pauseRequested) throw new Error('任务已暂停'); }
     updateCheckpointStatus(text) { const checkpoint = this.getActiveCheckpoint(); this.runtime.statusText = text; if (checkpoint) checkpoint.statusText = text; this.renderStatus(); void this.persistActiveCheckpoint().catch(() => {}); }
     async saveCheckpoint() { if (!this.runtime.checkpoint) return; this.runtime.checkpoint.updatedAt = new Date().toISOString(); await storageSetCached({ [STORAGE_KEYS.checkpoint]: this.runtime.checkpoint }); }
     async clearCheckpoint() { await storageRemove(STORAGE_KEYS.checkpoint); this.runtime.checkpoint = null; }
@@ -2658,13 +2675,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     async stopCurrentJob() {
       if (!this.runtime.running) return;
       const checkpoint = this.getActiveCheckpoint();
-      const stoppedStatusText = '采集已结束，可以重新开始';
+      const stoppedStatusText = '任务已结束，可以重新开始';
       requestListJobAbort(this.runtime.listJobAbortToken);
       this.runtime.stopping = true;
       this.runtime.pauseRequested = false;
       this.runtime.statusText = stoppedStatusText;
       this.abortActiveApiRequest();
-      this.pushLog('采集已结束');
+      this.pushLog('任务已结束');
       if (checkpoint) {
         checkpoint.status = 'stopped';
         checkpoint.statusText = stoppedStatusText;
@@ -2962,21 +2979,21 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
     async failJob(error) {
       const message = error && error.message ? error.message : String(error);
-      const paused = message === '采集已暂停';
-      const stopped = message === '采集已结束';
+      const paused = message === '任务已暂停';
+      const stopped = message === '任务已结束';
       if (stopped && !this.runtime.running && !this.runtime.jobType) return;
       const checkpoint = this.getActiveCheckpoint();
       if (checkpoint) {
         checkpoint.status = paused ? 'paused' : stopped ? 'stopped' : 'error';
-        checkpoint.statusText = paused ? '任务已暂停，可点击继续任务' : stopped ? '采集已结束，可以重新开始' : `任务遇到问题：${message}`;
+        checkpoint.statusText = paused ? '任务已暂停，可点击继续任务' : stopped ? '任务已结束，可以重新开始' : `任务遇到问题：${message}`;
         await this.saveCheckpoint();
       }
       this.runtime.running = false;
       this.runtime.activeAbortController = null;
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
-      this.runtime.statusText = paused ? '任务已暂停，可点击继续任务' : stopped ? '采集已结束，可以重新开始' : `任务遇到问题：${message}`;
-      this.pushLog(paused ? '任务已暂停' : stopped ? '采集已结束' : `任务遇到问题：${message}`);
+      this.runtime.statusText = paused ? '任务已暂停，可点击继续任务' : stopped ? '任务已结束，可以重新开始' : `任务遇到问题：${message}`;
+      this.pushLog(paused ? '任务已暂停' : stopped ? '任务已结束' : `任务遇到问题：${message}`);
       this.runtime.jobType = '';
       this.render();
     }

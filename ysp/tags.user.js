@@ -33,7 +33,7 @@
   const MAX_EMPTY_NEW_PAGES = 50;
   const PANEL_ID = 'ysp-tag-crawler-root';
 
-  const panelStyle = `
+  const PANEL_STYLE = `
 #${PANEL_ID} {
   position: fixed;
   right: 18px;
@@ -44,15 +44,17 @@
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
 }
 
-#${PANEL_ID} .tag-crawler-panel {
+#${PANEL_ID} .ysp-tag-panel__shell {
   overflow: hidden;
-  border: 1px solid rgba(23, 48, 75, 0.14);
+  border: 1px solid rgba(21, 54, 85, 0.12);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 18px 42px rgba(18, 38, 58, 0.22);
+  backdrop-filter: blur(18px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
 }
 
-#${PANEL_ID} .tag-crawler-head {
+#${PANEL_ID} .ysp-tag-panel__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -60,72 +62,83 @@
   border-bottom: 1px solid rgba(23, 48, 75, 0.08);
 }
 
-#${PANEL_ID} .tag-crawler-title {
+#${PANEL_ID} .ysp-tag-panel__title {
+  font-family: "STZhongsong", "Songti SC", "Noto Serif SC", serif;
   font-size: 15px;
   font-weight: 700;
 }
 
-#${PANEL_ID} .tag-crawler-version {
+#${PANEL_ID} .ysp-tag-panel__version {
   font-size: 12px;
   color: #7b8b9a;
 }
 
-#${PANEL_ID} .tag-crawler-body {
+#${PANEL_ID} .ysp-tag-panel__body {
   padding: 12px 14px 14px;
 }
 
-#${PANEL_ID} .tag-crawler-count {
+#${PANEL_ID} .ysp-tag-panel__count {
   margin-bottom: 10px;
   font-size: 13px;
   line-height: 1.7;
   color: #52687d;
 }
 
-#${PANEL_ID} .tag-crawler-actions {
+#${PANEL_ID} .ysp-tag-panel__actions {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin-bottom: 10px;
 }
 
-#${PANEL_ID} .tag-crawler-tools {
+#${PANEL_ID} .ysp-tag-panel__tools {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 
 #${PANEL_ID} button {
-  min-height: 34px;
+  min-height: 48px;
   border: 0;
-  border-radius: 10px;
-  background: #17304b;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0f7d94, #1f5f86);
   color: #ffffff;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 14px 28px rgba(31, 95, 134, 0.2);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+}
+
+#${PANEL_ID} button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 36px rgba(31, 95, 134, 0.28);
 }
 
 #${PANEL_ID} button.secondary {
   background: #edf3f8;
   color: #17304b;
+  box-shadow: none;
 }
 
 #${PANEL_ID} button.danger {
-  background: #f5e6e3;
-  color: #b44b3b;
+  background: linear-gradient(135deg, rgba(255, 245, 241, 0.96), rgba(255, 236, 231, 0.96));
+  color: #b3472f;
+  border: 1px solid rgba(194, 92, 64, 0.18);
+  box-shadow: 0 10px 20px rgba(194, 92, 64, 0.12);
 }
 
 #${PANEL_ID} button:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: default;
 }
 
-#${PANEL_ID} .tag-crawler-log {
+#${PANEL_ID} .ysp-tag-panel__log {
   min-height: 40px;
   max-height: 96px;
   margin-top: 10px;
   overflow: auto;
-  border-radius: 10px;
+  border-radius: 16px;
   background: #f5f8fb;
   padding: 8px 10px;
   color: #43576b;
@@ -138,13 +151,13 @@
   function normalizeText(value) {
     return String(value == null ? '' : value)
       .replace(/\s+/g, ' ')
-      .replace(/\u00a0/g, ' ')
+      .replace(/ /g, ' ')
       .trim();
   }
 
   function sleep(ms) {
     return new Promise((resolve) => {
-      window.setTimeout(resolve, ms);
+      setTimeout(resolve, ms);
     });
   }
 
@@ -569,88 +582,158 @@
     URL.revokeObjectURL(url);
   }
 
-  function createPanel() {
-    if (document.getElementById(PANEL_ID)) {
-      return;
+  class YspTagCrawlerApp {
+    constructor() {
+      this.panel = null;
+      this.stopRequested = false;
+      this.refs = {};
     }
-    GM_addStyle(panelStyle);
-    const root = document.createElement('div');
-    root.id = PANEL_ID;
-    root.innerHTML = `
-      <div class="tag-crawler-panel">
-        <div class="tag-crawler-head">
-          <div class="tag-crawler-title">成品视频标签采集器</div>
-          <div class="tag-crawler-version">v${GM_info.script.version}</div>
+
+    init() {
+      GM_addStyle(PANEL_STYLE);
+      this.mountPanel();
+      this.bindPanelEvents();
+      this.refreshCount();
+    }
+
+    mountPanel() {
+      if (document.getElementById(PANEL_ID)) return;
+      const root = document.createElement('div');
+      root.id = PANEL_ID;
+      root.innerHTML = `
+        <div class="ysp-tag-panel__shell">
+          <div class="ysp-tag-panel__header">
+            <div class="ysp-tag-panel__title">成品视频标签采集器</div>
+            <div class="ysp-tag-panel__version">v${GM_info.script.version}</div>
+          </div>
+          <div class="ysp-tag-panel__body">
+            <div class="ysp-tag-panel__count" data-role="count"></div>
+            <div class="ysp-tag-panel__actions">
+              <button type="button" data-limit="100">100条</button>
+              <button type="button" data-limit="1000">1000条</button>
+              <button type="button" data-limit="10000">10000条</button>
+              <button type="button" data-limit="all">全部</button>
+            </div>
+            <div class="ysp-tag-panel__tools">
+              <button type="button" class="secondary" data-action="export-csv">导出CSV</button>
+            </div>
+            <div class="ysp-tag-panel__tools" style="margin-top: 8px;">
+              <button type="button" class="danger" data-action="stop">结束任务</button>
+              <button type="button" class="danger" data-action="clear">清理缓存</button>
+            </div>
+            <div class="ysp-tag-panel__tools" style="margin-top: 8px;">
+              <button type="button" class="secondary" data-action="refresh">刷新数量</button>
+            </div>
+            <div class="ysp-tag-panel__log" data-role="log">暂无日志</div>
+          </div>
         </div>
-        <div class="tag-crawler-body">
-          <div class="tag-crawler-count" data-role="count"></div>
-          <div class="tag-crawler-actions">
-            <button type="button" data-limit="100">100条</button>
-            <button type="button" data-limit="1000">1000条</button>
-            <button type="button" data-limit="10000">10000条</button>
-            <button type="button" data-limit="all">全部</button>
-          </div>
-          <div class="tag-crawler-tools">
-            <button type="button" class="secondary" data-action="export-csv">导出CSV</button>
-          </div>
-          <div class="tag-crawler-tools" style="margin-top: 8px;">
-            <button type="button" class="danger" data-action="stop">停止采集</button>
-            <button type="button" class="danger" data-action="clear">清空本地库</button>
-          </div>
-          <div class="tag-crawler-tools" style="margin-top: 8px;">
-            <button type="button" class="secondary" data-action="refresh">刷新数量</button>
-          </div>
-          <div class="tag-crawler-log" data-role="log">等待开始</div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(root);
+      `;
+      document.body.appendChild(root);
+      this.panel = root;
+      this.refs = {
+        count: root.querySelector('[data-role="count"]'),
+        log: root.querySelector('[data-role="log"]'),
+        buttons: Array.from(root.querySelectorAll('button'))
+      };
+    }
 
-    const refs = {
-      count: root.querySelector('[data-role="count"]'),
-      log: root.querySelector('[data-role="log"]'),
-      buttons: Array.from(root.querySelectorAll('button'))
-    };
+    bindPanelEvents() {
+      if (!this.panel) return;
+      this.panel.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        const limit = button.getAttribute('data-limit');
+        const action = button.getAttribute('data-action');
+        if (limit) { this.runCrawl(limit); return; }
+        if (action === 'stop') {
+          this.stopRequested = true;
+          this.setLog('正在停止，当前页保存完成后结束');
+          return;
+        }
+        if (action === 'refresh') {
+          this.setBusy(true);
+          this.refreshCount()
+            .then(() => { this.setLog('数量已刷新'); })
+            .catch((error) => this.failJob(error))
+            .finally(() => { this.setBusy(false); });
+          return;
+        }
+        if (action === 'export-csv') {
+          this.setBusy(true);
+          readStoredTags()
+            .then((tags) => {
+              downloadText('ysp-tag-library.csv', `﻿${buildCsv(tags)}`, 'text/csv;charset=utf-8');
+              this.setLog(`已导出 CSV：${tags.length} 个标签`);
+            })
+            .catch((error) => this.failJob(error))
+            .finally(() => { this.setBusy(false); });
+          return;
+        }
+        if (action === 'clear') {
+          if (window.confirm('确认清理标签采集器本地缓存吗？')) {
+            this.setBusy(true);
+            clearStoredTags()
+              .then(() => this.refreshCount())
+              .then(() => { this.setLog('本地缓存已清理'); })
+              .catch((error) => this.failJob(error))
+              .finally(() => { this.setBusy(false); });
+          }
+        }
+      });
+    }
 
-    const setLog = (text) => {
-      refs.log.textContent = text;
-    };
-    let stopRequested = false;
+    destroy() {
+      if (this.panel && this.panel.isConnected) this.panel.remove();
+      this.panel = null;
+      this.refs = {};
+    }
 
-    const refreshCount = async () => {
-      const count = await countStoredTags();
-      refs.count.textContent = `本地数据库已保存：${count} 个标签`;
-    };
+    failJob(error) {
+      const message = error && error.message ? error.message : String(error);
+      console.error('[央视频标签库采集器]', error);
+      this.setLog(message);
+      this.setBusy(false);
+    }
 
-    const setBusy = (busy) => {
-      refs.buttons.forEach((button) => {
+    setLog(text) {
+      if (this.refs.log) this.refs.log.textContent = text;
+    }
+
+    setBusy(busy) {
+      if (!this.refs.buttons) return;
+      this.refs.buttons.forEach((button) => {
         button.disabled = busy && button.getAttribute('data-action') !== 'stop';
       });
-    };
+    }
 
-    const runCrawl = async (limitValue) => {
+    async refreshCount() {
+      const count = await countStoredTags();
+      if (this.refs.count) this.refs.count.textContent = `本地数据库已保存：${count} 个标签`;
+    }
+
+    async runCrawl(limitValue) {
       const limit = limitValue === 'all' ? 'all' : Number(limitValue);
-      stopRequested = false;
-      setBusy(true);
-      setLog(limit === 'all' ? '正在采集全部标签...' : `正在采集 ${limit} 条标签...`);
+      this.stopRequested = false;
+      this.setBusy(true);
+      this.setLog(limit === 'all' ? '正在采集全部标签...' : `正在采集 ${limit} 条标签...`);
       try {
         const result = await crawlTags(
           limit === 'all' ? null : limit,
           (progress) => {
             if (progress.cooldownMs) {
-              setLog(`已读取 ${progress.savedCount} 个标签，新增 ${progress.addedCount} 个，重复跳过 ${progress.skippedCount} 个，连续无新增 ${progress.emptyNewPageCount} 页，已读取 ${progress.page} 页，休息 ${Math.round(progress.cooldownMs / 1000)} 秒...`);
+              this.setLog(`已读取 ${progress.savedCount} 个标签，新增 ${progress.addedCount} 个，重复跳过 ${progress.skippedCount} 个，连续无新增 ${progress.emptyNewPageCount} 页，已读取 ${progress.page} 页，休息 ${Math.round(progress.cooldownMs / 1000)} 秒...`);
               return;
             }
-            setLog(
+            this.setLog(
               limit === 'all'
                 ? `已读取 ${progress.savedCount} 个标签，新增 ${progress.addedCount} 个，重复跳过 ${progress.skippedCount} 个，连续无新增 ${progress.emptyNewPageCount} 页，正在读取第 ${progress.page} 页...`
                 : `已读取 ${progress.savedCount}/${limit} 个标签，新增 ${progress.addedCount} 个，重复跳过 ${progress.skippedCount} 个，连续无新增 ${progress.emptyNewPageCount} 页...`
             );
           },
-          () => stopRequested
+          () => this.stopRequested
         );
-        await refreshCount();
-        setLog(
+        await this.refreshCount();
+        this.setLog(
           result.stoppedByDuplicateGuard
             ? `已自动停止：连续 ${MAX_EMPTY_NEW_PAGES} 页没有新增标签，可能已采完或接口分页异常。本次读取 ${result.savedCount} 个标签，新增 ${result.addedCount} 个，重复跳过 ${result.skippedCount} 个。`
             : result.stopped
@@ -658,80 +741,49 @@
             : `采集完成。本次读取 ${result.savedCount} 个标签，新增 ${result.addedCount} 个，重复跳过 ${result.skippedCount} 个。`
         );
       } catch (error) {
-        setLog(error && error.message ? error.message : String(error));
+        this.failJob(error);
       } finally {
-        stopRequested = false;
-        setBusy(false);
+        this.stopRequested = false;
+        this.setBusy(false);
       }
-    };
-
-    root.addEventListener('click', (event) => {
-      const button = event.target.closest('button');
-      if (!button) {
-        return;
-      }
-      const limit = button.getAttribute('data-limit');
-      const action = button.getAttribute('data-action');
-      if (limit) {
-        runCrawl(limit);
-        return;
-      }
-      if (action === 'stop') {
-        stopRequested = true;
-        setLog('正在停止，当前页保存完成后结束');
-        return;
-      }
-      if (action === 'refresh') {
-        setBusy(true);
-        refreshCount()
-          .then(() => {
-            setLog('数量已刷新');
-          })
-          .catch((error) => {
-            setLog(error && error.message ? error.message : String(error));
-          })
-          .finally(() => {
-            setBusy(false);
-          });
-        return;
-      }
-      if (action === 'export-csv') {
-        setBusy(true);
-        readStoredTags()
-          .then((tags) => {
-            downloadText('ysp-tag-library.csv', `\ufeff${buildCsv(tags)}`, 'text/csv;charset=utf-8');
-            setLog(`已导出 CSV：${tags.length} 个标签`);
-          })
-          .catch((error) => {
-            setLog(error && error.message ? error.message : String(error));
-          })
-          .finally(() => {
-            setBusy(false);
-          });
-        return;
-      }
-      if (action === 'clear') {
-        if (window.confirm('确认清空标签采集器本地保存的标签吗？')) {
-          setBusy(true);
-          clearStoredTags()
-            .then(() => refreshCount())
-            .then(() => {
-              setLog('本地标签库已清空');
-            })
-            .catch((error) => {
-              setLog(error && error.message ? error.message : String(error));
-            })
-            .finally(() => {
-              setBusy(false);
-            });
-        }
-      }
-    });
-
-    refreshCount().catch((error) => {
-      setLog(error && error.message ? error.message : String(error));
-    });
+    }
   }
 
-  createPanel();
+  let app = null;
+
+  function ensurePanelMounted() {
+    if (app && document.getElementById(PANEL_ID)) return;
+    if (app) app.destroy();
+    app = new YspTagCrawlerApp();
+    app.init();
+  }
+
+  function installRouteHooks() {
+    const methods = ['pushState', 'replaceState'];
+    for (const method of methods) {
+      const original = history[method];
+      history[method] = function (...args) {
+        const result = original.apply(this, args);
+        window.dispatchEvent(new Event('ysp:tag-location-change'));
+        return result;
+      };
+    }
+    const onLocationChange = () => {
+      queueMicrotask(() => ensurePanelMounted());
+    };
+    window.addEventListener('popstate', onLocationChange);
+    window.addEventListener('hashchange', onLocationChange);
+    window.addEventListener('ysp:tag-location-change', onLocationChange);
+    const observer = new MutationObserver(() => {
+      if (!document.getElementById(PANEL_ID)) {
+        if (app) app.destroy();
+        app = null;
+        ensurePanelMounted();
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  installRouteHooks();
+  ensurePanelMounted();
 })();

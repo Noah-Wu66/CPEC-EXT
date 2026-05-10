@@ -72,23 +72,23 @@
   pointer-events: auto;
 }
 
-.ysp-daily-panel__backdrop {
+.ysp-qc-panel__backdrop {
   position: absolute;
   inset: 0;
   background: rgba(8, 24, 40, 0.16);
   transition: background 0.22s ease;
 }
 
-#ysp-secondary-qc-panel-root.is-focused .ysp-daily-panel__backdrop {
+#ysp-secondary-qc-panel-root.is-focused .ysp-qc-panel__backdrop {
   background: rgba(8, 24, 40, 0.28);
 }
 
-#ysp-secondary-qc-panel-root.is-input-locked .ysp-daily-panel__backdrop {
+#ysp-secondary-qc-panel-root.is-input-locked .ysp-qc-panel__backdrop {
   pointer-events: auto;
   background: rgba(6, 14, 24, 0.56);
 }
 
-.ysp-daily-panel {
+.ysp-qc-panel {
   position: relative;
   pointer-events: auto;
   display: flex;
@@ -110,20 +110,20 @@
   justify-content: flex-end;
 }
 
-#ysp-secondary-qc-panel-root.is-minimized .ysp-daily-panel__backdrop {
+#ysp-secondary-qc-panel-root.is-minimized .ysp-qc-panel__backdrop {
   opacity: 0;
   pointer-events: none;
 }
 
-#ysp-secondary-qc-panel-root.is-minimized .ysp-daily-panel {
+#ysp-secondary-qc-panel-root.is-minimized .ysp-qc-panel {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transform: translateX(32px) scale(0.98);
 }
 
-.ysp-daily-panel::before,
-.ysp-daily-panel::after {
+.ysp-qc-panel::before,
+.ysp-qc-panel::after {
   content: "";
   position: absolute;
   pointer-events: none;
@@ -131,7 +131,7 @@
   filter: blur(4px);
 }
 
-.ysp-daily-panel::before {
+.ysp-qc-panel::before {
   top: -84px;
   right: -42px;
   width: 220px;
@@ -139,7 +139,7 @@
   background: radial-gradient(circle, rgba(254, 202, 137, 0.34), rgba(254, 202, 137, 0));
 }
 
-.ysp-daily-panel::after {
+.ysp-qc-panel::after {
   bottom: -96px;
   left: -54px;
   width: 260px;
@@ -147,7 +147,7 @@
   background: radial-gradient(circle, rgba(121, 166, 215, 0.28), rgba(121, 166, 215, 0));
 }
 
-.ysp-daily-panel__header {
+.ysp-qc-panel__header {
   position: relative;
   z-index: 2;
   padding: 20px 22px 16px;
@@ -157,7 +157,7 @@
     #17314b;
 }
 
-.ysp-daily-panel__header::after {
+.ysp-qc-panel__header::after {
   content: "";
   position: absolute;
   inset: auto 22px 0 22px;
@@ -165,14 +165,14 @@
   background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0));
 }
 
-.ysp-daily-panel__header-top {
+.ysp-qc-panel__header-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
 }
 
-.ysp-daily-panel__header-actions {
+.ysp-qc-panel__header-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -180,7 +180,7 @@
   flex-wrap: wrap;
 }
 
-.ysp-daily-panel__title {
+.ysp-qc-panel__title {
   margin: 0;
   font-family: "STZhongsong", "Songti SC", "Noto Serif SC", serif;
   font-size: 22px;
@@ -188,7 +188,7 @@
   line-height: 1.15;
 }
 
-.ysp-daily-panel__header-chip {
+.ysp-qc-panel__header-chip {
   position: relative;
   z-index: 3;
   display: inline-flex;
@@ -209,15 +209,15 @@
   white-space: nowrap;
 }
 
-button.ysp-daily-panel__header-chip {
+button.ysp-qc-panel__header-chip {
   cursor: pointer;
 }
 
-button.ysp-daily-panel__header-chip:hover:not(:disabled) {
+button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.18);
 }
 
-.ysp-daily-panel__body {
+.ysp-qc-panel__body {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.78fr);
@@ -228,24 +228,24 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   min-height: 0;
 }
 
-.ysp-daily-panel__main,
-.ysp-daily-panel__side {
+.ysp-qc-panel__main,
+.ysp-qc-panel__side {
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-height: 0;
 }
 
-.ysp-daily-panel__main {
+.ysp-qc-panel__main {
   overflow-y: auto;
   padding-right: 4px;
 }
 
-.ysp-daily-panel__side {
+.ysp-qc-panel__side {
   overflow: hidden;
 }
 
-.ysp-daily-panel__section {
+.ysp-qc-panel__section {
   position: relative;
   padding: 16px;
   border-radius: 18px;
@@ -254,24 +254,24 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
-.ysp-daily-panel__section--compact {
+.ysp-qc-panel__section--compact {
   padding: 14px 16px;
 }
 
-.ysp-daily-panel__section--fill {
+.ysp-qc-panel__section--fill {
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-.ysp-daily-panel__toolbar {
+.ysp-qc-panel__toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 10px;
 }
 
-.ysp-daily-panel__label {
+.ysp-qc-panel__label {
   display: block;
   margin-bottom: 8px;
   font-size: 13px;
@@ -279,11 +279,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   color: #18344c;
 }
 
-.ysp-daily-panel__toolbar .ysp-daily-panel__label {
+.ysp-qc-panel__toolbar .ysp-qc-panel__label {
   margin-bottom: 0;
 }
 
-.ysp-daily-panel__toolbar-button {
+.ysp-qc-panel__toolbar-button {
   padding: 0;
   border: 0;
   background: transparent;
@@ -293,11 +293,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   cursor: pointer;
 }
 
-.ysp-daily-panel__toolbar-button:hover {
+.ysp-qc-panel__toolbar-button:hover {
   color: #17344d;
 }
 
-.ysp-daily-panel__date {
+.ysp-qc-panel__date {
   width: 100%;
   box-sizing: border-box;
   padding: 12px 14px;
@@ -310,25 +310,25 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   cursor: pointer;
 }
 
-.ysp-daily-panel__date-grid {
+.ysp-qc-panel__date-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
 }
 
-.ysp-daily-panel__date-field {
+.ysp-qc-panel__date-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.ysp-daily-panel__date-caption {
+.ysp-qc-panel__date-caption {
   font-size: 12px;
   font-weight: 700;
   color: #49657c;
 }
 
-.ysp-daily-panel__badge {
+.ysp-qc-panel__badge {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
@@ -340,7 +340,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   font-weight: 600;
 }
 
-.ysp-daily-panel__catalog {
+.ysp-qc-panel__catalog {
   display: grid;
   gap: 12px;
   flex: 1 1 auto;
@@ -349,7 +349,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   overflow-y: auto;
 }
 
-.ysp-daily-panel__group {
+.ysp-qc-panel__group {
   --accent: #3276aa;
   --accent-soft: rgba(50, 118, 170, 0.1);
   --accent-border: rgba(50, 118, 170, 0.16);
@@ -365,12 +365,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   cursor: pointer;
 }
 
-.ysp-daily-panel__group:hover {
+.ysp-qc-panel__group:hover {
   transform: translateY(-1px);
   box-shadow: 0 14px 26px rgba(23, 56, 84, 0.08);
 }
 
-.ysp-daily-panel__group.is-selected {
+.ysp-qc-panel__group.is-selected {
   border-color: color-mix(in srgb, var(--accent) 28%, white);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 82%, white), rgba(255, 255, 255, 0.94)),
@@ -379,32 +379,32 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
-.ysp-daily-panel__group[data-theme="knowledge"] {
+.ysp-qc-panel__group[data-theme="knowledge"] {
   --accent: #cf7d2e;
   --accent-soft: rgba(207, 125, 46, 0.12);
   --accent-border: rgba(207, 125, 46, 0.16);
   --accent-ink: #7d4b1f;
 }
 
-.ysp-daily-panel__group[data-theme="information"] {
+.ysp-qc-panel__group[data-theme="information"] {
   --accent: #4b7fab;
   --accent-soft: rgba(75, 127, 171, 0.12);
   --accent-border: rgba(75, 127, 171, 0.16);
   --accent-ink: #274766;
 }
 
-.ysp-daily-panel__group[data-theme="culture"] {
+.ysp-qc-panel__group[data-theme="culture"] {
   --accent: #be6b58;
   --accent-soft: rgba(190, 107, 88, 0.12);
   --accent-border: rgba(190, 107, 88, 0.16);
   --accent-ink: #733d31;
 }
 
-.ysp-daily-panel__group-header {
+.ysp-qc-panel__group-header {
   display: block;
 }
 
-.ysp-daily-panel__group-title {
+.ysp-qc-panel__group-title {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
@@ -412,18 +412,18 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   color: var(--accent-ink);
 }
 
-.ysp-daily-panel__actions {
+.ysp-qc-panel__actions {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
 }
 
-.ysp-daily-panel__side > .ysp-daily-panel__actions {
+.ysp-qc-panel__side > .ysp-qc-panel__actions {
   flex: 0 0 auto;
   margin-top: auto;
 }
 
-.ysp-daily-panel__button {
+.ysp-qc-panel__button {
   min-height: 48px;
   padding: 10px 12px;
   border: 0;
@@ -434,54 +434,54 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
 }
 
-.ysp-daily-panel__button:hover:not(:disabled) {
+.ysp-qc-panel__button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
-.ysp-daily-panel__button:disabled {
+.ysp-qc-panel__button:disabled {
   opacity: 0.5;
   cursor: default;
   transform: none;
   box-shadow: none;
 }
 
-.ysp-daily-panel__button.is-loading {
+.ysp-qc-panel__button.is-loading {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
 
-.ysp-daily-panel__button.is-loading::before {
+.ysp-qc-panel__button.is-loading::before {
   content: "";
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.45);
   border-top-color: #ffffff;
   border-radius: 50%;
-  animation: ysp-daily-panel-spin 0.8s linear infinite;
+  animation: ysp-qc-panel-spin 0.8s linear infinite;
 }
 
-@keyframes ysp-daily-panel-spin {
+@keyframes ysp-qc-panel-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.ysp-daily-panel__button--primary {
+.ysp-qc-panel__button--primary {
   background: linear-gradient(135deg, #0f7d94, #1f5f86);
   color: #ffffff;
   box-shadow: 0 14px 28px rgba(31, 95, 134, 0.2);
 }
 
-.ysp-daily-panel__button--danger {
+.ysp-qc-panel__button--danger {
   background: linear-gradient(135deg, rgba(255, 245, 241, 0.96), rgba(255, 236, 231, 0.96));
   color: #b3472f;
   border: 1px solid rgba(194, 92, 64, 0.18);
   box-shadow: 0 10px 20px rgba(194, 92, 64, 0.12);
 }
 
-.ysp-daily-panel__status {
+.ysp-qc-panel__status {
   display: grid;
   gap: 8px;
   width: 100%;
@@ -497,16 +497,16 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   flex: 0 0 auto;
 }
 
-.ysp-daily-panel__status-head {
+.ysp-qc-panel__status-head {
   display: flex;
   align-items: center;
 }
 
-.ysp-daily-panel__status-head .ysp-daily-panel__label {
+.ysp-qc-panel__status-head .ysp-qc-panel__label {
   margin-bottom: 0;
 }
 
-.ysp-daily-panel__status-value {
+.ysp-qc-panel__status-value {
   font-size: 15px;
   font-weight: 700;
   line-height: 1.6;
@@ -514,18 +514,18 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   word-break: break-word;
 }
 
-.ysp-daily-panel__status-subtext {
+.ysp-qc-panel__status-subtext {
   padding-top: 8px;
   border-top: 1px solid rgba(22, 51, 78, 0.08);
   font-size: 12px;
   color: #6b7a90;
 }
 
-.ysp-daily-panel__result-card {
+.ysp-qc-panel__result-card {
   flex: 0 0 auto;
 }
 
-.ysp-daily-panel__download-list {
+.ysp-qc-panel__download-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -534,7 +534,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   padding-right: 4px;
 }
 
-.ysp-daily-panel__log-card {
+.ysp-qc-panel__log-card {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -542,14 +542,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   overflow: hidden;
 }
 
-.ysp-daily-panel__log-list {
+.ysp-qc-panel__log-list {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
 }
 
-.ysp-daily-panel__log-entry {
+.ysp-qc-panel__log-entry {
   padding: 8px 0;
   border-bottom: 1px dashed #d8e2ee;
   color: #40556f;
@@ -558,7 +558,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   word-break: break-all;
 }
 
-.ysp-daily-panel__report {
+.ysp-qc-panel__report {
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -567,34 +567,34 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   border: 1px solid rgba(25, 56, 84, 0.08);
 }
 
-.ysp-daily-panel__report-empty {
+.ysp-qc-panel__report-empty {
   font-size: 12px;
   line-height: 1.6;
   color: #5d7690;
 }
 
-.ysp-daily-panel__report-top {
+.ysp-qc-panel__report-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.ysp-daily-panel__report-title {
+.ysp-qc-panel__report-title {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
   color: #18344c;
 }
 
-.ysp-daily-panel__report-meta {
+.ysp-qc-panel__report-meta {
   margin-top: 6px;
   font-size: 12px;
   line-height: 1.55;
   color: #54708a;
 }
 
-.ysp-daily-panel__download {
+.ysp-qc-panel__download {
   min-height: 40px;
   padding: 0 16px;
   border: 0;
@@ -607,19 +607,19 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   box-shadow: 0 10px 22px rgba(184, 94, 60, 0.2);
 }
 
-.ysp-daily-panel__download:disabled {
+.ysp-qc-panel__download:disabled {
   opacity: 0.5;
   cursor: default;
   box-shadow: none;
 }
 
-.ysp-daily-panel__report-tags {
+.ysp-qc-panel__report-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.ysp-daily-panel__dock {
+.ysp-qc-panel__dock {
   position: absolute;
   top: 50%;
   right: 0;
@@ -642,7 +642,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
 }
 
-#ysp-secondary-qc-panel-root.is-minimized .ysp-daily-panel__dock {
+#ysp-secondary-qc-panel-root.is-minimized .ysp-qc-panel__dock {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -654,50 +654,50 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     padding: 16px;
   }
 
-  .ysp-daily-panel {
+  .ysp-qc-panel {
     width: min(900px, calc(100vw - 24px));
   }
 }
 
 @media (max-width: 920px) {
-  .ysp-daily-panel {
+  .ysp-qc-panel {
     width: min(480px, calc(100vw - 24px));
   }
 
-  .ysp-daily-panel__body {
+  .ysp-qc-panel__body {
     grid-template-columns: 1fr;
     overflow-y: auto;
   }
 
-  .ysp-daily-panel__main,
-  .ysp-daily-panel__side {
+  .ysp-qc-panel__main,
+  .ysp-qc-panel__side {
     overflow: visible;
     padding-right: 0;
   }
 
-  .ysp-daily-panel__download-list,
-  .ysp-daily-panel__log-list {
+  .ysp-qc-panel__download-list,
+  .ysp-qc-panel__log-list {
     max-height: none;
     overflow: visible;
     padding-right: 0;
   }
 
-  .ysp-daily-panel__log-card {
+  .ysp-qc-panel__log-card {
     min-height: auto;
   }
 
-  .ysp-daily-panel__date-grid {
+  .ysp-qc-panel__date-grid {
     grid-template-columns: 1fr;
   }
 }
 
-.ysp-daily-panel__module-switcher {
+.ysp-qc-panel__module-switcher {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.ysp-daily-panel__module-tab {
+.ysp-qc-panel__module-tab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -713,54 +713,54 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.ysp-daily-panel__module-tab.is-active {
+.ysp-qc-panel__module-tab.is-active {
   border-color: rgba(31, 94, 139, 0.2);
   background: linear-gradient(135deg, rgba(27, 82, 122, 0.96), rgba(16, 50, 78, 0.98));
   color: #f9fbff;
   box-shadow: 0 10px 24px rgba(19, 57, 88, 0.18);
 }
 
-.ysp-daily-panel__module {
+.ysp-qc-panel__module {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.ysp-daily-panel__module-body {
+.ysp-qc-panel__module-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.ysp-daily-panel__module[hidden] {
+.ysp-qc-panel__module[hidden] {
   display: none;
 }
 
-.ysp-daily-panel__subheader {
+.ysp-qc-panel__subheader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.ysp-daily-panel__subheader-title {
+.ysp-qc-panel__subheader-title {
   font-size: 13px;
   font-weight: 700;
   color: #18344c;
 }
 
-.ysp-daily-panel__help {
+.ysp-qc-panel__help {
   font-size: 12px;
   color: #617688;
 }
 
-.ysp-daily-panel__field-grid {
+.ysp-qc-panel__field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.ysp-daily-panel__field {
+.ysp-qc-panel__field {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -768,7 +768,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   overflow: visible;
 }
 
-.ysp-daily-panel__input {
+.ysp-qc-panel__input {
   width: 100%;
   box-sizing: border-box;
   padding: 12px 14px;
@@ -780,30 +780,30 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   box-shadow: inset 0 1px 2px rgba(17, 41, 66, 0.04);
 }
 
-.ysp-daily-panel__input:disabled {
+.ysp-qc-panel__input:disabled {
   opacity: 0.65;
   cursor: not-allowed;
 }
 
-.ysp-daily-panel__group-picker {
+.ysp-qc-panel__group-picker {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
-.ysp-daily-panel__popup-layer {
+.ysp-qc-panel__popup-layer {
   position: fixed;
   inset: 0;
   z-index: 12;
   pointer-events: none;
 }
 
-.ysp-daily-panel__popup-layer > * {
+.ysp-qc-panel__popup-layer > * {
   pointer-events: auto;
 }
 
-.ysp-daily-panel__group-trigger {
+.ysp-qc-panel__group-trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -821,18 +821,18 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
-.ysp-daily-panel__group-trigger:disabled {
+.ysp-qc-panel__group-trigger:disabled {
   opacity: 0.65;
   cursor: not-allowed;
 }
 
-.ysp-daily-panel__group-picker.is-open .ysp-daily-panel__group-trigger {
+.ysp-qc-panel__group-picker.is-open .ysp-qc-panel__group-trigger {
   border-color: rgba(31, 94, 139, 0.32);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 0 0 3px rgba(46, 110, 158, 0.1), inset 0 1px 2px rgba(17, 41, 66, 0.04);
 }
 
-.ysp-daily-panel__group-trigger-text {
+.ysp-qc-panel__group-trigger-text {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -841,13 +841,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   text-overflow: ellipsis;
 }
 
-.ysp-daily-panel__group-trigger-icon {
+.ysp-qc-panel__group-trigger-icon {
   flex: 0 0 auto;
   color: #60778d;
   font-size: 12px;
 }
 
-.ysp-daily-panel__group-menu {
+.ysp-qc-panel__group-menu {
   position: fixed;
   left: var(--menu-left, 12px);
   width: var(--menu-width, 360px);
@@ -865,10 +865,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   box-shadow: 0 18px 36px rgba(23, 56, 84, 0.16);
   backdrop-filter: blur(16px);
   transform-origin: top left;
-  animation: ysp-daily-panel__group-menu-in 0.18s ease;
+  animation: ysp-qc-panel__group-menu-in 0.18s ease;
 }
 
-@keyframes ysp-daily-panel__group-menu-in {
+@keyframes ysp-qc-panel__group-menu-in {
   from {
     opacity: 0;
     transform: translateY(-6px);
@@ -879,7 +879,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   }
 }
 
-.ysp-daily-panel__group-option {
+.ysp-qc-panel__group-option {
   --accent: #3276aa;
   --accent-soft: rgba(50, 118, 170, 0.1);
   --accent-border: rgba(50, 118, 170, 0.14);
@@ -899,61 +899,61 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   cursor: pointer;
 }
 
-.ysp-daily-panel__group-option:hover {
+.ysp-qc-panel__group-option:hover {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 44%, white), rgba(255, 255, 255, 0.94));
 }
 
-.ysp-daily-panel__group-option.is-selected {
+.ysp-qc-panel__group-option.is-selected {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 78%, white), rgba(255, 255, 255, 0.96));
   border-color: color-mix(in srgb, var(--accent) 26%, white);
 }
 
-.ysp-daily-panel__group-option:disabled {
+.ysp-qc-panel__group-option:disabled {
   opacity: 0.65;
   cursor: not-allowed;
 }
 
-.ysp-daily-panel__group-option[data-theme="knowledge"] {
+.ysp-qc-panel__group-option[data-theme="knowledge"] {
   --accent: #cf7d2e;
   --accent-soft: rgba(207, 125, 46, 0.12);
   --accent-border: rgba(207, 125, 46, 0.16);
   --accent-ink: #7d4b1f;
 }
 
-.ysp-daily-panel__group-option[data-theme="information"] {
+.ysp-qc-panel__group-option[data-theme="information"] {
   --accent: #4b7fab;
   --accent-soft: rgba(75, 127, 171, 0.12);
   --accent-border: rgba(75, 127, 171, 0.16);
   --accent-ink: #274766;
 }
 
-.ysp-daily-panel__group-option[data-theme="culture"] {
+.ysp-qc-panel__group-option[data-theme="culture"] {
   --accent: #be6b58;
   --accent-soft: rgba(190, 107, 88, 0.12);
   --accent-border: rgba(190, 107, 88, 0.16);
   --accent-ink: #733d31;
 }
 
-.ysp-daily-panel__group-option-copy {
+.ysp-qc-panel__group-option-copy {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.ysp-daily-panel__group-option-meta {
+.ysp-qc-panel__group-option-meta {
   font-size: 11px;
   font-weight: 700;
   color: #6a7f91;
 }
 
-.ysp-daily-panel__group-option-label {
+.ysp-qc-panel__group-option-label {
   font-size: 14px;
   font-weight: 700;
   line-height: 1.5;
   color: inherit;
 }
 
-.ysp-daily-panel__group-option-check {
+.ysp-qc-panel__group-option-check {
   flex: 0 0 auto;
   font-size: 12px;
   font-weight: 700;
@@ -961,45 +961,45 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-.ysp-daily-panel__input--secret {
+.ysp-qc-panel__input--secret {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.ysp-daily-panel__hint {
+.ysp-qc-panel__hint {
   font-size: 12px;
   line-height: 1.6;
   color: #5f7284;
 }
 
-.ysp-daily-panel__group-grid {
+.ysp-qc-panel__group-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.ysp-daily-panel__group-note {
+.ysp-qc-panel__group-note {
   font-size: 12px;
   color: #5d7183;
 }
 
-.ysp-daily-panel__button-row {
+.ysp-qc-panel__button-row {
   display: flex;
   gap: 12px;
 }
 
-.ysp-daily-panel__button-row > * {
+.ysp-qc-panel__button-row > * {
   flex: 1 1 0;
 }
 
-.ysp-daily-panel__stack {
+.ysp-qc-panel__stack {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.ysp-daily-panel__status-card,
-.ysp-daily-panel__result-card,
-.ysp-daily-panel__log-card {
+.ysp-qc-panel__status-card,
+.ysp-qc-panel__result-card,
+.ysp-qc-panel__log-card {
   padding: 14px 16px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.72);
@@ -1007,35 +1007,35 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
-.ysp-daily-panel__status-title,
-.ysp-daily-panel__log-title,
-.ysp-daily-panel__result-title {
+.ysp-qc-panel__status-title,
+.ysp-qc-panel__log-title,
+.ysp-qc-panel__result-title {
   margin: 0 0 8px;
   font-size: 14px;
   font-weight: 700;
   color: #18344c;
 }
 
-.ysp-daily-panel__status-text {
+.ysp-qc-panel__status-text {
   font-size: 13px;
   line-height: 1.7;
   color: #28445a;
   white-space: pre-wrap;
 }
 
-.ysp-daily-panel__result-empty,
-.ysp-daily-panel__log-empty {
+.ysp-qc-panel__result-empty,
+.ysp-qc-panel__log-empty {
   font-size: 12px;
   color: #6d7e8d;
 }
 
-.ysp-daily-panel__result-list {
+.ysp-qc-panel__result-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.ysp-daily-panel__result-item {
+.ysp-qc-panel__result-item {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1046,20 +1046,20 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   border: 1px solid rgba(25, 56, 84, 0.08);
 }
 
-.ysp-daily-panel__result-head {
+.ysp-qc-panel__result-head {
   margin: 0 0 4px;
   font-size: 13px;
   font-weight: 700;
   color: #1e4260;
 }
 
-.ysp-daily-panel__result-meta {
+.ysp-qc-panel__result-meta {
   font-size: 12px;
   line-height: 1.6;
   color: #5d7082;
 }
 
-.ysp-daily-panel__link-button {
+.ysp-qc-panel__link-button {
   min-width: 86px;
   min-height: 34px;
   padding: 0 12px;
@@ -1072,7 +1072,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   cursor: pointer;
 }
 
-.ysp-daily-panel__log-list {
+.ysp-qc-panel__log-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1083,14 +1083,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   overflow-y: auto;
 }
 
-.ysp-daily-panel__log-item {
+.ysp-qc-panel__log-item {
   font-size: 12px;
   line-height: 1.6;
   color: #28445a;
   word-break: break-all;
 }
 
-.ysp-daily-panel__settings-trigger {
+.ysp-qc-panel__settings-trigger {
   min-width: 56px;
   min-height: 32px;
   padding: 0 12px;
@@ -1103,7 +1103,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   cursor: pointer;
 }
 
-.ysp-daily-panel__modal-mask {
+.ysp-qc-panel__modal-mask {
   position: absolute;
   inset: 0;
   z-index: 6;
@@ -1119,13 +1119,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   transition: opacity 0.18s ease, visibility 0.18s ease;
 }
 
-#ysp-secondary-qc-panel-root.is-settings-open .ysp-daily-panel__modal-mask {
+#ysp-secondary-qc-panel-root.is-settings-open .ysp-qc-panel__modal-mask {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
 }
 
-.ysp-daily-panel__modal {
+.ysp-qc-panel__modal {
   width: min(440px, 100%);
   pointer-events: auto;
   display: grid;
@@ -1137,40 +1137,47 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   box-shadow: 0 24px 60px rgba(19, 45, 71, 0.2);
 }
 
-.ysp-daily-panel__modal-title {
+.ysp-qc-panel__modal-title {
   margin: 0 0 6px;
   font-size: 18px;
   font-weight: 700;
   color: #18344c;
 }
 
-.ysp-daily-panel__modal-text {
+.ysp-qc-panel__modal-text {
   margin: 0 0 16px;
   font-size: 13px;
   line-height: 1.7;
   color: #5d7082;
 }
 
-.ysp-daily-panel__modal-actions {
+.ysp-qc-panel__modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 18px;
 }
 
-.ysp-daily-panel__modal-actions button {
+.ysp-qc-panel__modal-actions button {
   min-width: 92px;
 }
 
 @media (max-width: 920px) {
-  .ysp-daily-panel__field-grid,
-  .ysp-daily-panel__group-grid {
+  .ysp-qc-panel__field-grid,
+  .ysp-qc-panel__group-grid {
     grid-template-columns: 1fr;
   }
 
-  .ysp-daily-panel__button-row {
+  .ysp-qc-panel__button-row {
     flex-direction: column;
   }
+}
+
+.ysp-qc-panel__download-card {
+  padding: 12px;
+  border: 1px solid #d8e2ee;
+  border-radius: 16px;
+  background: #fff;
 }
   `;
 
@@ -1428,6 +1435,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   function cloneWorkbenchSettings(settings) {
     return normalizeWorkbenchSettings(JSON.parse(JSON.stringify(settings || createDefaultWorkbenchSettings())));
   }
+  /* ===================================================================
+   *  SHARED UTILITIES -- keep identical across tags/daily/qc
+   *  Last synced: 2026-05-11
+   * =================================================================== */
+
   function injectPanelStyle() {
     GM_addStyle(PANEL_STYLE);
   }
@@ -1597,7 +1609,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   }
 
   function normalizeText(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim();
+    return String(value == null ? '' : value)
+      .replace(/\s+/g, ' ')
+      .replace(/ /g, ' ')
+      .trim();
   }
 
   function normalizeMultilineText(value) {
@@ -1768,6 +1783,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     date.setHours(0, 0, 0, 0);
     return formatInputDate(date);
   }
+
+  /* =================================================================== */
 
   function buildDateList(startDateString, endDateString) {
     const startDate = normalizeText(startDateString);
@@ -5947,13 +5964,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const root = document.createElement('div');
       root.id = 'ysp-secondary-qc-panel-root';
       root.innerHTML = `
-        <div class="ysp-daily-panel__backdrop"></div><div class="ysp-daily-panel__popup-layer" data-role="popup-layer"></div>
-        <div class="ysp-daily-panel"><div class="ysp-daily-panel__header"><div class="ysp-daily-panel__header-top"><div><div class="ysp-daily-panel__title">央视频二次质检助手</div></div><div class="ysp-daily-panel__header-actions"><button type="button" class="ysp-daily-panel__header-chip" data-role="open-settings">设置</button><div class="ysp-daily-panel__header-chip">v${SCRIPT_VERSION}</div><button type="button" class="ysp-daily-panel__header-chip" data-role="minimize">收起</button></div></div></div>
-          <div class="ysp-daily-panel__body"><div class="ysp-daily-panel__main"><section class="ysp-daily-panel__module"><div class="ysp-daily-panel__module-body"><div class="ysp-daily-panel__field-grid"><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-start-date"><span class="ysp-daily-panel__date-caption">开始日期</span><input id="ysp-secondary-qc-start-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-end-date"><span class="ysp-daily-panel__date-caption">结束日期</span><input id="ysp-secondary-qc-end-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-target-count"><span class="ysp-daily-panel__date-caption">目标条数</span><input id="ysp-secondary-qc-target-count" class="ysp-daily-panel__input" type="number" min="1" max="999" step="1" /></label></div><div class="ysp-daily-panel__field"><span class="ysp-daily-panel__label">质检品类</span><div data-role="secondary-qc-groups"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-secondary-qc">开始质检</button></div></div></section></div><div class="ysp-daily-panel__side"><div class="ysp-daily-panel__status" data-role="status"></div><div class="ysp-daily-panel__log-card"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">运行日志</span></div><div class="ysp-daily-panel__log-list" data-role="logs"></div></div><div class="ysp-daily-panel__result-card" data-role="downloads-card" hidden><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">下载中心</span></div><div class="ysp-daily-panel__download-list" data-role="downloads"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button><button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button></div></div></div></div>
-        <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button><div class="ysp-daily-panel__modal-mask" data-role="settings-mask"><div class="ysp-daily-panel__modal"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">设置</span></div><label class="ysp-daily-panel__date-field" for="ysp-settings-config-workbook-file"><span class="ysp-daily-panel__date-caption">上传配置 XLSX（本地保存）</span><input id="ysp-settings-config-workbook-file" class="ysp-daily-panel__input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label><div class="ysp-daily-panel__status-subtext" data-role="config-workbook-file-status"></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-config">清理配置</button><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-tag-cache">清理缓存</button></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="save-settings">保存设置</button><button type="button" class="ysp-daily-panel__button" data-role="close-settings">关闭</button></div></div></div>`;
+        <div class="ysp-qc-panel__backdrop"></div><div class="ysp-qc-panel__popup-layer" data-role="popup-layer"></div>
+        <div class="ysp-qc-panel"><div class="ysp-qc-panel__header"><div class="ysp-qc-panel__header-top"><div><div class="ysp-qc-panel__title">央视频二次质检助手</div></div><div class="ysp-qc-panel__header-actions"><button type="button" class="ysp-qc-panel__header-chip" data-role="open-settings">设置</button><div class="ysp-qc-panel__header-chip">v${SCRIPT_VERSION}</div><button type="button" class="ysp-qc-panel__header-chip" data-role="minimize">收起</button></div></div></div>
+          <div class="ysp-qc-panel__body"><div class="ysp-qc-panel__main"><section class="ysp-qc-panel__module"><div class="ysp-qc-panel__module-body"><div class="ysp-qc-panel__field-grid"><label class="ysp-qc-panel__date-field" for="ysp-secondary-qc-start-date"><span class="ysp-qc-panel__date-caption">开始日期</span><input id="ysp-secondary-qc-start-date" class="ysp-qc-panel__date" type="date" /></label><label class="ysp-qc-panel__date-field" for="ysp-secondary-qc-end-date"><span class="ysp-qc-panel__date-caption">结束日期</span><input id="ysp-secondary-qc-end-date" class="ysp-qc-panel__date" type="date" /></label><label class="ysp-qc-panel__date-field" for="ysp-secondary-qc-target-count"><span class="ysp-qc-panel__date-caption">目标条数</span><input id="ysp-secondary-qc-target-count" class="ysp-qc-panel__input" type="number" min="1" max="999" step="1" /></label></div><div class="ysp-qc-panel__field"><span class="ysp-qc-panel__label">质检品类</span><div data-role="secondary-qc-groups"></div></div><div class="ysp-qc-panel__actions"><button type="button" class="ysp-qc-panel__button ysp-qc-panel__button--primary" data-role="start-secondary-qc">开始质检</button></div></div></section></div><div class="ysp-qc-panel__side"><div class="ysp-qc-panel__status" data-role="status"></div><div class="ysp-qc-panel__log-card"><div class="ysp-qc-panel__toolbar"><span class="ysp-qc-panel__label">运行日志</span></div><div class="ysp-qc-panel__log-list" data-role="logs"></div></div><div class="ysp-qc-panel__result-card" data-role="downloads-card" hidden><div class="ysp-qc-panel__toolbar"><span class="ysp-qc-panel__label">下载中心</span></div><div class="ysp-qc-panel__download-list" data-role="downloads"></div></div><div class="ysp-qc-panel__actions"><button type="button" class="ysp-qc-panel__button" data-role="pause-resume">暂停任务</button><button type="button" class="ysp-qc-panel__button" data-role="stop">结束任务</button></div></div></div></div>
+        <button type="button" class="ysp-qc-panel__dock" data-role="dock"><</button><div class="ysp-qc-panel__modal-mask" data-role="settings-mask"><div class="ysp-qc-panel__modal"><div class="ysp-qc-panel__toolbar"><span class="ysp-qc-panel__label">设置</span></div><label class="ysp-qc-panel__date-field" for="ysp-settings-config-workbook-file"><span class="ysp-qc-panel__date-caption">上传配置 XLSX（本地保存）</span><input id="ysp-settings-config-workbook-file" class="ysp-qc-panel__input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label><div class="ysp-qc-panel__status-subtext" data-role="config-workbook-file-status"></div><div class="ysp-qc-panel__actions"><button type="button" class="ysp-qc-panel__button ysp-qc-panel__button--danger" data-role="clear-config">清理配置</button><button type="button" class="ysp-qc-panel__button ysp-qc-panel__button--danger" data-role="clear-tag-cache">清理缓存</button></div><div class="ysp-qc-panel__actions"><button type="button" class="ysp-qc-panel__button ysp-qc-panel__button--primary" data-role="save-settings">保存设置</button><button type="button" class="ysp-qc-panel__button" data-role="close-settings">关闭</button></div></div></div>`;
       document.body.appendChild(root);
       this.panel = root;
-      this.refs = { backdrop: root.querySelector('.ysp-daily-panel__backdrop'), popupLayer: root.querySelector('[data-role="popup-layer"]'), surface: root.querySelector('.ysp-daily-panel'), dock: root.querySelector('[data-role="dock"]'), minimize: root.querySelector('[data-role="minimize"]'), openSettings: root.querySelector('[data-role="open-settings"]'), settingsMask: root.querySelector('[data-role="settings-mask"]'), configWorkbookFileInput: root.querySelector('#ysp-settings-config-workbook-file'), configWorkbookFileStatus: root.querySelector('[data-role="config-workbook-file-status"]'), saveSettings: root.querySelector('[data-role="save-settings"]'), closeSettings: root.querySelector('[data-role="close-settings"]'), secondaryQcStartDate: root.querySelector('#ysp-secondary-qc-start-date'), secondaryQcEndDate: root.querySelector('#ysp-secondary-qc-end-date'), secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'), secondaryQcGroups: root.querySelector('[data-role="secondary-qc-groups"]'), startSecondaryQc: root.querySelector('[data-role="start-secondary-qc"]'), pauseResume: root.querySelector('[data-role="pause-resume"]'), stop: root.querySelector('[data-role="stop"]'), clearConfig: root.querySelector('[data-role="clear-config"]'), clearTagCache: root.querySelector('[data-role="clear-tag-cache"]'), status: root.querySelector('[data-role="status"]'), downloadsCard: root.querySelector('[data-role="downloads-card"]'), downloads: root.querySelector('[data-role="downloads"]'), logs: root.querySelector('[data-role="logs"]') };
+      this.refs = { backdrop: root.querySelector('.ysp-qc-panel__backdrop'), popupLayer: root.querySelector('[data-role="popup-layer"]'), surface: root.querySelector('.ysp-qc-panel'), dock: root.querySelector('[data-role="dock"]'), minimize: root.querySelector('[data-role="minimize"]'), openSettings: root.querySelector('[data-role="open-settings"]'), settingsMask: root.querySelector('[data-role="settings-mask"]'), configWorkbookFileInput: root.querySelector('#ysp-settings-config-workbook-file'), configWorkbookFileStatus: root.querySelector('[data-role="config-workbook-file-status"]'), saveSettings: root.querySelector('[data-role="save-settings"]'), closeSettings: root.querySelector('[data-role="close-settings"]'), secondaryQcStartDate: root.querySelector('#ysp-secondary-qc-start-date'), secondaryQcEndDate: root.querySelector('#ysp-secondary-qc-end-date'), secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'), secondaryQcGroups: root.querySelector('[data-role="secondary-qc-groups"]'), startSecondaryQc: root.querySelector('[data-role="start-secondary-qc"]'), pauseResume: root.querySelector('[data-role="pause-resume"]'), stop: root.querySelector('[data-role="stop"]'), clearConfig: root.querySelector('[data-role="clear-config"]'), clearTagCache: root.querySelector('[data-role="clear-tag-cache"]'), status: root.querySelector('[data-role="status"]'), downloadsCard: root.querySelector('[data-role="downloads-card"]'), downloads: root.querySelector('[data-role="downloads"]'), logs: root.querySelector('[data-role="logs"]') };
       this.bindPanelEvents();
       this.syncSettingsToInputs();
       this.render();
@@ -5969,7 +5986,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     getGroupPickerSummary() { const entry = getCategoryEntry(this.settings.categoryKey); return entry ? `${entry.groupLabel} / ${entry.exportLabel}` : '请选择质检品类'; }
     getGroupTriggerElement() { return this.refs.secondaryQcGroups ? this.refs.secondaryQcGroups.querySelector('[data-role="group-trigger"]') : null; }
     getGroupMenuLayout() { const trigger = this.getGroupTriggerElement(); if (!trigger) return null; const rect = trigger.getBoundingClientRect(); const viewportPadding = 12; const gap = 8; const width = Math.min(Math.max(Math.round(rect.width), 360), Math.max(320, window.innerWidth - viewportPadding * 2)); const left = Math.min(Math.max(viewportPadding, Math.round(rect.left)), Math.max(viewportPadding, window.innerWidth - width - viewportPadding)); const preferredHeight = 360; const belowSpace = Math.max(160, Math.floor(window.innerHeight - rect.bottom - gap - viewportPadding)); const aboveSpace = Math.max(160, Math.floor(rect.top - gap - viewportPadding)); const openUpward = belowSpace < 220 && aboveSpace > belowSpace; return { left, width, maxHeight: Math.min(preferredHeight, openUpward ? aboveSpace : belowSpace), top: openUpward ? null : Math.round(rect.bottom + gap), bottom: openUpward ? Math.round(window.innerHeight - rect.top + gap) : null }; }
-    renderFloatingGroupMenu() { if (!this.refs.popupLayer) return; if (!this.runtime.openGroupMenu || this.runtime.running || this.runtime.minimized) { this.refs.popupLayer.innerHTML = ''; return; } const layout = this.getGroupMenuLayout(); if (!layout) { this.refs.popupLayer.innerHTML = ''; return; } const styleTokens = [`--menu-left:${layout.left}px`, `--menu-width:${layout.width}px`, `--menu-max-height:${layout.maxHeight}px`, layout.top === null ? 'top:auto' : `top:${layout.top}px`, layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`]; const selectedKey = normalizeText(this.settings.categoryKey); this.refs.popupLayer.innerHTML = `<div class="ysp-daily-panel__group-menu" data-role="group-menu" role="listbox" aria-label="质检品类选项" style="${styleTokens.join(';')}">${CATEGORY_ENTRIES.map((entry) => { const selectedClass = selectedKey === entry.key ? ' is-selected' : ''; return `<button type="button" class="ysp-daily-panel__group-option${selectedClass}" data-theme="${escapeXml(entry.theme)}" data-role="category-option" data-category-key="${escapeXml(entry.key)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-option-copy"><span class="ysp-daily-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span><span class="ysp-daily-panel__group-option-label">${escapeXml(entry.exportLabel)}</span></span><span class="ysp-daily-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span></button>`; }).join('')}</div>`; }
+    renderFloatingGroupMenu() { if (!this.refs.popupLayer) return; if (!this.runtime.openGroupMenu || this.runtime.running || this.runtime.minimized) { this.refs.popupLayer.innerHTML = ''; return; } const layout = this.getGroupMenuLayout(); if (!layout) { this.refs.popupLayer.innerHTML = ''; return; } const styleTokens = [`--menu-left:${layout.left}px`, `--menu-width:${layout.width}px`, `--menu-max-height:${layout.maxHeight}px`, layout.top === null ? 'top:auto' : `top:${layout.top}px`, layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`]; const selectedKey = normalizeText(this.settings.categoryKey); this.refs.popupLayer.innerHTML = `<div class="ysp-qc-panel__group-menu" data-role="group-menu" role="listbox" aria-label="质检品类选项" style="${styleTokens.join(';')}">${CATEGORY_ENTRIES.map((entry) => { const selectedClass = selectedKey === entry.key ? ' is-selected' : ''; return `<button type="button" class="ysp-qc-panel__group-option${selectedClass}" data-theme="${escapeXml(entry.theme)}" data-role="category-option" data-category-key="${escapeXml(entry.key)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-qc-panel__group-option-copy"><span class="ysp-qc-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span><span class="ysp-qc-panel__group-option-label">${escapeXml(entry.exportLabel)}</span></span><span class="ysp-qc-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span></button>`; }).join('')}</div>`; }
     async persistSettings() { await storageSetCached({ [STORAGE_KEYS.settings]: cloneWorkbenchSettings(this.settings) }); }
     syncSettingsToInputs() {
       const maxDate = getTodayDateString();
@@ -6131,10 +6148,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.render();
       this.pushLog('已清理缓存');
     }
-    renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'secondaryQc'; const triggerSummary = this.getGroupPickerSummary(); this.refs.secondaryQcGroups.innerHTML = `<div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
-    renderStatus() { const pageText = isListPage() ? '当前页面：列表页，可开始或继续质检' : isDetailPage() ? '当前页面：详情页，点击开始会自动回到列表页' : '当前页面：其他页面，请回标准化列表页操作'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：二次质检</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
-    renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div style="padding: 12px; border: 1px solid #d8e2ee; border-radius: 12px; background: #fff;"><div style="font-weight: 700; color: #17324f;">二次质检结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div style="margin-top: 4px; color: #6b7a90;">目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条</div><div class="ysp-daily-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="secondaryQc">下载质检表</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
-    renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(formatUserVisibleLogText(log))}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
+    renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'secondaryQc'; const triggerSummary = this.getGroupPickerSummary(); this.refs.secondaryQcGroups.innerHTML = `<div class="ysp-qc-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-qc-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-qc-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-qc-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
+    renderStatus() { const pageText = isListPage() ? '当前页面：列表页，可开始或继续质检' : isDetailPage() ? '当前页面：详情页，点击开始会自动回到列表页' : '当前页面：其他页面，请回标准化列表页操作'; this.refs.status.innerHTML = `<div class="ysp-qc-panel__status-head"><span class="ysp-qc-panel__label">当前状态</span></div><div class="ysp-qc-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-qc-panel__status-subtext">任务类型：二次质检</div><div class="ysp-qc-panel__status-subtext">${escapeXml(pageText)}</div>`; }
+    renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div class="ysp-qc-panel__download-card"><div style="font-weight: 700; color: #17324f;">二次质检结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div style="margin-top: 4px; color: #6b7a90;">目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条</div><div class="ysp-qc-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-qc-panel__button ysp-qc-panel__button--primary" data-download-role="secondaryQc">下载质检表</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
+    renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-qc-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-qc-panel__log-entry">${escapeXml(formatUserVisibleLogText(log))}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
     render() {
       if (!this.panel) return;
       if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = '';
@@ -6168,7 +6185,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const pausedTask = this.getPausedTaskMeta();
       this.refs.pauseResume.disabled = !disabled && (!pausedTask || !listPageActive);
       this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? '继续质检' : '继续任务';
-      this.refs.pauseResume.classList.toggle('ysp-daily-panel__button--primary', !disabled && Boolean(pausedTask));
+      this.refs.pauseResume.classList.toggle('ysp-qc-panel__button--primary', !disabled && Boolean(pausedTask));
       this.refs.startSecondaryQc.textContent = disabled ? '质检运行中' : '开始质检';
       this.renderStatus();
       this.renderDownloads();
