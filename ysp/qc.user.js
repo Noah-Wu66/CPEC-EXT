@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.3
+// @version      1.1.4
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -429,6 +429,29 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   cursor: default;
   transform: none;
   box-shadow: none;
+}
+
+.ysp-daily-panel__button.is-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ysp-daily-panel__button.is-loading::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: ysp-daily-panel-spin 0.8s linear infinite;
+}
+
+@keyframes ysp-daily-panel-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .ysp-daily-panel__button--primary {
@@ -5688,7 +5711,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.settingsModalOpen = false;
       this.settingsDraft = createDefaultWorkbenchSettings();
       this.settings = createDefaultWorkbenchSettings();
-      this.runtime = { minimized: false, running: false, openGroupMenu: '', jobType: '', listJobAbortToken: 0, stopping: false, pauseRequested: false, statusText: '等待开始', logs: [], checkpoint: null, report: null };
+      this.runtime = { minimized: false, running: false, openGroupMenu: '', jobType: '', listJobAbortToken: 0, stopping: false, pauseRequested: false, settingsSaving: false, settingsSavingText: '', statusText: '等待开始', logs: [], checkpoint: null, report: null };
       this.refs = {};
     }
 
@@ -5736,13 +5759,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.refs.secondaryQcTargetCount.value = String(this.settings.targetCount || 10);
       if (this.refs.configWorkbookFileInput) this.refs.configWorkbookFileInput.value = '';
       if (this.refs.configWorkbookFileStatus) {
+        const savingText = normalizeText(this.runtime.settingsSavingText);
         const fileName = normalizeText(this.settingsDraft.configWorkbookFileName);
         const tagCount = Math.max(0, Math.trunc(Number(this.settingsDraft.tagLibraryCount) || 0));
         const ruleCount = Math.max(0, Math.trunc(Number(this.settingsDraft.configWorkbookRuleCount) || 0));
         const apiKeyReady = normalizeText(this.settingsDraft.secrets && this.settingsDraft.secrets.arkApiKey) ? 'API Key 已读取' : 'API Key 未读取';
-        this.refs.configWorkbookFileStatus.textContent = fileName
+        this.refs.configWorkbookFileStatus.textContent = savingText || (fileName
           ? `已上传：${fileName}${tagCount ? `，标签 ${tagCount} 条` : ''}${ruleCount ? `，规则 ${ruleCount} 条` : ''}，${apiKeyReady}`
-          : '未上传配置 XLSX';
+          : '未上传配置 XLSX');
       }
     }
     bindDateInput(input, handler) { input.setAttribute('inputmode', 'none'); input.addEventListener('click', () => this.openDatePicker(input)); input.addEventListener('focus', () => window.setTimeout(() => this.openDatePicker(input), 0)); input.addEventListener('keydown', (event) => { if (event.key === 'Tab') return; event.preventDefault(); if (event.key === 'Enter' || event.key === ' ') this.openDatePicker(input); }); input.addEventListener('beforeinput', (event) => event.preventDefault()); input.addEventListener('paste', (event) => event.preventDefault()); input.addEventListener('drop', (event) => event.preventDefault()); input.addEventListener('wheel', (event) => event.preventDefault(), { passive: false }); input.addEventListener('change', handler); }
@@ -5809,23 +5833,33 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     openSettingsModal() { this.settingsDraft = cloneWorkbenchSettings(this.settings); this.settingsModalOpen = true; this.runtime.openGroupMenu = ''; this.syncSettingsToInputs(); this.render(); if (this.refs.configWorkbookFileInput) this.refs.configWorkbookFileInput.focus(); }
     closeSettingsModal() { this.settingsModalOpen = false; this.render(); }
     async saveSettingsModal() {
+      if (this.runtime.settingsSaving) return;
       const workbookFile = this.refs.configWorkbookFileInput && this.refs.configWorkbookFileInput.files && this.refs.configWorkbookFileInput.files.length ? this.refs.configWorkbookFileInput.files[0] : null;
-      if (workbookFile) {
-        const workbookMeta = await saveUploadedConfigWorkbookFile(workbookFile);
-        this.settings.configWorkbookFileName = workbookMeta.fileName;
-        this.settings.configWorkbookUploadedAt = workbookMeta.uploadedAt;
-        this.settings.configWorkbookRuleCount = workbookMeta.categoryRuleCount;
-        this.settings.categoryRulesContent = workbookMeta.categoryRulesContent;
-        this.settings.tagLibraryFileName = workbookMeta.fileName;
-        this.settings.tagLibraryUploadedAt = workbookMeta.uploadedAt;
-        this.settings.tagLibraryCount = workbookMeta.tagLibraryCount;
-        this.settings.secrets.arkApiKey = workbookMeta.arkApiKey;
-      }
-      this.settingsDraft = cloneWorkbenchSettings(this.settings);
-      this.settingsModalOpen = false;
+      this.runtime.settingsSaving = true;
+      this.runtime.settingsSavingText = workbookFile ? '正在读取配置 XLSX，请稍候' : '正在保存设置，请稍候';
       this.render();
-      await this.persistSettings();
-      this.pushLog('设置已保存');
+      await sleep(60);
+      try {
+        if (workbookFile) {
+          const workbookMeta = await saveUploadedConfigWorkbookFile(workbookFile);
+          this.settings.configWorkbookFileName = workbookMeta.fileName;
+          this.settings.configWorkbookUploadedAt = workbookMeta.uploadedAt;
+          this.settings.configWorkbookRuleCount = workbookMeta.categoryRuleCount;
+          this.settings.categoryRulesContent = workbookMeta.categoryRulesContent;
+          this.settings.tagLibraryFileName = workbookMeta.fileName;
+          this.settings.tagLibraryUploadedAt = workbookMeta.uploadedAt;
+          this.settings.tagLibraryCount = workbookMeta.tagLibraryCount;
+          this.settings.secrets.arkApiKey = workbookMeta.arkApiKey;
+        }
+        await this.persistSettings();
+        this.settingsDraft = cloneWorkbenchSettings(this.settings);
+        this.settingsModalOpen = false;
+        this.pushLog('设置已保存');
+      } finally {
+        this.runtime.settingsSaving = false;
+        this.runtime.settingsSavingText = '';
+        this.render();
+      }
     }
     async clearConfigWorkbookData() {
       if (this.runtime.running) return;
@@ -5860,7 +5894,42 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     renderStatus() { const pageText = isListPage() ? '当前页面：列表页' : isDetailPage() ? '当前页面：详情页，只保留质检处理；开始或继续任务请回列表页' : '当前页面：其他页面'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：二次质检</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
     renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div style="padding: 12px; border: 1px solid #d8e2ee; border-radius: 12px; background: #fff;"><div style="font-weight: 700; color: #17324f;">二次质检结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div style="margin-top: 4px; color: #6b7a90;">目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条</div><div class="ysp-daily-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="secondaryQc">下载质检表</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
     renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(log)}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
-    render() { if (!this.panel) return; if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = ''; const listPageActive = isListPage(); if (this.runtime.running) enforcePageMuted({ pausePlayback: isDetailPage() }); else releasePageMuted(); this.panel.classList.toggle('is-minimized', this.runtime.minimized); this.panel.classList.toggle('is-settings-open', this.settingsModalOpen); this.syncSettingsToInputs(); this.renderGroupSelector(); this.renderFloatingGroupMenu(); const disabled = this.runtime.running; this.refs.secondaryQcStartDate.disabled = disabled; this.refs.secondaryQcEndDate.disabled = disabled; this.refs.secondaryQcTargetCount.disabled = disabled; this.refs.startSecondaryQc.disabled = disabled || !listPageActive; this.refs.clearData.disabled = disabled; this.refs.stop.disabled = !disabled; const pausedTask = this.getPausedTaskMeta(); this.refs.pauseResume.disabled = !disabled && (!pausedTask || !listPageActive); this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? '继续质检' : '继续任务'; this.refs.pauseResume.classList.toggle('ysp-daily-panel__button--primary', !disabled && Boolean(pausedTask)); this.refs.startSecondaryQc.textContent = disabled ? '质检运行中' : '开始质检'; this.renderStatus(); this.renderDownloads(); this.renderLogs(); }
+    render() {
+      if (!this.panel) return;
+      if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = '';
+      const listPageActive = isListPage();
+      if (this.runtime.running) enforcePageMuted({ pausePlayback: isDetailPage() });
+      else releasePageMuted();
+      this.panel.classList.toggle('is-minimized', this.runtime.minimized);
+      this.panel.classList.toggle('is-settings-open', this.settingsModalOpen);
+      this.syncSettingsToInputs();
+      this.renderGroupSelector();
+      this.renderFloatingGroupMenu();
+      const disabled = this.runtime.running;
+      const settingsBusy = Boolean(this.runtime.settingsSaving);
+      this.refs.secondaryQcStartDate.disabled = disabled;
+      this.refs.secondaryQcEndDate.disabled = disabled;
+      this.refs.secondaryQcTargetCount.disabled = disabled;
+      this.refs.startSecondaryQc.disabled = disabled || !listPageActive;
+      this.refs.clearConfig.disabled = disabled || settingsBusy;
+      this.refs.clearTagCache.disabled = disabled || settingsBusy;
+      this.refs.stop.disabled = !disabled;
+      if (this.refs.configWorkbookFileInput) this.refs.configWorkbookFileInput.disabled = disabled || settingsBusy;
+      if (this.refs.saveSettings) {
+        this.refs.saveSettings.disabled = disabled || settingsBusy;
+        this.refs.saveSettings.textContent = settingsBusy ? '保存中...' : '保存设置';
+        this.refs.saveSettings.classList.toggle('is-loading', settingsBusy);
+      }
+      if (this.refs.closeSettings) this.refs.closeSettings.disabled = settingsBusy;
+      const pausedTask = this.getPausedTaskMeta();
+      this.refs.pauseResume.disabled = !disabled && (!pausedTask || !listPageActive);
+      this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? '继续质检' : '继续任务';
+      this.refs.pauseResume.classList.toggle('ysp-daily-panel__button--primary', !disabled && Boolean(pausedTask));
+      this.refs.startSecondaryQc.textContent = disabled ? '质检运行中' : '开始质检';
+      this.renderStatus();
+      this.renderDownloads();
+      this.renderLogs();
+    }
     applySecondaryQcWorkerProgress(text, progressLogLines) { const progressText = normalizeText(text); const logLines = normalizeProgressLogLines(progressLogLines); const mergedLines = [progressText, ...logLines].filter(Boolean).filter((line, index, array) => array.indexOf(line) === index); if (!progressText && !mergedLines.length) return; this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; if (progressText) this.runtime.statusText = progressText; this.runtime.logs = mergeLogEntries(this.runtime.logs, mergedLines); this.render(); }
     pushLog(message) { this.runtime.logs = mergeLogEntries(this.runtime.logs, [message]); const checkpoint = this.getActiveCheckpoint(); if (checkpoint) checkpoint.logs = this.runtime.logs.slice(); this.renderLogs(); void this.persistActiveCheckpoint().catch(() => {}); }
     updateCheckpointStatus(text) { const checkpoint = this.getActiveCheckpoint(); this.runtime.statusText = text; if (checkpoint) checkpoint.statusText = text; this.renderStatus(); void this.persistActiveCheckpoint().catch(() => {}); }
