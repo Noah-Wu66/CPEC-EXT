@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.13
+// @version      1.1.16
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1339,15 +1339,17 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const QUERY_TIMEOUT = 90000;
   const PAGE_READY_TIMEOUT = 60000;
   const DETAIL_PAGE_TIMEOUT = 60000;
-  const ARK_REQUEST_TIMEOUT = 90 * 1000;
+  const ARK_REQUEST_TIMEOUT = 120 * 1000;
   const WORKER_START_TIMEOUT = 15000;
-  const WORKER_PROGRESS_STALL_TIMEOUT = 90 * 1000;
-  const WORKER_RESPONSE_TIMEOUT = 8 * 60 * 1000;
+  const WORKER_PROGRESS_STALL_TIMEOUT = 120 * 1000;
+  const WORKER_RESPONSE_TIMEOUT = 300 * 1000;
   const MEDIA_WORKER_RESPONSE_TIMEOUT = 10 * 1000;
   const MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS = 5 * 60;
   const ARK_CHAT_URL = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
   const SECONDARY_QC_MODEL = 'doubao-seed-2-0-lite-260215';
   const SECONDARY_QC_MODEL_LABEL = 'Doubao-Seed-2.0-lite';
+  const SECONDARY_QC_MODEL_THINKING_TYPE = 'enabled';
+  const SECONDARY_QC_MODEL_MAX_COMPLETION_TOKENS = 65536;
   const SECONDARY_QC_LIST_PAGE_SIZE = 50;
   const TAG_LIBRARY_MAX_OPTIONS_PER_KEYWORD = 30;
   const TAG_LIBRARY_IDB_NAME = 'yspSecondaryQcTagLibraryV2';
@@ -4176,6 +4178,16 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       : extractTextFromModelJson(response.responseText || '');
   }
 
+  function buildSecondaryQcModelPayload(options) {
+    const payload = options && typeof options === 'object' ? options : {};
+    return {
+      ...payload,
+      model: SECONDARY_QC_MODEL,
+      thinking: { type: SECONDARY_QC_MODEL_THINKING_TYPE },
+      max_completion_tokens: SECONDARY_QC_MODEL_MAX_COMPLETION_TOKENS
+    };
+  }
+
   async function requestOmniVideoSummary(apiKey, videoUrl, promptText, categoryRule, detailCategoryContext, cancelCheck) {
     const systemPrompt = buildCategoryRuleSystemPrompt(categoryRule, detailCategoryContext);
     const messages = [];
@@ -4200,14 +4212,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         }
       ]
     });
-    const payload = {
-      model: SECONDARY_QC_MODEL,
+    const payload = buildSecondaryQcModelPayload({
       messages,
       stream: true,
       stream_options: {
         include_usage: true
       }
-    };
+    });
     return requestArkText(apiKey, payload, true, cancelCheck);
   }
 
@@ -4224,10 +4235,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       role: 'user',
       content: promptText
     });
-    const payload = {
-      model: SECONDARY_QC_MODEL,
+    const payload = buildSecondaryQcModelPayload({
       messages
-    };
+    });
     return requestArkText(apiKey, payload, false, cancelCheck);
   }
 
@@ -5358,14 +5368,25 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return true;
   }
 
-  function buildOmniVideoSummaryPrompt(titleText, detailCategoryContext) {
+  function formatSecondaryQcFixedContext(titleText, detailCategoryContext) {
     const normalizedTitle = normalizeText(titleText);
     const normalizedCategoryContext = normalizeMultilineText(detailCategoryContext);
     return [
+      '本次质检固定上下文：',
+      normalizedTitle ? `标题：${normalizedTitle}` : '标题：无',
+      normalizedCategoryContext ? `品类信息：\n${normalizedCategoryContext}` : '品类信息：无'
+    ].join('\n');
+  }
+
+  function formatSelectedTagsContext(selectedTags) {
+    return `当前已有成品标签完整信息：${JSON.stringify(normalizeTagDetailArray(selectedTags || []))}`;
+  }
+
+  function buildOmniVideoSummaryPrompt(titleText, detailCategoryContext) {
+    return [
       '你是央视频二次质检的视频理解助手。',
       '这是最后一道查缺补漏，请认真看完整个视频，不要只看开头，也不要凭印象猜测。',
-      normalizedCategoryContext ? `当前视频品类信息：\n${normalizedCategoryContext}` : '',
-      normalizedTitle ? `参考标题：${normalizedTitle}` : '参考标题：无',
+      formatSecondaryQcFixedContext(titleText, detailCategoryContext),
       '请只返回 JSON，不要输出其他文字。',
       'JSON 里的字段名和字符串值只能使用英文双引号，禁止使用单引号。',
       '必须覆盖：',
@@ -5383,11 +5404,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     ].filter((line) => line !== '').join('\n');
   }
 
-  function buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags) {
+  function buildFirstTagJudgePrompt(titleText, detailCategoryContext, videoSummary, selectedTags) {
     return [
       '你是央视频标准化系统的二次质检助手。',
       '这是一条已经过多次校对后的最终查缺补漏任务，你的主要目标是补打真正重要且缺失的标签，不要为了凑结果而补。',
       '请根据“标题”“视频理解结果”和“当前已有成品标签完整信息”，判断哪些标签值得去标签库查询验证，目标只有补打，不做错打筛查。',
+      '请完整使用“本次质检固定上下文”，不要丢掉品类、标题、已有标签或视频理解结果。',
       '规则：',
       '1. search_candidates 只保留真正值得去标签库查询验证的关键词，每个候选都要给 keyword 和 reason。',
       '2. keyword 必须是标签库搜索词，不是标题片段，也不是一句话；优先 2-8 个汉字，最多 12 个字符。',
@@ -5398,8 +5420,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       '7. summary 用一句中文总结判断原因。',
       '8. 只能返回 JSON，不要返回其他文字。',
       '',
-      `标题：${normalizeText(titleText) || '无'}`,
-      `当前已有成品标签完整信息：${JSON.stringify(normalizeTagDetailArray(selectedTags || []))}`,
+      formatSecondaryQcFixedContext(titleText, detailCategoryContext),
+      formatSelectedTagsContext(selectedTags),
       `视频理解结果：${videoSummary}`,
       '',
       '输出格式：',
@@ -5407,11 +5429,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     ].join('\n');
   }
 
-  function buildFinalTagJudgePrompt(titleText, videoSummary, selectedTags, firstJudge, searchResults) {
+  function buildFinalTagJudgePrompt(titleText, detailCategoryContext, videoSummary, selectedTags, firstJudge, searchResults) {
     return [
       '你是央视频标准化系统的最终二次质检裁定助手。',
       '这一步是最后落表结论，本次任务只做补打，不做错打筛查。',
       '你现在拿到了标题、视频理解结果、当前已有成品标签完整信息、候选标签判断结果，以及候选标签在标签库中的真实检索结果。',
+      '请完整使用“本次质检固定上下文”，不要丢掉品类、标题、已有标签、视频理解结果、候选判断或标签库结果。',
       '规则：',
       '1. missing_tags_actionable 只保留“标签库真实存在”且“确实应该补打”的重要标签。',
       '2. candidate_decisions 必须覆盖每一个已检索的候选标签，每个候选只出现一次，accepted 表示最终是否采纳，reason 必须说明原因。',
@@ -5421,9 +5444,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       '6. 单次擦边出现、弱相关、没有反复支撑、不是主题核心的标签，一律不要补。',
       '7. 只能返回 JSON，不要返回其他文字。',
       '',
-      `标题：${normalizeText(titleText) || '无'}`,
+      formatSecondaryQcFixedContext(titleText, detailCategoryContext),
       `视频理解结果：${videoSummary}`,
-      `当前已有成品标签完整信息：${JSON.stringify(normalizeTagDetailArray(selectedTags || []))}`,
+      formatSelectedTagsContext(selectedTags),
       `候选标签判断：${JSON.stringify(firstJudge || {})}`,
       `候选标签真实检索结果：${JSON.stringify(searchResults || [])}`,
       '',
@@ -5706,7 +5729,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await reportProgress('正在加载标签库', { stageLabel: '标签库' });
       const tagLibrary = await loadTagLibrary();
       await reportProgress(`标签库已加载：${tagLibrary.count} 条`, { stageLabel: '标签库' });
-      const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags), categoryRule, detailCategoryContext, cancelCheck);
+      const firstJudgeRaw = await requestTagJudge(
+        apiKey,
+        buildFirstTagJudgePrompt(titleText, detailCategoryContext, videoSummary, selectedTags),
+        categoryRule,
+        detailCategoryContext,
+        cancelCheck
+      );
       const firstJudge = parseModelJsonObject(firstJudgeRaw, '候选标签判断');
       const searchCandidates = normalizeTagSearchCandidateArray(firstJudge.search_candidates);
       const missingCandidates = searchCandidates.map((item) => item.keyword);
@@ -5762,6 +5791,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         apiKey,
         buildFinalTagJudgePrompt(
           titleText,
+          detailCategoryContext,
           videoSummary,
           selectedTags,
           {
