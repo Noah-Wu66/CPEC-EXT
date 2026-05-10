@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.4
+// @version      1.1.5
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -16,6 +16,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
+// @grant        GM_listValues
 // @grant        GM_addStyle
 // @grant        GM_info
 // @grant        GM_xmlhttpRequest
@@ -2058,6 +2059,31 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const keyList = Array.isArray(keys) ? keys : [keys];
     for (const key of keyList) {
       GM_deleteValue(key);
+    }
+  }
+
+  async function storageListKeys() {
+    return GM_listValues();
+  }
+
+  async function clearNonConfigCacheStorage() {
+    const cachePrefixes = [
+      STORAGE_KEYS.workerRequestPrefix,
+      STORAGE_KEYS.workerResponsePrefix,
+      STORAGE_KEYS.workerProgressPrefix,
+      STORAGE_KEYS.workerStopPrefix,
+      STORAGE_KEYS.mediaWorkerRequestPrefix,
+      STORAGE_KEYS.mediaWorkerResponsePrefix
+    ];
+    const keys = await storageListKeys();
+    const cacheKeys = keys.filter((key) => {
+      const text = normalizeText(key);
+      return text === STORAGE_KEYS.report
+        || text === STORAGE_KEYS.checkpoint
+        || cachePrefixes.some((prefix) => text.startsWith(prefix));
+    });
+    if (cacheKeys.length) {
+      await storageRemove(cacheKeys);
     }
   }
 
@@ -5820,7 +5846,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.refs.pauseResume.addEventListener('click', () => this.handlePauseResumeAction().catch((error) => this.failJob(error)));
       this.refs.stop.addEventListener('click', () => this.stopCurrentJob().catch((error) => this.failJob(error)));
       this.refs.clearConfig.addEventListener('click', () => this.clearConfigWorkbookData().catch((error) => this.failJob(error)));
-      this.refs.clearTagCache.addEventListener('click', () => this.clearTagLibraryCacheData().catch((error) => this.failJob(error)));
+      this.refs.clearTagCache.addEventListener('click', () => this.clearNonConfigCacheData().catch((error) => this.failJob(error)));
       this.refs.downloads.addEventListener('click', (event) => {
         const target = event.target;
         if (target instanceof HTMLElement && target.closest('[data-download-role="secondaryQc"]')) this.exportSecondaryQcResult();
@@ -5876,19 +5902,22 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.render();
       this.pushLog('已清理配置');
     }
-    async clearTagLibraryCacheData() {
+    async clearNonConfigCacheData() {
       if (this.runtime.running) return;
-      const confirmed = window.confirm('这会清除本地标签库缓存，不会清理配置 XLSX、品类规则和 API Key。确认清理吗？');
+      const confirmed = window.confirm('这会清除任务进度、下载结果、临时请求和当前日志，不会清理配置 XLSX、标签库、品类规则和 API Key。确认清理吗？');
       if (!confirmed) return;
-      await clearCachedTagLibraryCsv();
-      this.settings.tagLibraryFileName = '';
-      this.settings.tagLibraryUploadedAt = '';
-      this.settings.tagLibraryCount = 0;
-      await this.persistSettings();
+      await clearNonConfigCacheStorage();
+      this.runtime.report = null;
+      this.runtime.checkpoint = null;
+      this.runtime.logs = [];
+      this.runtime.statusText = '缓存已清理';
+      this.runtime.jobType = '';
+      this.runtime.stopping = false;
+      this.runtime.pauseRequested = false;
       this.settingsDraft = cloneWorkbenchSettings(this.settings);
       this.syncSettingsToInputs();
       this.render();
-      this.pushLog('已清理标签缓存');
+      this.pushLog('已清理缓存');
     }
     renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'secondaryQc'; const triggerSummary = this.getGroupPickerSummary(); this.refs.secondaryQcGroups.innerHTML = `<div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
     renderStatus() { const pageText = isListPage() ? '当前页面：列表页' : isDetailPage() ? '当前页面：详情页，只保留质检处理；开始或继续任务请回列表页' : '当前页面：其他页面'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：二次质检</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
