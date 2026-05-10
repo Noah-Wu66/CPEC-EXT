@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.5
+// @version      1.1.10
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1328,7 +1328,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   const WORKER_START_TIMEOUT = 15000;
   const WORKER_PROGRESS_STALL_TIMEOUT = 90 * 1000;
   const WORKER_RESPONSE_TIMEOUT = 8 * 60 * 1000;
-  const MEDIA_WORKER_RESPONSE_TIMEOUT = 90 * 1000;
+  const MEDIA_WORKER_RESPONSE_TIMEOUT = 10 * 1000;
   const MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS = 5 * 60;
   const ARK_CHAT_URL = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
   const SECONDARY_QC_MODEL = 'doubao-seed-2-0-lite-260215';
@@ -1658,7 +1658,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return [
       primary ? `一级品类：${primary}` : '',
       secondary ? `二级品类：${secondary}` : '',
-      rawText ? `接口品类路径：${rawText}` : ''
+      rawText ? `页面品类原文：${rawText}` : ''
     ].filter(Boolean).join('\n');
   }
 
@@ -2097,7 +2097,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   async function waitFor(checker, timeoutMs, message, options) {
     const cancelCheck = options && typeof options.cancelCheck === 'function' ? options.cancelCheck : null;
-    const cancelMessage = normalizeText(options && options.cancelMessage) || '采集已结束';
+    const cancelMessage = normalizeText(options && options.cancelMessage) || '任务已结束';
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       if (cancelCheck && cancelCheck()) {
@@ -2255,7 +2255,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     let stableSince = 0;
     while (Date.now() - startedAt < QUERY_TIMEOUT) {
       if (cancelCheck && cancelCheck()) {
-        throw new Error('采集已结束');
+        throw new Error('任务已结束');
       }
       const loading = getVisibleLoadingMask();
       const current = getTopResultCount();
@@ -2667,14 +2667,47 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return normalizeText(params.get('ysp_media_request'));
   }
 
+  function formatUserVisibleLogText(value) {
+    const rawText = normalizeText(value);
+    if (!rawText) {
+      return '';
+    }
+    const timeMatch = rawText.match(/^(\[\d{2}:\d{2}:\d{2}\]\s*)(.*)$/);
+    const timePrefix = timeMatch ? timeMatch[1] : '';
+    let text = timeMatch ? normalizeText(timeMatch[2]) : rawText;
+    if (!text) {
+      return timePrefix.trim();
+    }
+    text = text
+      .replace(/https?:\/\/[^\s)）]+/gi, '视频播放地址')
+      .replace(/^([a-z0-9_-]{8,})：/i, '视频 $1：')
+      .replace(/视频\s*VID/gi, '视频编号')
+      .replace(/\bVID\b/gi, '视频编号')
+      .replace(/APIKEY\s*页/gi, '密钥页')
+      .replace(/第\s*3\s*页\s*APIKEY/gi, '第 3 页密钥')
+      .replace(/ARK_API_KEY|ARKAPIKEY/gi, '密钥')
+      .replace(/API\s*Key/gi, '密钥')
+      .replace(/JSON/gi, '内容格式')
+      .replace(/接口/g, '页面数据')
+      .replace(/请求/g, '连接')
+      .replace(/响应/g, '返回')
+      .replace(/模型/g, 'AI');
+    return `${timePrefix}${text}`;
+  }
+
+  function formatTaskLogPrefix(taskId) {
+    const normalizedTaskId = normalizeText(taskId);
+    return normalizedTaskId ? `视频 ${normalizedTaskId}` : '';
+  }
+
   function normalizeProgressLogLines(lines) {
     return Array.isArray(lines)
-      ? lines.map((line) => normalizeText(line)).filter(Boolean)
+      ? lines.map((line) => formatUserVisibleLogText(line)).filter(Boolean)
       : [];
   }
 
   function createLogEntry(message) {
-    return `[${formatClock()}] ${normalizeText(message)}`;
+    return `[${formatClock()}] ${formatUserVisibleLogText(message)}`;
   }
 
   function getLogEntryMessage(entry) {
@@ -2689,7 +2722,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   function mergeLogEntries(existingLogs, messages) {
     const nextLogs = Array.isArray(existingLogs) ? existingLogs.slice(-MAX_LOGS) : [];
     const incomingMessages = Array.isArray(messages)
-      ? messages.map((message) => normalizeText(message)).filter(Boolean)
+      ? messages.map((message) => formatUserVisibleLogText(message)).filter(Boolean)
       : [];
     for (const message of incomingMessages) {
       if (getLogEntryMessage(nextLogs[nextLogs.length - 1]) === message) {
@@ -2709,7 +2742,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const progress = progressOrText && typeof progressOrText === 'object'
       ? progressOrText
       : { text: progressOrText };
-    const normalizedText = normalizeText(progress.text);
+    const normalizedText = formatUserVisibleLogText(progress.text);
     const logLines = normalizeProgressLogLines(progress.logLines);
     if (!normalizedRequestId || (!normalizedText && !logLines.length)) {
       return;
@@ -2776,10 +2809,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   async function ensureSecondaryQcWorkerNotStopped(requestId) {
     if (JOB_ABORT_CONTROLLER.secondaryQcWorkerRequestId === normalizeText(requestId) && JOB_ABORT_CONTROLLER.secondaryQcWorkerStopped) {
-      throw new Error('采集已结束');
+      throw new Error('任务已结束');
     }
     if (await syncSecondaryQcWorkerStopState(requestId)) {
-      throw new Error('采集已结束');
+      throw new Error('任务已结束');
     }
   }
 
@@ -3195,7 +3228,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       || window.XLSX
       || (typeof unsafeWindow !== 'undefined' ? unsafeWindow.XLSX : null);
     if (!parser || typeof parser.read !== 'function' || !parser.utils) {
-      throw new Error('XLSX 解析库加载失败，请刷新页面后重试');
+      throw new Error('配置文件读取组件加载失败，请刷新页面后重试');
     }
     return parser;
   }
@@ -3226,8 +3259,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       throw new Error('品类规则页至少需要表头和通用规则行');
     }
     const header = rows[0] || [];
-    if (normalizeText(header[0]) !== '品类名' || normalizeText(header[1]) !== '规则内容') {
-      throw new Error('品类规则页首行必须是：品类名、规则内容');
+    if (normalizeText(header[0]) !== '品类名' || normalizeText(header[1]) !== '规则内容' || normalizeText(header[2]) !== '规则补充') {
+      throw new Error('品类规则页首行必须是：品类名、规则内容、规则补充');
     }
     const bodyRows = rows.slice(1);
     if (normalizeText(bodyRows[0] && bodyRows[0][0]) !== '通用') {
@@ -3244,7 +3277,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (!allowedCategories.has(category)) {
         throw new Error(`品类规则页存在未支持的品类：${category}`);
       }
-      const rule = normalizeMultilineText(row[1]);
+      const baseRule = normalizeMultilineText(row[1]);
+      const extraRule = normalizeMultilineText(row[2]);
+      const rule = normalizeMultilineText([
+        baseRule ? `规则内容：\n${baseRule}` : '',
+        extraRule ? `规则补充：\n${extraRule}` : ''
+      ].filter(Boolean).join('\n\n'));
       if (normalizeText(rule)) {
         ruleCount += 1;
       }
@@ -3258,19 +3296,19 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   function readApiKeyFromRows(rows) {
     if (!Array.isArray(rows) || !rows.length) {
-      throw new Error('APIKEY 页为空');
+      throw new Error('密钥页为空');
     }
     for (const row of rows) {
       const keyName = normalizeText(row && row[0]).replace(/\s+/g, '').toUpperCase();
       if (keyName === 'ARK_API_KEY' || keyName === 'ARKAPIKEY') {
         const apiKey = normalizeText(row && row[1]);
         if (!apiKey) {
-          throw new Error('APIKEY 页里 ARK_API_KEY 的值为空');
+          throw new Error('密钥页里的密钥为空');
         }
         return apiKey;
       }
     }
-    throw new Error('APIKEY 页必须包含 ARK_API_KEY');
+    throw new Error('密钥页必须包含可用密钥');
   }
 
   async function saveUploadedConfigWorkbookFile(file) {
@@ -3289,7 +3327,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
     const tagSheet = getWorkbookSheet(workbook, 0, '第 1 页标签库');
     const ruleSheet = getWorkbookSheet(workbook, 1, '第 2 页品类规则');
-    const apiSheet = getWorkbookSheet(workbook, 2, '第 3 页 APIKEY');
+    const apiSheet = getWorkbookSheet(workbook, 2, '第 3 页密钥');
     if (normalizeText(apiSheet.name).toUpperCase() !== 'APIKEY') {
       throw new Error('第 3 页工作表名称必须是 APIKEY');
     }
@@ -3600,19 +3638,19 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     try {
       parsed = JSON.parse(responseText || '{}');
     } catch (error) {
-      throw new Error('列表接口返回不是有效 JSON');
+      throw new Error('标准化列表返回内容格式不对');
     }
     const code = Number(parsed && parsed.code);
     if (Number.isFinite(code) && code !== 0 && code !== 200) {
-      throw new Error(normalizeText(parsed.message || parsed.msg) || `列表接口返回错误：${code}`);
+      throw new Error(normalizeText(parsed.message || parsed.msg) || `标准化列表读取失败：${code}`);
     }
     if (!parsed || !Array.isArray(parsed.data)) {
-      throw new Error('列表接口返回结构异常：缺少 data');
+      throw new Error('标准化列表返回内容不完整');
     }
     const totalRecords = Math.max(0, Math.trunc(Number(parsed.total) || 0));
     const totalPages = Math.trunc(Number(parsed.total_page));
     if (totalRecords > 0 && (!Number.isFinite(totalPages) || totalPages < 1)) {
-      throw new Error('列表接口返回结构异常：缺少 total_page');
+      throw new Error('标准化列表页数读取失败');
     }
     return {
       records: parsed.data,
@@ -3638,12 +3676,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       });
     } catch (error) {
       if (cancelCheck && cancelCheck()) {
-        throw new Error('采集已结束');
+        throw new Error('任务已结束');
       }
       throw error;
     }
     if (!response || response.status >= 400) {
-      throw new Error(`列表接口请求失败：${response ? response.status : '未知状态'}`);
+      throw new Error(`标准化列表读取失败：${response ? response.status : '未知状态'}`);
     }
     return {
       pageNumber: Math.max(1, Math.trunc(Number(pageNumber) || 1)),
@@ -3723,13 +3761,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   function extractFirstJsonObject(text) {
     const source = normalizeText(text);
     if (!source) {
-      throw new Error('模型未返回内容');
+      throw new Error('AI 没有返回可用内容');
     }
     const fenceMatch = source.match(/```json\s*([\s\S]*?)```/i) || source.match(/```\s*([\s\S]*?)```/i);
     const raw = fenceMatch ? fenceMatch[1].trim() : source;
     const firstBrace = raw.indexOf('{');
     if (firstBrace < 0) {
-      throw new Error('模型返回中没有 JSON');
+      throw new Error('AI 返回内容格式不对');
     }
     let depth = 0;
     let inString = false;
@@ -3759,7 +3797,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         }
       }
     }
-    throw new Error('模型 JSON 不完整');
+    throw new Error('AI 返回内容不完整');
   }
 
   function buildModelOutputPreview(text) {
@@ -3865,15 +3903,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       }
     } catch (error) {
       const label = normalizeText(sceneLabel) || '模型';
-      const message = error && error.message ? error.message : String(error);
-      const preview = buildModelOutputPreview(text);
-      throw new Error(`${label}返回解析失败：${message}；原始片段：${preview}`);
+      throw new Error(`${label}返回内容格式不对`);
     }
   }
 
   function isModelJsonParseFailureMessage(message) {
     const normalized = normalizeText(message);
-    return normalized.includes('返回解析失败');
+    return normalized.includes('返回解析失败') || normalized.includes('返回内容格式不对');
   }
 
   function extractMessageTextFromOpenAIContent(content) {
@@ -4042,7 +4078,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     });
     if (!response || response.status >= 400) {
       const detail = extractModelErrorMessage(response && response.responseText);
-      throw new Error(detail || `模型请求失败：${response ? response.status : '未知状态'}`);
+      throw new Error(detail || `AI 判断失败：${response ? response.status : '未知状态'}`);
     }
     return isStream
       ? extractTextFromModelStream(response.responseText || '')
@@ -4262,14 +4298,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   async function fetchDetailTaskInfo(taskId, cancelCheck) {
     const vid = normalizeText(taskId);
     if (!vid) {
-      throw new Error('未提供详情页 VID');
+      throw new Error('未提供详情页视频编号');
     }
     const controller = new AbortController();
     let cancelTimer = 0;
     try {
       if (typeof cancelCheck === 'function') {
         if (cancelCheck()) {
-          throw new Error('采集已结束');
+          throw new Error('任务已结束');
         }
         cancelTimer = window.setInterval(() => {
           try {
@@ -4289,16 +4325,16 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         }
       );
       if (!response.ok) {
-        throw new Error(`详情页信息接口请求失败：${response.status}`);
+        throw new Error(`详情页视频信息读取失败：${response.status}`);
       }
       const payload = await response.json();
       if (!payload || Number(payload.code) !== 0 || !payload.data) {
-        throw new Error(normalizeText(payload && (payload.msg || payload.message)) || '详情页信息接口返回异常');
+        throw new Error(normalizeText(payload && (payload.msg || payload.message)) || '详情页视频信息返回异常');
       }
       return payload.data;
     } catch (error) {
       if (error && error.name === 'AbortError') {
-        throw new Error('采集已结束');
+        throw new Error('任务已结束');
       }
       throw error;
     } finally {
@@ -4401,7 +4437,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < 5000) {
       if (cancelCheck && cancelCheck()) {
-        throw new Error('采集已结束');
+        throw new Error('任务已结束');
       }
       const mediaDuration = getDetailMediaDurationSeconds();
       if (mediaDuration > 0) {
@@ -4903,16 +4939,21 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   function prefixTaskError(taskId, message) {
     const normalizedTaskId = normalizeText(taskId);
-    const normalizedMessage = normalizeText(message);
+    const normalizedMessage = formatUserVisibleLogText(message);
+    const taskPrefix = formatTaskLogPrefix(normalizedTaskId);
     if (!normalizedTaskId) {
       return normalizedMessage;
     }
     if (!normalizedMessage) {
-      return normalizedTaskId;
+      return taskPrefix || normalizedTaskId;
     }
-    return normalizedMessage.startsWith(`${normalizedTaskId}：`)
-      ? normalizedMessage
-      : `${normalizedTaskId}：${normalizedMessage}`;
+    if (normalizedMessage.startsWith(`${taskPrefix}：`)) {
+      return normalizedMessage;
+    }
+    if (normalizedMessage.startsWith(`${normalizedTaskId}：`)) {
+      return `${taskPrefix}：${normalizeText(normalizedMessage.slice(normalizedTaskId.length + 1))}`;
+    }
+    return `${taskPrefix}：${normalizedMessage}`;
   }
 
   async function waitForStorageObjectResponse(options) {
@@ -4938,7 +4979,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     let hasProgress = false;
     while (Date.now() - startedAt < timeoutMs) {
       if (cancelCheck && cancelCheck()) {
-        throw new Error('采集已结束');
+        throw new Error('任务已结束');
       }
       const storage = await storageGet(progressKey ? [responseKey, progressKey] : responseKey);
       if (progressKey) {
@@ -4984,8 +5025,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       startTimeoutMs: WORKER_START_TIMEOUT,
       stallTimeoutMs: WORKER_PROGRESS_STALL_TIMEOUT,
       startTimeoutMessage: '详情页未启动，可能被浏览器拦截或新标签页没有打开',
-      stallTimeoutMessage: '详情页处理卡住，已超时跳过',
-      timeoutMessage: '等待详情页结果超时',
+      stallTimeoutMessage: '详情页长时间没有进展，已超时跳过',
+      timeoutMessage: '单条视频处理超时',
       onProgress,
       cancelCheck
     });
@@ -4996,7 +5037,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       responseKey: buildSecondaryQcMediaWorkerResponseKey(requestId),
       timeoutMs,
       pollIntervalMs: 400,
-      timeoutMessage: '等待视频地址结果超时',
+      timeoutMessage: '获取视频播放地址超时',
       cancelCheck
     });
   }
@@ -5033,23 +5074,23 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     try {
       payload = typeof responseText === 'string' ? JSON.parse(responseText) : responseText;
     } catch (error) {
-      throw new Error('播放接口返回内容不是有效 JSON');
+      throw new Error('视频播放信息返回内容格式不对');
     }
     const data = payload && payload.data;
     if (!data || typeof data !== 'object') {
-      throw new Error('播放接口未返回视频数据');
+      throw new Error('未读取到视频播放信息');
     }
     if (Number(data.code) !== 0) {
-      throw new Error(normalizeText(data.message || payload.msg) || '播放接口返回错误');
+      throw new Error(normalizeText(data.message || payload.msg) || '视频播放信息读取失败');
     }
     const videoItem = data.vl && Array.isArray(data.vl.vi) ? data.vl.vi[0] : null;
     if (!videoItem || typeof videoItem !== 'object') {
-      throw new Error('播放接口未返回视频文件信息');
+      throw new Error('未读取到视频文件信息');
     }
     const responseVid = normalizeText(videoItem.vid);
     const normalizedExpectedVid = normalizeText(expectedVid);
     if (normalizedExpectedVid && responseVid && responseVid !== normalizedExpectedVid) {
-      throw new Error('播放接口返回的 VID 与当前视频不一致');
+      throw new Error('读取到的视频编号和当前视频不一致');
     }
     const urlItem = videoItem.ul && Array.isArray(videoItem.ul.ui) ? videoItem.ul.ui[0] : null;
     const baseUrl = normalizeText(urlItem && urlItem.url);
@@ -5057,12 +5098,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const fvkey = normalizeText(videoItem.fvkey);
     const extendedParam = normalizeText(data.extended_param);
     if (!baseUrl || !fileName || !fvkey || !extendedParam) {
-      throw new Error('播放接口返回的视频地址参数不完整');
+      throw new Error('视频播放地址信息不完整');
     }
     const pathSeparator = baseUrl.endsWith('/') || fileName.startsWith('/') ? '' : '/';
     const videoUrl = normalizeMediaSourceUrl(`${baseUrl}${pathSeparator}${fileName}?vkey=${encodeURIComponent(fvkey)}${extendedParam}`);
     if (!videoUrl) {
-      throw new Error('播放接口拼出的地址不可用');
+      throw new Error('视频播放地址不可用');
     }
     return videoUrl;
   }
@@ -5122,7 +5163,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           return;
         }
         if (Date.now() - startedAt >= DETAIL_PAGE_TIMEOUT) {
-          rejectOnce(new Error('未获取到播放接口返回'));
+          rejectOnce(new Error('未获取到视频播放信息'));
         }
       }, 250);
     });
@@ -5131,7 +5172,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   async function fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck) {
     const normalizedVid = normalizeText(videoVid);
     if (!normalizedVid) {
-      throw new Error('未提供视频 VID');
+      throw new Error('未提供视频编号');
     }
     const requestId = createRuntimeToken('media');
     const requestKey = buildSecondaryQcMediaWorkerRequestKey(requestId);
@@ -5184,7 +5225,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < QUERY_TIMEOUT) {
       if (cancelCheck && cancelCheck()) {
-        throw new Error('采集已结束');
+        throw new Error('任务已结束');
       }
       if (!getVisibleLoadingMask()) {
         await sleep(250);
@@ -5255,17 +5296,19 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return [
       '你是央视频标准化系统的二次质检助手。',
       '这是一条已经过多次校对后的最终查缺补漏任务，你的主要目标是补打真正重要且缺失的标签，不要为了凑结果而补。',
-      '请根据“标题”“视频理解结果”和“当前已选成品标签完整信息”，判断哪些标签值得去标签库查询验证，目标只有补打，不做错打筛查。',
+      '请根据“标题”“视频理解结果”和“当前已有成品标签完整信息”，判断哪些标签值得去标签库查询验证，目标只有补打，不做错打筛查。',
       '规则：',
       '1. search_candidates 只保留真正值得去标签库查询验证的关键词，每个候选都要给 keyword 和 reason。',
-      '2. search_candidates 里的 keyword 必须简短、可直接搜索，不要写成长句。',
-      '3. 单次擦边出现、弱相关、泛泛概念、可有可无的标签，一律不要给。',
-      '4. 不要推荐已经在当前已选成品标签里的同名标签。',
-      '5. summary 用一句中文总结判断原因。',
-      '6. 只能返回 JSON，不要返回其他文字。',
+      '2. keyword 必须是标签库搜索词，不是标题片段，也不是一句话；优先 2-8 个汉字，最多 12 个字符。',
+      '3. 如果一个方向包含多个主题，拆成多条候选；例如不要写“老年人户外锻炼改善心肺功能”，要拆成“老年人”“户外锻炼”“心肺功能”这类短词。',
+      '4. 禁止把人物动作、完整事件、长描述当 keyword。',
+      '5. 单次擦边出现、弱相关、泛泛概念、可有可无的标签，一律不要给。',
+      '6. 不要推荐已经在当前已有成品标签里的同名标签。',
+      '7. summary 用一句中文总结判断原因。',
+      '8. 只能返回 JSON，不要返回其他文字。',
       '',
       `标题：${normalizeText(titleText) || '无'}`,
-      `当前已选成品标签完整信息：${JSON.stringify(normalizeTagDetailArray(selectedTags || []))}`,
+      `当前已有成品标签完整信息：${JSON.stringify(normalizeTagDetailArray(selectedTags || []))}`,
       `视频理解结果：${videoSummary}`,
       '',
       '输出格式：',
@@ -5277,21 +5320,21 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return [
       '你是央视频标准化系统的最终二次质检裁定助手。',
       '这一步是最后落表结论，本次任务只做补打，不做错打筛查。',
-      '你现在拿到了标题、视频理解结果、当前已选成品标签完整信息、第一轮搜索计划，以及候选标签在标签库中的真实查询结果。',
+      '你现在拿到了标题、视频理解结果、当前已有成品标签完整信息、候选标签判断结果，以及候选标签在标签库中的真实检索结果。',
       '规则：',
       '1. missing_tags_actionable 只保留“标签库真实存在”且“确实应该补打”的重要标签。',
-      '2. candidate_decisions 必须覆盖每一个已搜索的候选标签，每个候选只出现一次，accepted 表示最终是否采纳，reason 必须说明原因。',
-      '3. 如果 accepted 为 true，请尽量在 candidate_decisions 里补充 matched_option_id、matched_option_name、matched_option_type、matched_option_remark，指出你最终采纳的是哪一个搜索结果。',
+      '2. candidate_decisions 必须覆盖每一个已检索的候选标签，每个候选只出现一次，accepted 表示最终是否采纳，reason 必须说明原因。',
+      '3. 如果 accepted 为 true，请尽量在 candidate_decisions 里补充 matched_option_id、matched_option_name、matched_option_type、matched_option_remark，指出你最终采纳的是哪一个检索结果。',
       '4. evidence_summary 要概括真正支持结论的强证据，重点看标题、主题、反复出现的信息、画面与口播共同支持的点。',
-      '5. final_reason 用一句中文说明为什么最终落到这个结论。',
+      '5. final_reason 用一句中文说明最终判断依据。',
       '6. 单次擦边出现、弱相关、没有反复支撑、不是主题核心的标签，一律不要补。',
       '7. 只能返回 JSON，不要返回其他文字。',
       '',
       `标题：${normalizeText(titleText) || '无'}`,
       `视频理解结果：${videoSummary}`,
-      `当前已选成品标签完整信息：${JSON.stringify(normalizeTagDetailArray(selectedTags || []))}`,
-      `第一轮判断：${JSON.stringify(firstJudge || {})}`,
-      `候选标签真实搜索结果：${JSON.stringify(searchResults || [])}`,
+      `当前已有成品标签完整信息：${JSON.stringify(normalizeTagDetailArray(selectedTags || []))}`,
+      `候选标签判断：${JSON.stringify(firstJudge || {})}`,
+      `候选标签真实检索结果：${JSON.stringify(searchResults || [])}`,
       '',
       '输出格式：',
       '{"missing_tags_actionable":[],"candidate_decisions":[{"keyword":"","accepted":false,"reason":"","matched_option_id":"","matched_option_name":"","matched_option_type":"","matched_option_remark":""}],"evidence_summary":"","final_reason":""}'
@@ -5347,7 +5390,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       const videoVid = normalizeText(request.videoVid || new URLSearchParams(location.search).get('vid'));
       if (!videoVid) {
-        throw new Error('未提供视频 VID');
+        throw new Error('未提供视频编号');
       }
 
       const videoUrl = await waitForYangshipinVideoInfoUrl(videoVid, cancelCheck);
@@ -5412,7 +5455,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       await waitForDetailPageReady(cancelCheck);
       await waitForDetailAnalysisReady(listVid, cancelCheck);
-      await reportProgress('正在读取视频信息', { stageLabel: '读取元数据' });
+      await reportProgress('正在读取视频信息', { stageLabel: '读取视频信息' });
       await ensureSecondaryQcWorkerNotStopped(requestId);
 
       const titleText = getDetailTitleText();
@@ -5430,13 +5473,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           logLines: [
             titleText ? `标题：${titleText}` : '',
             detailCategoryContext ? `品类信息：${detailCategoryContext.replace(/\n+/g, '；')}` : '',
-            videoVid ? `顶部VID：${videoVid}` : '',
+            videoVid ? '视频编号已读取' : '',
             durationSeconds > 0 ? `视频时长：${formatDurationSeconds(durationSeconds)}` : '视频时长：未读取到'
           ]
         }
       );
 
-      await reportProgress(`当前质检模型：${SECONDARY_QC_MODEL_LABEL}`, { stageLabel: '时长判断' });
+      await reportProgress('视频信息读取完成，准备开始判断', { stageLabel: '时长判断' });
 
       if (durationSeconds > MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS) {
         const finalReason = `视频时长 ${formatDurationSeconds(durationSeconds)}，超过 ${formatDurationSeconds(MAX_SECONDARY_QC_VIDEO_DURATION_SECONDS)}，按规则跳过`;
@@ -5444,13 +5487,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           stageLabel: '时长判断',
           finalReason,
           skipReason: 'long_video',
-          evidenceSummary: '当前视频超过 5 分钟，按质检规则直接跳过，不进入视频理解模型。',
+          evidenceSummary: '当前视频超过 5 分钟，按质检规则直接跳过，不进入视频理解。',
           missingCandidates: [],
           validatedCandidates: [],
           rejectedCandidates: [],
           logLines: [
-            `最终说明：${finalReason}`,
-            '证据摘要：当前视频超过 5 分钟，按质检规则直接跳过，不进入视频理解模型。'
+            `最终判断：${finalReason}`,
+            '证据摘要：当前视频超过 5 分钟，按质检规则直接跳过，不进入视频理解。'
           ]
         });
         responsePayload = {
@@ -5465,16 +5508,42 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       const apiKey = normalizeText(request.apiKey);
       if (!apiKey) {
-        throw new Error('未配置 ARK_API_KEY');
+        throw new Error('配置文件里没有可用密钥');
       }
       if (!videoVid) {
-        throw new Error('未读取到顶部 VID');
+        throw new Error('未读取到视频编号');
       }
 
       await reportProgress('正在获取视频地址', { stageLabel: '获取视频地址' });
-      const videoUrl = await fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck);
+      let videoUrl = '';
+      try {
+        videoUrl = await fetchYangshipinVideoUrlByWorker(videoVid, cancelCheck);
+      } catch (error) {
+        const videoUrlMessage = normalizeText(error && error.message ? error.message : String(error)) || '视频地址获取失败';
+        const finalReason = `视频地址获取失败，当前条目已跳过：${videoUrlMessage}`;
+        await reportProgress('视频地址获取失败，当前条目已跳过', {
+          stageLabel: '获取视频地址',
+          finalReason,
+          skipReason: 'video_url_failed',
+          evidenceSummary: finalReason,
+          missingCandidates: [],
+          validatedCandidates: [],
+          rejectedCandidates: [],
+          logLines: [
+            `最终判断：${finalReason}`
+          ]
+        });
+        responsePayload = {
+          status: 'completed',
+          skipped: true,
+          skipReason: 'video_url_failed',
+          error: videoUrlMessage
+        };
+        await reportProgress('视频地址获取失败，正在返回结果', { stageLabel: '已完成' });
+        return;
+      }
       await ensureSecondaryQcWorkerNotStopped(requestId);
-      await reportProgress(`视频地址已获取：${videoUrl}`, { stageLabel: '获取视频地址' });
+      await reportProgress('视频播放地址已获取', { stageLabel: '获取视频地址' });
 
       await reportProgress('正在理解视频内容', { stageLabel: '视频理解' });
       let videoSummaryRaw = '';
@@ -5492,9 +5561,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         if (!isModelVideoInspectionErrorMessage(videoInspectionMessage)) {
           throw error;
         }
-        const finalReason = '视频触发模型内容风控，当前条目已跳过';
-        const evidenceSummary = `模型返回：${videoInspectionMessage || '视频内容触发风控拦截'}`;
-        await reportProgress('视频触发内容风控，当前条目已跳过', {
+        const finalReason = '视频内容触发安全拦截，当前条目已跳过';
+        const evidenceSummary = 'AI 提示视频内容触发安全拦截';
+        await reportProgress('视频内容触发安全拦截，当前条目已跳过', {
           stageLabel: '视频理解',
           finalReason,
           skipReason: 'content_inspection_failed',
@@ -5503,7 +5572,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           validatedCandidates: [],
           rejectedCandidates: [],
           logLines: [
-            `最终说明：${finalReason}`,
+            `最终判断：${finalReason}`,
             `证据摘要：${evidenceSummary}`
           ]
         });
@@ -5512,7 +5581,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           skipped: true,
           skipReason: 'content_inspection_failed'
         };
-        await reportProgress('风控跳过完成，正在返回结果', { stageLabel: '已完成' });
+        await reportProgress('内容安全跳过完成，正在返回结果', { stageLabel: '已完成' });
         return;
       }
       const videoAnalysis = normalizeOmniVideoAnalysis(parseModelJsonObject(videoSummaryRaw, '视频理解'));
@@ -5542,12 +5611,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         ]
       });
 
-      await reportProgress('正在分析成品标签', { stageLabel: '候选分析' });
+      await reportProgress('正在判断候选标签', { stageLabel: '候选标签判断' });
       await reportProgress('正在加载标签库', { stageLabel: '标签库' });
       const tagLibrary = await loadTagLibrary();
       await reportProgress(`标签库已加载：${tagLibrary.count} 条`, { stageLabel: '标签库' });
       const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags), categoryRule, detailCategoryContext, cancelCheck);
-      const firstJudge = parseModelJsonObject(firstJudgeRaw, '第一轮标签判断');
+      const firstJudge = parseModelJsonObject(firstJudgeRaw, '候选标签判断');
       const searchCandidates = normalizeTagSearchCandidateArray(firstJudge.search_candidates);
       const missingCandidates = searchCandidates.map((item) => item.keyword);
       const firstSummary = normalizeText(firstJudge.summary);
@@ -5558,10 +5627,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           ? `正在验证候选标签（1/${searchCandidates.length}）`
           : '当前没有候选标签需要验证',
         {
-          stageLabel: '搜索验证',
+          stageLabel: '标签库验证',
           logLines: [
-            firstSummary ? `候选判断：${firstSummary}` : '',
-            missingCandidates.length ? `候选补打标签：${missingCandidates.join('、')}` : '候选补打标签：无',
+            firstSummary ? `候选标签判断：${firstSummary}` : '',
+            missingCandidates.length ? `候选关键词：${missingCandidates.join('、')}` : '候选关键词：无',
             `标签库记录：${tagLibrary.count} 条`
           ],
           validatedCandidates: searchCandidates.map((item) => ({
@@ -5589,15 +5658,15 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           options
         });
         await reportProgress(`候选标签 ${candidate.keyword} 检索完成`, {
-          stageLabel: '搜索验证',
+          stageLabel: '标签库验证',
           logLines: [
-            candidate.reason ? `发起搜索：${candidate.reason}` : '',
+            candidate.reason ? `检索原因：${candidate.reason}` : '',
             `标签库结果：${options.map((option) => formatTagDetailForDisplay(option)).join('；') || '标签库无结果'}`
           ]
         });
       }
 
-      await reportProgress('正在生成最终结论', { stageLabel: '生成结论' });
+      await reportProgress('正在进行最终标签裁定', { stageLabel: '最终标签裁定' });
       const finalJudgeRaw = await requestTagJudge(
         apiKey,
         buildFinalTagJudgePrompt(
@@ -5614,7 +5683,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         detailCategoryContext,
         cancelCheck
       );
-      const finalJudge = parseModelJsonObject(finalJudgeRaw, '最终结论');
+      const finalJudge = parseModelJsonObject(finalJudgeRaw, '最终标签裁定');
       const missingTagsActionable = normalizeTagArray(finalJudge.missing_tags_actionable);
       const candidateDecisions = normalizeCandidateDecisionArray(finalJudge.candidate_decisions);
       const validatedCandidates = buildValidatedCandidates(searchResults, candidateDecisions);
@@ -5627,12 +5696,12 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const evidenceSummary = normalizeText(finalJudge.evidence_summary) || [firstSummary, baseEvidenceSummary].filter(Boolean).join('\n');
       const finalReason = normalizeText(finalJudge.final_reason) || firstSummary;
       const missingTagsText = buildMissingTagRecordText(missingTagsActionable);
-      await reportProgress('最终结论已生成，正在整理结果', {
-        stageLabel: '生成结论',
+      await reportProgress('最终标签裁定完成，正在整理结果', {
+        stageLabel: '最终标签裁定',
         logLines: [
           evidenceSummary ? `证据摘要：${evidenceSummary.replace(/\n+/g, '；')}` : '',
           validatedCandidates.length
-            ? `候选结论：${validatedCandidates.map((item) => {
+            ? `候选标签裁定：${validatedCandidates.map((item) => {
               const resultLabel = item.accepted === true ? '采纳' : item.accepted === false ? '放弃' : '待定';
               const parts = [`${item.keyword}(${resultLabel})`];
               if (item.reason) {
@@ -5643,13 +5712,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
               }
               return parts.join('，');
             }).join('；')}`
-            : '候选结论：无',
+            : '候选标签裁定：无',
           rejectedCandidates.length
             ? `放弃候选：${rejectedCandidates.map((item) => `${item.keyword}（${item.reason || '暂无说明'}）`).join('；')}`
             : '放弃候选：无',
           missingTagsActionable.length ? `最终补打标签：${missingTagsActionable.join('、')}` : '最终补打标签：无',
-          missingTagsText ? `落表漏打标签：${missingTagsText}` : '落表漏打标签：无',
-          finalReason ? `最终说明：${finalReason}` : ''
+          missingTagsText ? `写入结果的漏打标签：${missingTagsText}` : '写入结果的漏打标签：无',
+          finalReason ? `最终判断：${finalReason}` : ''
         ]
       });
 
@@ -5743,7 +5812,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
     async init() { if (!isSupportedPage()) return; injectPanelStyle(); await this.clearExpiredCache(); await this.loadState(); this.mountPanel(); if (isListPage()) await this.tryResume(); }
     async clearExpiredCache() { const state = await storageGet(STORAGE_KEYS.checkpoint); const checkpoint = state[STORAGE_KEYS.checkpoint]; const cutoffDate = getQuarterCutoffDateString(new Date()); const dateValue = checkpoint && normalizeText(checkpoint.updatedAt || checkpoint.startedAt).slice(0, 10); if (dateValue && isDateExpiredByQuarter(dateValue, cutoffDate)) await storageRemove(STORAGE_KEYS.checkpoint); }
-    async loadState() { const state = await storageGet([STORAGE_KEYS.settings, STORAGE_KEYS.report, STORAGE_KEYS.checkpoint]); this.settings = normalizeWorkbenchSettings(state[STORAGE_KEYS.settings]); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.runtime.minimized = Boolean(this.settings.ui.panelMinimized); this.runtime.report = normalizeSecondaryQcReport(state[STORAGE_KEYS.report]); this.runtime.checkpoint = normalizeSecondaryQcCheckpoint(state[STORAGE_KEYS.checkpoint]); this.runtime.logs = []; this.runtime.statusText = '等待开始'; this.runtime.running = false; this.runtime.jobType = ''; this.runtime.listJobAbortToken = 0; this.runtime.stopping = false; this.runtime.pauseRequested = false; if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS) : []; this.runtime.statusText = this.runtime.checkpoint.statusText || '检测到未完成二次质检，正在准备继续'; return; } if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'paused') { this.runtime.statusText = this.runtime.checkpoint.statusText || '存在已暂停质检，可点击继续任务'; this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS) : []; return; } if (this.runtime.checkpoint && this.runtime.checkpoint.statusText) { this.runtime.statusText = this.runtime.checkpoint.statusText; this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS) : []; } }
+    async loadState() { const state = await storageGet([STORAGE_KEYS.settings, STORAGE_KEYS.report, STORAGE_KEYS.checkpoint]); this.settings = normalizeWorkbenchSettings(state[STORAGE_KEYS.settings]); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.runtime.minimized = Boolean(this.settings.ui.panelMinimized); this.runtime.report = normalizeSecondaryQcReport(state[STORAGE_KEYS.report]); this.runtime.checkpoint = normalizeSecondaryQcCheckpoint(state[STORAGE_KEYS.checkpoint]); this.runtime.logs = []; this.runtime.statusText = '等待开始'; this.runtime.running = false; this.runtime.jobType = ''; this.runtime.listJobAbortToken = 0; this.runtime.stopping = false; this.runtime.pauseRequested = false; if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '检测到未完成二次质检，正在准备继续'); return; } if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'paused') { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '存在已暂停质检，可点击继续任务'); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; return; } if (this.runtime.checkpoint && this.runtime.checkpoint.statusText) { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; } }
 
     mountPanel() {
       const existing = document.getElementById('ysp-secondary-qc-panel-root');
@@ -5753,7 +5822,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       root.innerHTML = `
         <div class="ysp-daily-panel__backdrop"></div><div class="ysp-daily-panel__popup-layer" data-role="popup-layer"></div>
         <div class="ysp-daily-panel"><div class="ysp-daily-panel__header"><div class="ysp-daily-panel__header-top"><div><div class="ysp-daily-panel__title">央视频二次质检助手</div></div><div class="ysp-daily-panel__header-actions"><button type="button" class="ysp-daily-panel__header-chip" data-role="open-settings">设置</button><div class="ysp-daily-panel__header-chip">v${SCRIPT_VERSION}</div><button type="button" class="ysp-daily-panel__header-chip" data-role="minimize">收起</button></div></div></div>
-          <div class="ysp-daily-panel__body"><div class="ysp-daily-panel__main"><section class="ysp-daily-panel__module"><div class="ysp-daily-panel__module-body"><div class="ysp-daily-panel__field-grid"><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-start-date"><span class="ysp-daily-panel__date-caption">开始周期</span><input id="ysp-secondary-qc-start-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-end-date"><span class="ysp-daily-panel__date-caption">结束周期</span><input id="ysp-secondary-qc-end-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-target-count"><span class="ysp-daily-panel__date-caption">质检条数</span><input id="ysp-secondary-qc-target-count" class="ysp-daily-panel__input" type="number" min="1" max="999" step="1" /></label></div><div class="ysp-daily-panel__field"><span class="ysp-daily-panel__label">质检品类</span><div data-role="secondary-qc-groups"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-secondary-qc">开始质检</button></div></div></section></div><div class="ysp-daily-panel__side"><div class="ysp-daily-panel__status" data-role="status"></div><div class="ysp-daily-panel__log-card"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">运行日志</span></div><div class="ysp-daily-panel__log-list" data-role="logs"></div></div><div class="ysp-daily-panel__result-card" data-role="downloads-card" hidden><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">下载中心</span></div><div class="ysp-daily-panel__download-list" data-role="downloads"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button><button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button></div></div></div></div>
+          <div class="ysp-daily-panel__body"><div class="ysp-daily-panel__main"><section class="ysp-daily-panel__module"><div class="ysp-daily-panel__module-body"><div class="ysp-daily-panel__field-grid"><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-start-date"><span class="ysp-daily-panel__date-caption">开始日期</span><input id="ysp-secondary-qc-start-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-end-date"><span class="ysp-daily-panel__date-caption">结束日期</span><input id="ysp-secondary-qc-end-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-target-count"><span class="ysp-daily-panel__date-caption">目标条数</span><input id="ysp-secondary-qc-target-count" class="ysp-daily-panel__input" type="number" min="1" max="999" step="1" /></label></div><div class="ysp-daily-panel__field"><span class="ysp-daily-panel__label">质检品类</span><div data-role="secondary-qc-groups"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-secondary-qc">开始质检</button></div></div></section></div><div class="ysp-daily-panel__side"><div class="ysp-daily-panel__status" data-role="status"></div><div class="ysp-daily-panel__log-card"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">运行日志</span></div><div class="ysp-daily-panel__log-list" data-role="logs"></div></div><div class="ysp-daily-panel__result-card" data-role="downloads-card" hidden><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">下载中心</span></div><div class="ysp-daily-panel__download-list" data-role="downloads"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button><button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button></div></div></div></div>
         <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button><div class="ysp-daily-panel__modal-mask" data-role="settings-mask"><div class="ysp-daily-panel__modal"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">设置</span></div><label class="ysp-daily-panel__date-field" for="ysp-settings-config-workbook-file"><span class="ysp-daily-panel__date-caption">上传配置 XLSX（本地保存）</span><input id="ysp-settings-config-workbook-file" class="ysp-daily-panel__input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label><div class="ysp-daily-panel__status-subtext" data-role="config-workbook-file-status"></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-config">清理配置</button><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-tag-cache">清理缓存</button></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="save-settings">保存设置</button><button type="button" class="ysp-daily-panel__button" data-role="close-settings">关闭</button></div></div></div>`;
       document.body.appendChild(root);
       this.panel = root;
@@ -5789,7 +5858,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         const fileName = normalizeText(this.settingsDraft.configWorkbookFileName);
         const tagCount = Math.max(0, Math.trunc(Number(this.settingsDraft.tagLibraryCount) || 0));
         const ruleCount = Math.max(0, Math.trunc(Number(this.settingsDraft.configWorkbookRuleCount) || 0));
-        const apiKeyReady = normalizeText(this.settingsDraft.secrets && this.settingsDraft.secrets.arkApiKey) ? 'API Key 已读取' : 'API Key 未读取';
+        const apiKeyReady = normalizeText(this.settingsDraft.secrets && this.settingsDraft.secrets.arkApiKey) ? '密钥已读取' : '密钥未读取';
         this.refs.configWorkbookFileStatus.textContent = savingText || (fileName
           ? `已上传：${fileName}${tagCount ? `，标签 ${tagCount} 条` : ''}${ruleCount ? `，规则 ${ruleCount} 条` : ''}，${apiKeyReady}`
           : '未上传配置 XLSX');
@@ -5889,7 +5958,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
     async clearConfigWorkbookData() {
       if (this.runtime.running) return;
-      const confirmed = window.confirm('这会清除已上传的配置 XLSX、品类规则和 API Key，不会清理标签缓存。确认清理吗？');
+      const confirmed = window.confirm('这会清除配置 XLSX 的上传记录、品类规则和密钥，不会清理任务缓存和标签库缓存。确认清理吗？');
       if (!confirmed) return;
       this.settings.configWorkbookFileName = '';
       this.settings.configWorkbookUploadedAt = '';
@@ -5904,7 +5973,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
     async clearNonConfigCacheData() {
       if (this.runtime.running) return;
-      const confirmed = window.confirm('这会清除任务进度、下载结果、临时请求和当前日志，不会清理配置 XLSX、标签库、品类规则和 API Key。确认清理吗？');
+      const confirmed = window.confirm('这会清除任务进度、下载结果、临时记录和当前日志，不会清理配置 XLSX、标签库、品类规则和密钥。确认清理吗？');
       if (!confirmed) return;
       await clearNonConfigCacheStorage();
       this.runtime.report = null;
@@ -5920,9 +5989,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.pushLog('已清理缓存');
     }
     renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'secondaryQc'; const triggerSummary = this.getGroupPickerSummary(); this.refs.secondaryQcGroups.innerHTML = `<div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
-    renderStatus() { const pageText = isListPage() ? '当前页面：列表页' : isDetailPage() ? '当前页面：详情页，只保留质检处理；开始或继续任务请回列表页' : '当前页面：其他页面'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：二次质检</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
+    renderStatus() { const pageText = isListPage() ? '当前页面：列表页，可开始或继续质检' : isDetailPage() ? '当前页面：详情页，正在处理单条视频；开始或继续任务请回列表页' : '当前页面：其他页面，请回标准化列表页操作'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：二次质检</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
     renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div style="padding: 12px; border: 1px solid #d8e2ee; border-radius: 12px; background: #fff;"><div style="font-weight: 700; color: #17324f;">二次质检结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div style="margin-top: 4px; color: #6b7a90;">目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条</div><div class="ysp-daily-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="secondaryQc">下载质检表</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
-    renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(log)}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
+    renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(formatUserVisibleLogText(log))}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
     render() {
       if (!this.panel) return;
       if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = '';
@@ -5959,15 +6028,15 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.renderDownloads();
       this.renderLogs();
     }
-    applySecondaryQcWorkerProgress(text, progressLogLines) { const progressText = normalizeText(text); const logLines = normalizeProgressLogLines(progressLogLines); const mergedLines = [progressText, ...logLines].filter(Boolean).filter((line, index, array) => array.indexOf(line) === index); if (!progressText && !mergedLines.length) return; this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; if (progressText) this.runtime.statusText = progressText; this.runtime.logs = mergeLogEntries(this.runtime.logs, mergedLines); this.render(); }
+    applySecondaryQcWorkerProgress(text, progressLogLines) { const progressText = formatUserVisibleLogText(text); const logLines = normalizeProgressLogLines(progressLogLines); const mergedLines = [progressText, ...logLines].filter(Boolean).filter((line, index, array) => array.indexOf(line) === index); if (!progressText && !mergedLines.length) return; this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; if (progressText) this.runtime.statusText = progressText; this.runtime.logs = mergeLogEntries(this.runtime.logs, mergedLines); this.render(); }
     pushLog(message) { this.runtime.logs = mergeLogEntries(this.runtime.logs, [message]); const checkpoint = this.getActiveCheckpoint(); if (checkpoint) checkpoint.logs = this.runtime.logs.slice(); this.renderLogs(); void this.persistActiveCheckpoint().catch(() => {}); }
-    updateCheckpointStatus(text) { const checkpoint = this.getActiveCheckpoint(); this.runtime.statusText = text; if (checkpoint) checkpoint.statusText = text; this.renderStatus(); void this.persistActiveCheckpoint().catch(() => {}); }
+    updateCheckpointStatus(text) { const checkpoint = this.getActiveCheckpoint(); const statusText = formatUserVisibleLogText(text); this.runtime.statusText = statusText; if (checkpoint) checkpoint.statusText = statusText; this.renderStatus(); void this.persistActiveCheckpoint().catch(() => {}); }
     async saveCheckpoint() { if (!this.runtime.checkpoint) return; this.runtime.checkpoint.updatedAt = new Date().toISOString(); await storageSetCached({ [STORAGE_KEYS.checkpoint]: this.runtime.checkpoint }); }
     async clearCheckpoint() { await storageRemove(STORAGE_KEYS.checkpoint); this.runtime.checkpoint = null; }
-    async stopCurrentJob() { if (!this.runtime.running) return; const checkpoint = this.getActiveCheckpoint(); const stoppedStatusText = '采集已结束，可以重新开始'; requestListJobAbort(this.runtime.listJobAbortToken); this.runtime.stopping = true; this.runtime.pauseRequested = false; this.runtime.statusText = stoppedStatusText; this.pushLog('采集已结束'); if (checkpoint) { checkpoint.status = 'stopped'; checkpoint.statusText = stoppedStatusText; const requestIds = uniqueTextList(this.getSecondaryQcInflightEntries(checkpoint).map((entry) => entry.requestId)); checkpoint.inflightEntries = []; await this.saveCheckpoint(); if (requestIds.length) await this.stopSecondaryQcRequests(requestIds); } this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.render(); }
+    async stopCurrentJob() { if (!this.runtime.running) return; const checkpoint = this.getActiveCheckpoint(); const stoppedStatusText = '任务已结束，可以重新开始'; requestListJobAbort(this.runtime.listJobAbortToken); this.runtime.stopping = true; this.runtime.pauseRequested = false; this.runtime.statusText = stoppedStatusText; this.pushLog('任务已结束'); if (checkpoint) { checkpoint.status = 'stopped'; checkpoint.statusText = stoppedStatusText; const requestIds = uniqueTextList(this.getSecondaryQcInflightEntries(checkpoint).map((entry) => entry.requestId)); checkpoint.inflightEntries = []; await this.saveCheckpoint(); if (requestIds.length) await this.stopSecondaryQcRequests(requestIds); } this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.render(); }
     pauseCurrentJob() { if (!this.runtime.running) return; const inflightCount = this.getSecondaryQcInflightEntries(this.runtime.checkpoint).length; this.runtime.pauseRequested = true; this.runtime.stopping = false; this.runtime.statusText = inflightCount ? `正在暂停当前任务，等待 ${inflightCount} 个进行中视频完成` : '正在暂停当前任务'; this.pushLog(this.runtime.statusText); this.render(); }
     async handlePauseResumeAction() { if (this.runtime.running) { this.pauseCurrentJob(); return; } await this.resumePausedJob(); }
-    async resumePausedJob() { if (this.runtime.running) return; if (!isListPage()) throw new Error('继续任务请回到标准化列表页'); const pausedTask = this.getPausedTaskMeta(); if (!pausedTask) throw new Error('当前没有可继续的暂停任务'); this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS) : []; pausedTask.checkpoint.status = 'running'; pausedTask.checkpoint.statusText = '正在继续质检'; this.runtime.statusText = pausedTask.checkpoint.statusText; await this.saveCheckpoint(); this.pushLog('继续质检'); this.render(); await this.runSecondaryQcFromCheckpoint(); }
+    async resumePausedJob() { if (this.runtime.running) return; if (!isListPage()) throw new Error('继续任务请回到标准化列表页'); const pausedTask = this.getPausedTaskMeta(); if (!pausedTask) throw new Error('当前没有可继续的暂停任务'); this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; pausedTask.checkpoint.status = 'running'; pausedTask.checkpoint.statusText = '正在继续质检'; this.runtime.statusText = pausedTask.checkpoint.statusText; await this.saveCheckpoint(); this.pushLog('继续质检'); this.render(); await this.runSecondaryQcFromCheckpoint(); }
     async tryResume() { if (!this.runtime.running) { this.render(); return; } if (this.runtime.jobType === 'secondaryQc' && this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.pushLog('检测到未完成二次质检，正在继续'); await this.runSecondaryQcFromCheckpoint(); return; } this.runtime.running = false; this.runtime.jobType = ''; this.render(); }
     describeItem(item) { return item.exportLabel; }
     isCurrentJobStopRequested() { return isListJobAbortRequested(this.runtime.listJobAbortToken) || this.runtime.stopping; }
@@ -6087,7 +6156,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       });
       await this.saveCheckpoint();
 
-      this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页开始质检 ${row.taskId}`);
+      this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页开始处理 ${formatTaskLogPrefix(row.taskId)}`);
       openUrlInNewTab(detailUrl);
 
       descriptor.promise = (async () => {
@@ -6114,14 +6183,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
               const lines = [progressText, ...progressLogLines].filter(Boolean);
               const uniqueLines = lines.filter((line, index) => lines.indexOf(line) === index);
               uniqueLines.forEach((line) => {
-                this.pushLog(`${row.taskId}：${line}`);
+                this.pushLog(`${formatTaskLogPrefix(row.taskId)}：${line}`);
               });
             },
             taskCancelCheck
           );
         } catch (error) {
           const message = error && error.message ? error.message : String(error);
-          if (message === '采集已结束') {
+          if (message === '任务已结束') {
             throw error;
           }
           throw new Error(prefixTaskError(row.taskId, message));
@@ -6151,7 +6220,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (response.status === 'error') {
         const responseError = normalizeText(response.error);
         if (isModelJsonParseFailureMessage(responseError)) {
-          this.pushLog(`${row.taskId}：模型返回格式错误，已跳过当前条目`);
+          this.pushLog(`${formatTaskLogPrefix(row.taskId)}：AI 返回内容格式不对，已跳过当前条目`);
           return;
         }
         throw new Error(prefixTaskError(row.taskId, responseError || '详情页处理失败'));
@@ -6159,18 +6228,23 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       if (response.skipped && response.skipReason === 'long_video') {
         this.pushLog(
-          `${row.taskId}：长视频跳过${response.durationSeconds ? `（${formatDurationSeconds(response.durationSeconds)}）` : ''}`
+          `${formatTaskLogPrefix(row.taskId)}：长视频跳过${response.durationSeconds ? `（${formatDurationSeconds(response.durationSeconds)}）` : ''}`
         );
         return;
       }
       if (response.skipped && response.skipReason === 'content_inspection_failed') {
-        this.pushLog(`${row.taskId}：视频触发内容风控，已跳过`);
+        this.pushLog(`${formatTaskLogPrefix(row.taskId)}：视频内容触发安全拦截，已跳过`);
+        return;
+      }
+      if (response.skipped && response.skipReason === 'video_url_failed') {
+        const errorText = normalizeText(response.error);
+        this.pushLog(`${formatTaskLogPrefix(row.taskId)}：视频地址获取失败，已跳过${errorText ? `（${formatUserVisibleLogText(errorText)}）` : ''}`);
         return;
       }
 
       const missingTagsActionable = normalizeTagArray(response.missingTagsActionable);
       if (!missingTagsActionable.length) {
-        this.pushLog(`${row.taskId}：未发现漏打标签`);
+        this.pushLog(`${formatTaskLogPrefix(row.taskId)}：未发现漏打标签`);
         return;
       }
       const missingTagsText = buildMissingTagRecordText(missingTagsActionable);
@@ -6178,7 +6252,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const itemTargetCount = checkpoint.itemTargetCounts[itemIndex] || 0;
       const itemRecordedCount = checkpoint.itemRecordedCounts[itemIndex] || 0;
       if (checkpoint.rows.length >= checkpoint.targetCount || itemRecordedCount >= itemTargetCount) {
-        this.pushLog(`${row.taskId}：结果已返回，但当前目标已满，未再落表`);
+        this.pushLog(`${formatTaskLogPrefix(row.taskId)}：结果已返回，但当前目标已满，未再落表`);
         return;
       }
 
@@ -6191,7 +6265,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       });
       checkpoint.itemRecordedCounts[itemIndex] = itemRecordedCount + 1;
       this.pushLog(
-        `${row.taskId}：已记录漏打标签 ${missingTagsText}（${checkpoint.itemRecordedCounts[itemIndex]}/${itemTargetCount}）`
+        `${formatTaskLogPrefix(row.taskId)}：已记录漏打标签 ${missingTagsText}（${checkpoint.itemRecordedCounts[itemIndex]}/${itemTargetCount}）`
       );
     }
 
@@ -6216,7 +6290,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
               ? String(settled.error)
               : '详情页处理失败'
         );
-        if (message && message !== '采集已结束') {
+        if (message && message !== '任务已结束') {
           this.pushLog(`${prefixTaskError(taskId, message)}，已跳过当前条目`);
         }
         await this.saveCheckpoint();
@@ -6248,7 +6322,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             .filter((entry) => entry.requestId !== descriptor.requestId);
           await this.saveCheckpoint();
         }
-        throw new Error('采集已结束');
+        throw new Error('任务已结束');
       }
       await this.handleSettledSecondaryQcTask(settled);
       this.updateSecondaryQcItemProgress(item);
@@ -6271,16 +6345,16 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const items = this.getSelectedEntries('secondaryQc');
       const apiKey = normalizeText(this.settings.secrets.arkApiKey);
       if (!startDate) {
-        throw new Error('请先选择二次质检开始周期');
+        throw new Error('请先选择二次质检开始日期');
       }
       if (!endDate) {
-        throw new Error('请先选择二次质检结束周期');
+        throw new Error('请先选择二次质检结束日期');
       }
       if (startDate > maxDate || endDate > maxDate) {
-        throw new Error('二次质检周期只能选择今天及以前');
+        throw new Error('二次质检日期只能选择今天及以前');
       }
       if (endDate < startDate) {
-        throw new Error('结束周期不能早于开始周期');
+        throw new Error('结束日期不能早于开始日期');
       }
       if (!categoryKey || !items.length) {
         throw new Error('请先选择一个质检品类');
@@ -6289,7 +6363,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         throw new Error('请先在设置里上传配置 XLSX 文件');
       }
       if (!apiKey) {
-        throw new Error('配置 XLSX 的 APIKEY 页缺少 ARK_API_KEY');
+        throw new Error('配置 XLSX 的密钥页缺少可用密钥');
       }
       const categoryRule = getCategoryRuleForCategory(this.settings.categoryRulesContent, items[0].exportLabel);
       await this.persistSettings();
@@ -6331,7 +6405,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       }
       await this.saveCheckpoint();
       this.pushLog(
-        `开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，品类 ${items[0].exportLabel}，目标 ${targetCount} 条，顺序执行，模型 ${SECONDARY_QC_MODEL_LABEL}`
+        `开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，品类 ${items[0].exportLabel}，目标 ${targetCount} 条`
       );
       await this.runSecondaryQcFromCheckpoint();
     }
@@ -6359,10 +6433,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
       while (checkpoint.currentItemIndex < items.length) {
         if (this.isCurrentJobStopRequested()) {
-          throw new Error('采集已结束');
+          throw new Error('任务已结束');
         }
         if (this.runtime.pauseRequested) {
-          throw new Error('采集已暂停');
+          throw new Error('任务已暂停');
         }
         if (checkpoint.rows.length >= checkpoint.targetCount) {
           break;
@@ -6372,7 +6446,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         const itemTargetCount = checkpoint.itemTargetCounts[itemIndex] || 0;
         const itemRecordedCount = checkpoint.itemRecordedCounts[itemIndex] || 0;
         if (!itemTargetCount) {
-          this.pushLog(`${this.describeItem(item)}：分配 0 条，跳过`);
+          this.pushLog(`${this.describeItem(item)}：本品类无需处理，已跳过`);
           checkpoint.currentItemIndex += 1;
           await this.saveCheckpoint();
           continue;
@@ -6390,7 +6464,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         }
         if (itemStatus === 'paused') {
           await this.saveCheckpoint();
-          throw new Error('采集已暂停');
+          throw new Error('任务已暂停');
         }
         checkpoint.currentItemIndex += 1;
         await this.saveCheckpoint();
@@ -6412,20 +6486,20 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         return 'paused';
       }
 
-      this.pushLog(`${this.describeItem(item)}：正在通过接口读取标准化列表`);
+      this.pushLog(`${this.describeItem(item)}：正在读取标准化列表`);
       const firstPage = await requestSecondaryQcListPage(range, 1, activeCancelCheck);
       if (!firstPage.totalRecords) {
-        this.pushLog(`${this.describeItem(item)}：接口当前筛选下没有数据`);
+        this.pushLog(`${this.describeItem(item)}：标准化列表当前筛选下没有数据`);
         return 'done';
       }
 
       const totalPages = firstPage.totalPages;
       let matchedCandidateCount = 0;
-      this.pushLog(`${this.describeItem(item)}：接口返回 ${firstPage.totalRecords} 条，本品类目标 ${itemTargetCount} 条，共 ${totalPages} 页，开始倒序筛选`);
+      this.pushLog(`${this.describeItem(item)}：标准化列表共有 ${firstPage.totalRecords} 条，本品类目标 ${itemTargetCount} 条，共 ${totalPages} 页，将从最新视频开始筛选`);
 
       for (let pageNumber = totalPages; pageNumber >= 1; pageNumber -= 1) {
         if (this.isCurrentJobStopRequested()) {
-          throw new Error('采集已结束');
+          throw new Error('任务已结束');
         }
         if ((checkpoint.itemRecordedCounts[itemIndex] || 0) >= itemTargetCount || checkpoint.rows.length >= checkpoint.targetCount) {
           break;
@@ -6433,7 +6507,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         if (this.runtime.pauseRequested) {
           break;
         }
-        this.pushLog(`${this.describeItem(item)}：正在读取接口第 ${pageNumber}/${totalPages} 页`);
+        this.pushLog(`${this.describeItem(item)}：正在读取列表第 ${pageNumber}/${totalPages} 页`);
         const pageResult = pageNumber === 1
           ? firstPage
           : await requestSecondaryQcListPage(range, pageNumber, activeCancelCheck);
@@ -6452,7 +6526,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       }
 
       if (!matchedCandidateCount) {
-        this.pushLog(`${this.describeItem(item)}：接口返回数据里没有符合当前品类和状态的视频`);
+        this.pushLog(`${this.describeItem(item)}：标准化列表里没有符合当前品类和状态的视频`);
       }
       if (
         this.runtime.pauseRequested
@@ -6473,7 +6547,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         .filter(Boolean);
       for (let index = rows.length - 1; index >= 0; index -= 1) {
         if (this.isCurrentJobStopRequested()) {
-          throw new Error('采集已结束');
+          throw new Error('任务已结束');
         }
         if (this.runtime.pauseRequested) {
           break;
@@ -6533,8 +6607,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
     async failJob(error) {
       const message = error && error.message ? error.message : String(error);
-      const paused = message === '采集已暂停';
-      const stopped = message === '采集已结束';
+      const visibleMessage = formatUserVisibleLogText(message) || '任务处理失败';
+      const paused = message === '任务已暂停';
+      const stopped = message === '任务已结束';
       if (stopped && !this.runtime.running && !this.runtime.jobType) {
         return;
       }
@@ -6544,8 +6619,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         checkpoint.statusText = paused
           ? '任务已暂停，可点击继续任务'
           : stopped
-            ? '采集已结束，可以重新开始'
-            : `任务遇到问题：${message}`;
+            ? '任务已结束，可以重新开始'
+            : `任务遇到问题：${visibleMessage}`;
         await this.saveCheckpoint();
       }
       this.runtime.running = false;
@@ -6554,14 +6629,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.runtime.statusText = paused
         ? '任务已暂停，可点击继续任务'
         : stopped
-          ? '采集已结束，可以重新开始'
-          : `任务遇到问题：${message}`;
+          ? '任务已结束，可以重新开始'
+          : `任务遇到问题：${visibleMessage}`;
       this.pushLog(
         paused
           ? '任务已暂停'
           : stopped
-            ? '采集已结束'
-            : `任务遇到问题：${message}`
+            ? '任务已结束'
+            : `任务遇到问题：${visibleMessage}`
       );
       this.runtime.jobType = '';
       this.render();
