@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.10
+// @version      1.1.12
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1640,7 +1640,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     }
     return [
       normalizedCategoryContext ? `当前视频品类信息：\n${normalizedCategoryContext}` : '',
-      normalizedCategoryContext ? '请先看当前二级品类是什么，再优先参考规则里对应“二级分类”的段落；如果没有完全同名的二级分类，再参考当前一级品类下的其他规则。' : '',
+      normalizedCategoryContext ? '请先看当前二级品类是什么；只有“规则内容”里出现对应二级分类段落时，才优先参考该段落。' : '',
+      normalizedCategoryContext ? '如果“规则内容”里没有完全同名的二级分类段落，再参考当前一级品类下的其他规则。' : '',
+      normalizedRule ? '“规则补充”是当前品类的通用补充，不按二级品类拆分，判断时始终一起参考。' : '',
       normalizedRule ? '以下是当前配置表中的二次质检规则。' : '',
       normalizedRule ? '必须把这些规则作为本次判断的额外要求。' : '',
       normalizedRule ? '' : '',
@@ -5931,7 +5933,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (this.runtime.settingsSaving) return;
       const workbookFile = this.refs.configWorkbookFileInput && this.refs.configWorkbookFileInput.files && this.refs.configWorkbookFileInput.files.length ? this.refs.configWorkbookFileInput.files[0] : null;
       this.runtime.settingsSaving = true;
-      this.runtime.settingsSavingText = workbookFile ? '正在读取配置 XLSX，请稍候' : '正在保存设置，请稍候';
+      this.runtime.settingsSavingText = workbookFile
+        ? '正在读取配置 XLSX，请稍候。加载较慢，如果浏览器提示未响应，请选择等待选项。'
+        : '正在保存设置，请稍候。加载较慢，如果浏览器提示未响应，请选择等待选项。';
       this.render();
       await sleep(60);
       try {
