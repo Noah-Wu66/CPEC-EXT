@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.0.7
+// @version      1.1.3
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -12,6 +12,7 @@
 // @match        https://w.yangshipin.cn/*
 // @updateURL    https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp/qc.user.js
 // @downloadURL  https://gh-proxy.com/https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysp/qc.user.js
+// @require      https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
@@ -1327,6 +1328,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       endDate: '',
       targetCount: 10,
       categoryKey: '',
+      configWorkbookFileName: '',
+      configWorkbookUploadedAt: '',
+      configWorkbookRuleCount: 0,
+      categoryRulesContent: '',
       tagLibraryFileName: '',
       tagLibraryUploadedAt: '',
       tagLibraryCount: 0,
@@ -1365,6 +1370,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       endDate,
       targetCount: normalizePositiveInteger(rawSettings.targetCount, defaults.targetCount, 1, 999),
       categoryKey: normalizeSelectedKeys([rawSettings.categoryKey])[0] || '',
+      configWorkbookFileName: normalizeText(rawSettings.configWorkbookFileName),
+      configWorkbookUploadedAt: normalizeText(rawSettings.configWorkbookUploadedAt),
+      configWorkbookRuleCount: normalizePositiveInteger(rawSettings.configWorkbookRuleCount, 0, 0, 99999999),
+      categoryRulesContent: normalizeMultilineText(rawSettings.categoryRulesContent),
       tagLibraryFileName: normalizeText(rawSettings.tagLibraryFileName),
       tagLibraryUploadedAt: normalizeText(rawSettings.tagLibraryUploadedAt),
       tagLibraryCount: normalizePositiveInteger(rawSettings.tagLibraryCount, 0, 0, 99999999),
@@ -1547,6 +1556,98 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   function normalizeText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeMultilineText(value) {
+    return String(value || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
+  }
+
+  function parseCategoryRuleSections(markdownText) {
+    const source = normalizeMultilineText(markdownText);
+    const rules = new Map();
+    if (!source) {
+      return rules;
+    }
+    const lines = source.split('\n');
+    let currentCategory = '';
+    let currentLines = [];
+    const flushCurrentRule = () => {
+      if (!currentCategory) {
+        return;
+      }
+      rules.set(currentCategory, normalizeMultilineText(currentLines.join('\n')));
+    };
+
+    lines.forEach((line) => {
+      const headingMatch = normalizeText(line).match(/^----(.+?)----$/);
+      if (headingMatch) {
+        flushCurrentRule();
+        currentCategory = normalizeText(headingMatch[1]);
+        currentLines = [];
+        return;
+      }
+      if (currentCategory) {
+        currentLines.push(line);
+      }
+    });
+    flushCurrentRule();
+    return rules;
+  }
+
+  function getCategoryRuleForCategory(markdownText, categoryLabel) {
+    const normalizedCategoryLabel = normalizeText(categoryLabel);
+    if (!normalizedCategoryLabel) {
+      return '';
+    }
+    const rules = parseCategoryRuleSections(markdownText);
+    const commonRule = normalizeMultilineText(rules.get('通用') || '');
+    const categoryRule = normalizeMultilineText(rules.get(normalizedCategoryLabel) || '');
+    return normalizeMultilineText([
+      commonRule ? `通用规则：\n${commonRule}` : '',
+      categoryRule ? `${normalizedCategoryLabel}规则：\n${categoryRule}` : ''
+    ].filter(Boolean).join('\n\n'));
+  }
+
+  function buildCategoryRuleSystemPrompt(categoryRule, detailCategoryContext) {
+    const normalizedRule = normalizeMultilineText(categoryRule);
+    const normalizedCategoryContext = normalizeMultilineText(detailCategoryContext);
+    if (!normalizeText(normalizedRule) && !normalizeText(normalizedCategoryContext)) {
+      return '';
+    }
+    return [
+      normalizedCategoryContext ? `当前视频品类信息：\n${normalizedCategoryContext}` : '',
+      normalizedCategoryContext ? '请先看当前二级品类是什么，再优先参考规则里对应“二级分类”的段落；如果没有完全同名的二级分类，再参考当前一级品类下的其他规则。' : '',
+      normalizedRule ? '以下是当前配置表中的二次质检规则。' : '',
+      normalizedRule ? '必须把这些规则作为本次判断的额外要求。' : '',
+      normalizedRule ? '' : '',
+      normalizedRule
+    ].filter((line) => line !== '').join('\n');
+  }
+
+  function buildDetailCategoryContext(primaryCategory, secondaryCategory, rawCategoryText) {
+    const primary = normalizeText(primaryCategory);
+    const secondary = normalizeText(secondaryCategory);
+    const rawText = normalizeText(rawCategoryText);
+    if (!primary && !secondary && !rawText) {
+      return '';
+    }
+    return [
+      primary ? `一级品类：${primary}` : '',
+      secondary ? `二级品类：${secondary}` : '',
+      rawText ? `接口品类路径：${rawText}` : ''
+    ].filter(Boolean).join('\n');
+  }
+
+  function splitCategoryPathText(value) {
+    const normalized = normalizeText(value);
+    if (!normalized) {
+      return [];
+    }
+    const tokens = normalized
+      .split(/\s*(?:\/|>|›|»|→|->|，|,|、|\n)\s*/g)
+      .map((item) => normalizeText(item))
+      .filter(Boolean);
+    return tokens.length ? tokens : [normalized];
   }
 
   function escapeXml(value) {
@@ -2892,7 +2993,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   function buildTagLibraryFromCsv(csvText) {
     const rows = parseCsvRows(csvText);
     if (!rows.length) {
-      throw new Error('标签库 CSV 为空');
+      throw new Error('标签库为空');
     }
     const headers = rows[0] || [];
     const hasHeader = headers.some((header) => {
@@ -2939,7 +3040,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     });
 
     if (!entries.length) {
-      throw new Error('标签库 CSV 没有可用标签');
+      throw new Error('标签库没有可用标签');
     }
 
     const exactNameMap = new Map();
@@ -3029,31 +3130,143 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     });
   }
 
-  function readFileAsText(file) {
+  function readFileAsArrayBuffer(file, errorMessage) {
+    const failureMessage = normalizeText(errorMessage) || '配置 XLSX 文件读取失败';
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ''));
-      reader.onerror = () => reject(reader.error || new Error('标签库文件读取失败'));
-      reader.readAsText(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error(failureMessage));
+      reader.readAsArrayBuffer(file);
     });
   }
 
-  async function saveUploadedTagLibraryFile(file) {
+  function getXlsxParser() {
+    const parser = (typeof XLSX !== 'undefined' ? XLSX : null)
+      || (typeof globalThis !== 'undefined' ? globalThis.XLSX : null)
+      || window.XLSX
+      || (typeof unsafeWindow !== 'undefined' ? unsafeWindow.XLSX : null);
+    if (!parser || typeof parser.read !== 'function' || !parser.utils) {
+      throw new Error('XLSX 解析库加载失败，请刷新页面后重试');
+    }
+    return parser;
+  }
+
+  function getWorkbookSheet(workbook, index, label) {
+    const sheetName = workbook && workbook.SheetNames ? workbook.SheetNames[index] : '';
+    const sheet = sheetName ? workbook.Sheets[sheetName] : null;
+    if (!sheet) {
+      throw new Error(`配置 XLSX 缺少${label}`);
+    }
+    return {
+      name: sheetName,
+      sheet
+    };
+  }
+
+  function worksheetToRows(xlsxParser, worksheet) {
+    return xlsxParser.utils.sheet_to_json(worksheet, {
+      header: 1,
+      raw: false,
+      defval: '',
+      blankrows: false
+    });
+  }
+
+  function buildCategoryRulesContentFromRows(rows) {
+    if (!Array.isArray(rows) || rows.length < 2) {
+      throw new Error('品类规则页至少需要表头和通用规则行');
+    }
+    const header = rows[0] || [];
+    if (normalizeText(header[0]) !== '品类名' || normalizeText(header[1]) !== '规则内容') {
+      throw new Error('品类规则页首行必须是：品类名、规则内容');
+    }
+    const bodyRows = rows.slice(1);
+    if (normalizeText(bodyRows[0] && bodyRows[0][0]) !== '通用') {
+      throw new Error('品类规则页第二行第一列必须是：通用');
+    }
+    const allowedCategories = new Set(['通用', ...CATEGORY_ENTRIES.map((entry) => entry.exportLabel)]);
+    const sections = [];
+    let ruleCount = 0;
+    bodyRows.forEach((row) => {
+      const category = normalizeText(row && row[0]);
+      if (!category) {
+        return;
+      }
+      if (!allowedCategories.has(category)) {
+        throw new Error(`品类规则页存在未支持的品类：${category}`);
+      }
+      const rule = normalizeMultilineText(row[1]);
+      if (normalizeText(rule)) {
+        ruleCount += 1;
+      }
+      sections.push(`----${category}----\n${rule}`);
+    });
+    return {
+      content: normalizeMultilineText(sections.join('\n\n')),
+      ruleCount
+    };
+  }
+
+  function readApiKeyFromRows(rows) {
+    if (!Array.isArray(rows) || !rows.length) {
+      throw new Error('APIKEY 页为空');
+    }
+    for (const row of rows) {
+      const keyName = normalizeText(row && row[0]).replace(/\s+/g, '').toUpperCase();
+      if (keyName === 'ARK_API_KEY' || keyName === 'ARKAPIKEY') {
+        const apiKey = normalizeText(row && row[1]);
+        if (!apiKey) {
+          throw new Error('APIKEY 页里 ARK_API_KEY 的值为空');
+        }
+        return apiKey;
+      }
+    }
+    throw new Error('APIKEY 页必须包含 ARK_API_KEY');
+  }
+
+  async function saveUploadedConfigWorkbookFile(file) {
     if (!(file instanceof File)) {
-      throw new Error('请选择标签库 CSV 文件');
+      throw new Error('请选择配置 XLSX 文件');
     }
-    const csvText = await readFileAsText(file);
-    if (!normalizeText(csvText)) {
-      throw new Error('标签库文件为空');
+    const fileName = normalizeText(file.name);
+    if (!fileName.toLowerCase().endsWith('.xlsx')) {
+      throw new Error('请上传 .xlsx 配置文件');
     }
-    const library = buildTagLibraryFromCsv(csvText);
-    await writeCachedTagLibraryCsv(csvText, file.name, library.count);
-    TAG_LIBRARY_MEMORY_CACHE.library = library;
+    const xlsxParser = getXlsxParser();
+    const arrayBuffer = await readFileAsArrayBuffer(file, '配置 XLSX 文件读取失败');
+    const workbook = xlsxParser.read(arrayBuffer, { type: 'array' });
+    if (!workbook || !Array.isArray(workbook.SheetNames) || workbook.SheetNames.length < 3) {
+      throw new Error('配置 XLSX 至少需要 3 个工作表');
+    }
+    const tagSheet = getWorkbookSheet(workbook, 0, '第 1 页标签库');
+    const ruleSheet = getWorkbookSheet(workbook, 1, '第 2 页品类规则');
+    const apiSheet = getWorkbookSheet(workbook, 2, '第 3 页 APIKEY');
+    if (normalizeText(apiSheet.name).toUpperCase() !== 'APIKEY') {
+      throw new Error('第 3 页工作表名称必须是 APIKEY');
+    }
+
+    const tagCsvText = xlsxParser.utils.sheet_to_csv(tagSheet.sheet, {
+      FS: ',',
+      RS: '\n',
+      blankrows: false
+    });
+    if (!normalizeText(tagCsvText)) {
+      throw new Error('第 1 页标签库为空');
+    }
+    const tagLibrary = buildTagLibraryFromCsv(tagCsvText);
+    const ruleMeta = buildCategoryRulesContentFromRows(worksheetToRows(xlsxParser, ruleSheet.sheet));
+    const arkApiKey = readApiKeyFromRows(worksheetToRows(xlsxParser, apiSheet.sheet));
+
+    await writeCachedTagLibraryCsv(tagCsvText, fileName, tagLibrary.count);
+    TAG_LIBRARY_MEMORY_CACHE.library = tagLibrary;
     TAG_LIBRARY_MEMORY_CACHE.loadingPromise = null;
     return {
-      fileName: normalizeText(file.name) || '标签库.csv',
-      count: library.count,
-      uploadedAt: new Date().toISOString()
+      fileName: fileName || '配置.xlsx',
+      uploadedAt: new Date().toISOString(),
+      tagLibraryCount: tagLibrary.count,
+      categoryRulesContent: ruleMeta.content,
+      categoryRuleCount: ruleMeta.ruleCount,
+      arkApiKey
     };
   }
 
@@ -3068,7 +3281,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const record = await readCachedTagLibraryRecord();
       const csvText = record && typeof record.text === 'string' ? record.text : '';
       if (!csvText) {
-        throw new Error('请先在设置里上传标签库 CSV 文件');
+        throw new Error('请先在设置里上传配置 XLSX 文件');
       }
       const library = buildTagLibraryFromCsv(csvText);
       TAG_LIBRARY_MEMORY_CACHE.library = library;
@@ -3251,15 +3464,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return 0;
   }
 
-  function parseUserBadgeName(text) {
-    return normalizeText(String(text || '').replace(/，?\s*退出.*/, ''));
-  }
-
-  function getCurrentLoginName() {
-    const container = document.querySelector('.user-info, .right-menu .user-info, .right-menu-item');
-    return parseUserBadgeName(container ? container.textContent : '');
-  }
-
   function getCookieValue(name) {
     const normalizedName = normalizeText(name);
     if (!normalizedName) {
@@ -3409,6 +3613,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return {
       taskId,
       standardOperator: normalizeText(record.operator),
+      qcOperator: normalizeText(record.checker),
       qcStatus: normalizeText(record.check),
       state: normalizeText(record.state),
       type: normalizeText(record.type),
@@ -3795,26 +4000,33 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       : extractTextFromModelJson(response.responseText || '');
   }
 
-  async function requestOmniVideoSummary(apiKey, videoUrl, promptText, cancelCheck) {
+  async function requestOmniVideoSummary(apiKey, videoUrl, promptText, categoryRule, detailCategoryContext, cancelCheck) {
+    const systemPrompt = buildCategoryRuleSystemPrompt(categoryRule, detailCategoryContext);
+    const messages = [];
+    if (systemPrompt) {
+      messages.push({
+        role: 'system',
+        content: systemPrompt
+      });
+    }
+    messages.push({
+      role: 'user',
+      content: [
+        {
+          type: 'video_url',
+          video_url: {
+            url: videoUrl
+          }
+        },
+        {
+          type: 'text',
+          text: promptText
+        }
+      ]
+    });
     const payload = {
       model: SECONDARY_QC_MODEL,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'video_url',
-              video_url: {
-                url: videoUrl
-              }
-            },
-            {
-              type: 'text',
-              text: promptText
-            }
-          ]
-        }
-      ],
+      messages,
       stream: true,
       stream_options: {
         include_usage: true
@@ -3823,15 +4035,22 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return requestArkText(apiKey, payload, true, cancelCheck);
   }
 
-  async function requestTagJudge(apiKey, promptText, cancelCheck) {
+  async function requestTagJudge(apiKey, promptText, categoryRule, detailCategoryContext, cancelCheck) {
+    const systemPrompt = buildCategoryRuleSystemPrompt(categoryRule, detailCategoryContext);
+    const messages = [];
+    if (systemPrompt) {
+      messages.push({
+        role: 'system',
+        content: systemPrompt
+      });
+    }
+    messages.push({
+      role: 'user',
+      content: promptText
+    });
     const payload = {
       model: SECONDARY_QC_MODEL,
-      messages: [
-        {
-          role: 'user',
-          content: promptText
-        }
-      ]
+      messages
     };
     return requestArkText(apiKey, payload, false, cancelCheck);
   }
@@ -3935,6 +4154,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         actionButton,
         taskId: fields['VID'] || '',
         standardOperator: fields['标准化操作人'] || '',
+        qcOperator: fields['质检人'] || '',
         qcStatus: fields['质检状态'] || ''
       };
     });
@@ -3988,6 +4208,67 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     const playerValue = getDetailVideoVidFromPlayer();
     const taskValue = getDetailPageTaskId();
     return explicitValue || consoleValue || playerValue || normalizeText(fallbackVid) || taskValue || '';
+  }
+
+  async function fetchDetailTaskInfo(taskId, cancelCheck) {
+    const vid = normalizeText(taskId);
+    if (!vid) {
+      throw new Error('未提供详情页 VID');
+    }
+    const controller = new AbortController();
+    let cancelTimer = 0;
+    try {
+      if (typeof cancelCheck === 'function') {
+        if (cancelCheck()) {
+          throw new Error('采集已结束');
+        }
+        cancelTimer = window.setInterval(() => {
+          try {
+            if (cancelCheck()) {
+              controller.abort();
+            }
+          } catch (error) {
+            // ignore cancel check errors
+          }
+        }, 200);
+      }
+      const response = await fetch(
+        `${location.origin}/api/api/task/info?vid=${encodeURIComponent(vid)}&select_type=2`,
+        {
+          credentials: 'include',
+          signal: controller.signal
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`详情页信息接口请求失败：${response.status}`);
+      }
+      const payload = await response.json();
+      if (!payload || Number(payload.code) !== 0 || !payload.data) {
+        throw new Error(normalizeText(payload && (payload.msg || payload.message)) || '详情页信息接口返回异常');
+      }
+      return payload.data;
+    } catch (error) {
+      if (error && error.name === 'AbortError') {
+        throw new Error('采集已结束');
+      }
+      throw error;
+    } finally {
+      if (cancelTimer) {
+        window.clearInterval(cancelTimer);
+      }
+    }
+  }
+
+  function getDetailCategoryContextFromInfo(detailInfo, primaryCategory) {
+    const navItems = Array.isArray(detailInfo && detailInfo.nav)
+      ? detailInfo.nav
+        .map((item) => normalizeText(item && (item.name || item.val || item.title)))
+        .filter(Boolean)
+      : [];
+    const categoryParts = navItems.length ? navItems : splitCategoryPathText(primaryCategory);
+    const primary = normalizeText(primaryCategory) || categoryParts[0] || '';
+    const secondary = categoryParts.length > 1 ? categoryParts[1] : '';
+    return buildDetailCategoryContext(primary, secondary, categoryParts.join(' / '));
   }
 
   function getDetailFormValueByLabels(labels) {
@@ -4410,6 +4691,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       processedTaskIds: uniqueTextList(checkpoint.processedTaskIds),
       rows,
       qcOperator: normalizeText(checkpoint.qcOperator),
+      categoryRule: normalizeMultilineText(checkpoint.categoryRule),
       status: normalizeText(checkpoint.status),
       statusText: normalizeText(checkpoint.statusText),
       logs: Array.isArray(checkpoint.logs) ? checkpoint.logs.slice(0, MAX_LOGS) : [],
@@ -4895,11 +5177,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return true;
   }
 
-  function buildOmniVideoSummaryPrompt(titleText) {
+  function buildOmniVideoSummaryPrompt(titleText, detailCategoryContext) {
     const normalizedTitle = normalizeText(titleText);
+    const normalizedCategoryContext = normalizeMultilineText(detailCategoryContext);
     return [
       '你是央视频二次质检的视频理解助手。',
       '这是最后一道查缺补漏，请认真看完整个视频，不要只看开头，也不要凭印象猜测。',
+      normalizedCategoryContext ? `当前视频品类信息：\n${normalizedCategoryContext}` : '',
       normalizedTitle ? `参考标题：${normalizedTitle}` : '参考标题：无',
       '请只返回 JSON，不要输出其他文字。',
       'JSON 里的字段名和字符串值只能使用英文双引号，禁止使用单引号。',
@@ -4915,7 +5199,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       '',
       '输出格式：',
       '{"overall_theme":"","timeline":[{"time":"","summary":""}],"title_clues":[],"repeated_signals":[],"strong_evidence":[],"uncertain_points":[]}'
-    ].join('\n');
+    ].filter((line) => line !== '').join('\n');
   }
 
   function buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags) {
@@ -5074,6 +5358,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (!request || typeof request !== 'object') {
         throw new Error('未找到二次质检任务上下文');
       }
+      const categoryRule = normalizeMultilineText(request.categoryRule);
       const listVid = normalizeText(request.taskId || getDetailPageTaskId());
 
       await waitForDetailPageReady(cancelCheck);
@@ -5085,6 +5370,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const durationSeconds = await waitForDetailDurationSeconds(cancelCheck);
       const videoVid = getDetailVideoVid(listVid);
       const selectedTags = getDetailSelectedTagDetails();
+      const detailTaskInfo = await fetchDetailTaskInfo(listVid, cancelCheck);
+      const detailCategoryContext = getDetailCategoryContextFromInfo(detailTaskInfo, request.primaryCategory);
       await reportProgress(
         durationSeconds > 0
           ? `已读取视频信息，时长 ${formatDurationSeconds(durationSeconds)}`
@@ -5093,6 +5380,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           stageLabel: '时长判断',
           logLines: [
             titleText ? `标题：${titleText}` : '',
+            detailCategoryContext ? `品类信息：${detailCategoryContext.replace(/\n+/g, '；')}` : '',
             videoVid ? `顶部VID：${videoVid}` : '',
             durationSeconds > 0 ? `视频时长：${formatDurationSeconds(durationSeconds)}` : '视频时长：未读取到'
           ]
@@ -5145,7 +5433,9 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         videoSummaryRaw = await requestOmniVideoSummary(
           apiKey,
           videoUrl,
-          buildOmniVideoSummaryPrompt(titleText),
+          buildOmniVideoSummaryPrompt(titleText, detailCategoryContext),
+          categoryRule,
+          detailCategoryContext,
           cancelCheck
         );
       } catch (error) {
@@ -5207,7 +5497,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       await reportProgress('正在加载标签库', { stageLabel: '标签库' });
       const tagLibrary = await loadTagLibrary();
       await reportProgress(`标签库已加载：${tagLibrary.count} 条`, { stageLabel: '标签库' });
-      const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags), cancelCheck);
+      const firstJudgeRaw = await requestTagJudge(apiKey, buildFirstTagJudgePrompt(titleText, videoSummary, selectedTags), categoryRule, detailCategoryContext, cancelCheck);
       const firstJudge = parseModelJsonObject(firstJudgeRaw, '第一轮标签判断');
       const searchCandidates = normalizeTagSearchCandidateArray(firstJudge.search_candidates);
       const missingCandidates = searchCandidates.map((item) => item.keyword);
@@ -5271,6 +5561,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
           },
           searchResults
         ),
+        categoryRule,
+        detailCategoryContext,
         cancelCheck
       );
       const finalJudge = parseModelJsonObject(finalJudgeRaw, '最终结论');
@@ -5413,10 +5705,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         <div class="ysp-daily-panel__backdrop"></div><div class="ysp-daily-panel__popup-layer" data-role="popup-layer"></div>
         <div class="ysp-daily-panel"><div class="ysp-daily-panel__header"><div class="ysp-daily-panel__header-top"><div><div class="ysp-daily-panel__title">央视频二次质检助手</div></div><div class="ysp-daily-panel__header-actions"><button type="button" class="ysp-daily-panel__header-chip" data-role="open-settings">设置</button><div class="ysp-daily-panel__header-chip">v${SCRIPT_VERSION}</div><button type="button" class="ysp-daily-panel__header-chip" data-role="minimize">收起</button></div></div></div>
           <div class="ysp-daily-panel__body"><div class="ysp-daily-panel__main"><section class="ysp-daily-panel__module"><div class="ysp-daily-panel__module-body"><div class="ysp-daily-panel__field-grid"><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-start-date"><span class="ysp-daily-panel__date-caption">开始周期</span><input id="ysp-secondary-qc-start-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-end-date"><span class="ysp-daily-panel__date-caption">结束周期</span><input id="ysp-secondary-qc-end-date" class="ysp-daily-panel__date" type="date" /></label><label class="ysp-daily-panel__date-field" for="ysp-secondary-qc-target-count"><span class="ysp-daily-panel__date-caption">质检条数</span><input id="ysp-secondary-qc-target-count" class="ysp-daily-panel__input" type="number" min="1" max="999" step="1" /></label></div><div class="ysp-daily-panel__field"><span class="ysp-daily-panel__label">质检品类</span><div data-role="secondary-qc-groups"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="start-secondary-qc">开始质检</button></div></div></section></div><div class="ysp-daily-panel__side"><div class="ysp-daily-panel__status" data-role="status"></div><div class="ysp-daily-panel__log-card"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">运行日志</span></div><div class="ysp-daily-panel__log-list" data-role="logs"></div></div><div class="ysp-daily-panel__result-card" data-role="downloads-card" hidden><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">下载中心</span></div><div class="ysp-daily-panel__download-list" data-role="downloads"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button><button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button></div></div></div></div>
-        <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button><div class="ysp-daily-panel__modal-mask" data-role="settings-mask"><div class="ysp-daily-panel__modal"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">设置</span></div><label class="ysp-daily-panel__date-field" for="ysp-settings-ark-api-key"><span class="ysp-daily-panel__date-caption">ARK_API_KEY（本地保存）</span><input id="ysp-settings-ark-api-key" class="ysp-daily-panel__input" type="password" placeholder="请输入火山方舟模型 Key" /></label><label class="ysp-daily-panel__date-field" for="ysp-settings-tag-library-file"><span class="ysp-daily-panel__date-caption">上传标签库 CSV（本地保存）</span><input id="ysp-settings-tag-library-file" class="ysp-daily-panel__input" type="file" accept=".csv,text/csv" /></label><div class="ysp-daily-panel__status-subtext" data-role="tag-library-file-status"></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清理缓存</button></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="save-settings">保存设置</button><button type="button" class="ysp-daily-panel__button" data-role="close-settings">关闭</button></div></div></div>`;
+        <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button><div class="ysp-daily-panel__modal-mask" data-role="settings-mask"><div class="ysp-daily-panel__modal"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">设置</span></div><label class="ysp-daily-panel__date-field" for="ysp-settings-config-workbook-file"><span class="ysp-daily-panel__date-caption">上传配置 XLSX（本地保存）</span><input id="ysp-settings-config-workbook-file" class="ysp-daily-panel__input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label><div class="ysp-daily-panel__status-subtext" data-role="config-workbook-file-status"></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-config">清理配置</button><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-tag-cache">清理缓存</button></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-role="save-settings">保存设置</button><button type="button" class="ysp-daily-panel__button" data-role="close-settings">关闭</button></div></div></div>`;
       document.body.appendChild(root);
       this.panel = root;
-      this.refs = { backdrop: root.querySelector('.ysp-daily-panel__backdrop'), popupLayer: root.querySelector('[data-role="popup-layer"]'), surface: root.querySelector('.ysp-daily-panel'), dock: root.querySelector('[data-role="dock"]'), minimize: root.querySelector('[data-role="minimize"]'), openSettings: root.querySelector('[data-role="open-settings"]'), settingsMask: root.querySelector('[data-role="settings-mask"]'), settingsInput: root.querySelector('#ysp-settings-ark-api-key'), tagLibraryFileInput: root.querySelector('#ysp-settings-tag-library-file'), tagLibraryFileStatus: root.querySelector('[data-role="tag-library-file-status"]'), saveSettings: root.querySelector('[data-role="save-settings"]'), closeSettings: root.querySelector('[data-role="close-settings"]'), secondaryQcStartDate: root.querySelector('#ysp-secondary-qc-start-date'), secondaryQcEndDate: root.querySelector('#ysp-secondary-qc-end-date'), secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'), secondaryQcGroups: root.querySelector('[data-role="secondary-qc-groups"]'), startSecondaryQc: root.querySelector('[data-role="start-secondary-qc"]'), pauseResume: root.querySelector('[data-role="pause-resume"]'), stop: root.querySelector('[data-role="stop"]'), clearData: root.querySelector('[data-role="clear-data"]'), status: root.querySelector('[data-role="status"]'), downloadsCard: root.querySelector('[data-role="downloads-card"]'), downloads: root.querySelector('[data-role="downloads"]'), logs: root.querySelector('[data-role="logs"]') };
+      this.refs = { backdrop: root.querySelector('.ysp-daily-panel__backdrop'), popupLayer: root.querySelector('[data-role="popup-layer"]'), surface: root.querySelector('.ysp-daily-panel'), dock: root.querySelector('[data-role="dock"]'), minimize: root.querySelector('[data-role="minimize"]'), openSettings: root.querySelector('[data-role="open-settings"]'), settingsMask: root.querySelector('[data-role="settings-mask"]'), configWorkbookFileInput: root.querySelector('#ysp-settings-config-workbook-file'), configWorkbookFileStatus: root.querySelector('[data-role="config-workbook-file-status"]'), saveSettings: root.querySelector('[data-role="save-settings"]'), closeSettings: root.querySelector('[data-role="close-settings"]'), secondaryQcStartDate: root.querySelector('#ysp-secondary-qc-start-date'), secondaryQcEndDate: root.querySelector('#ysp-secondary-qc-end-date'), secondaryQcTargetCount: root.querySelector('#ysp-secondary-qc-target-count'), secondaryQcGroups: root.querySelector('[data-role="secondary-qc-groups"]'), startSecondaryQc: root.querySelector('[data-role="start-secondary-qc"]'), pauseResume: root.querySelector('[data-role="pause-resume"]'), stop: root.querySelector('[data-role="stop"]'), clearConfig: root.querySelector('[data-role="clear-config"]'), clearTagCache: root.querySelector('[data-role="clear-tag-cache"]'), status: root.querySelector('[data-role="status"]'), downloadsCard: root.querySelector('[data-role="downloads-card"]'), downloads: root.querySelector('[data-role="downloads"]'), logs: root.querySelector('[data-role="logs"]') };
       this.bindPanelEvents();
       this.syncSettingsToInputs();
       this.render();
@@ -5434,16 +5726,136 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     getGroupMenuLayout() { const trigger = this.getGroupTriggerElement(); if (!trigger) return null; const rect = trigger.getBoundingClientRect(); const viewportPadding = 12; const gap = 8; const width = Math.min(Math.max(Math.round(rect.width), 360), Math.max(320, window.innerWidth - viewportPadding * 2)); const left = Math.min(Math.max(viewportPadding, Math.round(rect.left)), Math.max(viewportPadding, window.innerWidth - width - viewportPadding)); const preferredHeight = 360; const belowSpace = Math.max(160, Math.floor(window.innerHeight - rect.bottom - gap - viewportPadding)); const aboveSpace = Math.max(160, Math.floor(rect.top - gap - viewportPadding)); const openUpward = belowSpace < 220 && aboveSpace > belowSpace; return { left, width, maxHeight: Math.min(preferredHeight, openUpward ? aboveSpace : belowSpace), top: openUpward ? null : Math.round(rect.bottom + gap), bottom: openUpward ? Math.round(window.innerHeight - rect.top + gap) : null }; }
     renderFloatingGroupMenu() { if (!this.refs.popupLayer) return; if (!this.runtime.openGroupMenu || this.runtime.running || this.runtime.minimized) { this.refs.popupLayer.innerHTML = ''; return; } const layout = this.getGroupMenuLayout(); if (!layout) { this.refs.popupLayer.innerHTML = ''; return; } const styleTokens = [`--menu-left:${layout.left}px`, `--menu-width:${layout.width}px`, `--menu-max-height:${layout.maxHeight}px`, layout.top === null ? 'top:auto' : `top:${layout.top}px`, layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`]; const selectedKey = normalizeText(this.settings.categoryKey); this.refs.popupLayer.innerHTML = `<div class="ysp-daily-panel__group-menu" data-role="group-menu" role="listbox" aria-label="质检品类选项" style="${styleTokens.join(';')}">${CATEGORY_ENTRIES.map((entry) => { const selectedClass = selectedKey === entry.key ? ' is-selected' : ''; return `<button type="button" class="ysp-daily-panel__group-option${selectedClass}" data-theme="${escapeXml(entry.theme)}" data-role="category-option" data-category-key="${escapeXml(entry.key)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-option-copy"><span class="ysp-daily-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span><span class="ysp-daily-panel__group-option-label">${escapeXml(entry.exportLabel)}</span></span><span class="ysp-daily-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span></button>`; }).join('')}</div>`; }
     async persistSettings() { await storageSetCached({ [STORAGE_KEYS.settings]: cloneWorkbenchSettings(this.settings) }); }
-    syncSettingsToInputs() { const maxDate = getTodayDateString(); this.refs.secondaryQcStartDate.max = maxDate; this.refs.secondaryQcEndDate.max = maxDate; this.refs.secondaryQcEndDate.min = this.settings.startDate || ''; this.refs.secondaryQcStartDate.value = this.settings.startDate || ''; this.refs.secondaryQcEndDate.value = this.settings.endDate || ''; this.refs.secondaryQcTargetCount.value = String(this.settings.targetCount || 10); this.refs.settingsInput.value = this.settingsDraft.secrets.arkApiKey || ''; if (this.refs.tagLibraryFileInput) this.refs.tagLibraryFileInput.value = ''; if (this.refs.tagLibraryFileStatus) { const fileName = normalizeText(this.settingsDraft.tagLibraryFileName); const count = Math.max(0, Math.trunc(Number(this.settingsDraft.tagLibraryCount) || 0)); this.refs.tagLibraryFileStatus.textContent = fileName ? `已上传：${fileName}${count ? `，${count} 条` : ''}` : '未上传标签库'; } }
+    syncSettingsToInputs() {
+      const maxDate = getTodayDateString();
+      this.refs.secondaryQcStartDate.max = maxDate;
+      this.refs.secondaryQcEndDate.max = maxDate;
+      this.refs.secondaryQcEndDate.min = this.settings.startDate || '';
+      this.refs.secondaryQcStartDate.value = this.settings.startDate || '';
+      this.refs.secondaryQcEndDate.value = this.settings.endDate || '';
+      this.refs.secondaryQcTargetCount.value = String(this.settings.targetCount || 10);
+      if (this.refs.configWorkbookFileInput) this.refs.configWorkbookFileInput.value = '';
+      if (this.refs.configWorkbookFileStatus) {
+        const fileName = normalizeText(this.settingsDraft.configWorkbookFileName);
+        const tagCount = Math.max(0, Math.trunc(Number(this.settingsDraft.tagLibraryCount) || 0));
+        const ruleCount = Math.max(0, Math.trunc(Number(this.settingsDraft.configWorkbookRuleCount) || 0));
+        const apiKeyReady = normalizeText(this.settingsDraft.secrets && this.settingsDraft.secrets.arkApiKey) ? 'API Key 已读取' : 'API Key 未读取';
+        this.refs.configWorkbookFileStatus.textContent = fileName
+          ? `已上传：${fileName}${tagCount ? `，标签 ${tagCount} 条` : ''}${ruleCount ? `，规则 ${ruleCount} 条` : ''}，${apiKeyReady}`
+          : '未上传配置 XLSX';
+      }
+    }
     bindDateInput(input, handler) { input.setAttribute('inputmode', 'none'); input.addEventListener('click', () => this.openDatePicker(input)); input.addEventListener('focus', () => window.setTimeout(() => this.openDatePicker(input), 0)); input.addEventListener('keydown', (event) => { if (event.key === 'Tab') return; event.preventDefault(); if (event.key === 'Enter' || event.key === ' ') this.openDatePicker(input); }); input.addEventListener('beforeinput', (event) => event.preventDefault()); input.addEventListener('paste', (event) => event.preventDefault()); input.addEventListener('drop', (event) => event.preventDefault()); input.addEventListener('wheel', (event) => event.preventDefault(), { passive: false }); input.addEventListener('change', handler); }
-    bindPanelEvents() { if (this.handleOutsideInteraction) { document.removeEventListener('pointerdown', this.handleOutsideInteraction, true); document.removeEventListener('mousedown', this.handleOutsideInteraction, true); document.removeEventListener('touchstart', this.handleOutsideInteraction, true); } this.handleOutsideInteraction = (event) => { if (this.runtime.minimized || event.isTrusted === false) return; const target = event.target; if (!(target instanceof Node)) return; if (this.refs.surface && this.refs.surface.contains(target)) return; if (this.refs.popupLayer && this.refs.popupLayer.contains(target)) return; if (this.refs.settingsMask && this.refs.settingsMask.contains(target)) return; this.setMinimized(true); }; document.addEventListener('pointerdown', this.handleOutsideInteraction, true); document.addEventListener('mousedown', this.handleOutsideInteraction, true); document.addEventListener('touchstart', this.handleOutsideInteraction, true); this.refs.backdrop.addEventListener('click', () => this.setMinimized(true)); this.refs.minimize.addEventListener('click', () => this.setMinimized(true)); this.refs.dock.addEventListener('click', () => this.setMinimized(false)); this.refs.openSettings.addEventListener('click', () => this.openSettingsModal()); this.refs.closeSettings.addEventListener('click', () => this.closeSettingsModal()); this.refs.settingsMask.addEventListener('click', (event) => { if (event.target === this.refs.settingsMask) this.closeSettingsModal(); }); this.refs.saveSettings.addEventListener('click', () => this.saveSettingsModal().catch((error) => this.failJob(error))); this.bindDateInput(this.refs.secondaryQcStartDate, () => this.updateDate('startDate', this.refs.secondaryQcStartDate.value)); this.bindDateInput(this.refs.secondaryQcEndDate, () => this.updateDate('endDate', this.refs.secondaryQcEndDate.value)); this.refs.secondaryQcTargetCount.addEventListener('change', () => { this.settings.targetCount = normalizePositiveInteger(this.refs.secondaryQcTargetCount.value, this.settings.targetCount || 10, 1, 999); this.persistSettings().catch(() => undefined); this.render(); }); this.refs.secondaryQcGroups.addEventListener('click', (event) => this.handleGroupSelection(event)); this.refs.popupLayer.addEventListener('click', (event) => this.handleGroupSelection(event)); this.refs.surface.addEventListener('click', (event) => { const target = event.target; if (!(target instanceof HTMLElement) || target.closest('[data-role="group-picker"]')) return; if (this.runtime.openGroupMenu) { this.runtime.openGroupMenu = ''; this.render(); } }); this.refs.surface.addEventListener('scroll', () => { if (this.runtime.openGroupMenu) this.render(); }, true); if (this.handleViewportChange) window.removeEventListener('resize', this.handleViewportChange); this.handleViewportChange = () => { if (this.runtime.openGroupMenu) this.render(); }; window.addEventListener('resize', this.handleViewportChange); this.refs.startSecondaryQc.addEventListener('click', () => this.startSecondaryQcJob().catch((error) => this.failJob(error))); this.refs.pauseResume.addEventListener('click', () => this.handlePauseResumeAction().catch((error) => this.failJob(error))); this.refs.stop.addEventListener('click', () => this.stopCurrentJob().catch((error) => this.failJob(error))); this.refs.clearData.addEventListener('click', () => this.clearAllCachedData().catch((error) => this.failJob(error))); this.refs.downloads.addEventListener('click', (event) => { const target = event.target; if (target instanceof HTMLElement && target.closest('[data-download-role="secondaryQc"]')) this.exportSecondaryQcResult(); }); }
+    bindPanelEvents() {
+      if (this.handleOutsideInteraction) {
+        document.removeEventListener('pointerdown', this.handleOutsideInteraction, true);
+        document.removeEventListener('mousedown', this.handleOutsideInteraction, true);
+        document.removeEventListener('touchstart', this.handleOutsideInteraction, true);
+      }
+      this.handleOutsideInteraction = (event) => {
+        if (this.runtime.minimized || event.isTrusted === false) return;
+        const target = event.target;
+        if (!(target instanceof Node)) return;
+        if (this.refs.surface && this.refs.surface.contains(target)) return;
+        if (this.refs.popupLayer && this.refs.popupLayer.contains(target)) return;
+        if (this.refs.settingsMask && this.refs.settingsMask.contains(target)) return;
+        this.setMinimized(true);
+      };
+      document.addEventListener('pointerdown', this.handleOutsideInteraction, true);
+      document.addEventListener('mousedown', this.handleOutsideInteraction, true);
+      document.addEventListener('touchstart', this.handleOutsideInteraction, true);
+      this.refs.backdrop.addEventListener('click', () => this.setMinimized(true));
+      this.refs.minimize.addEventListener('click', () => this.setMinimized(true));
+      this.refs.dock.addEventListener('click', () => this.setMinimized(false));
+      this.refs.openSettings.addEventListener('click', () => this.openSettingsModal());
+      this.refs.closeSettings.addEventListener('click', () => this.closeSettingsModal());
+      this.refs.settingsMask.addEventListener('click', (event) => { if (event.target === this.refs.settingsMask) this.closeSettingsModal(); });
+      this.refs.saveSettings.addEventListener('click', () => this.saveSettingsModal().catch((error) => this.failJob(error)));
+      this.bindDateInput(this.refs.secondaryQcStartDate, () => this.updateDate('startDate', this.refs.secondaryQcStartDate.value));
+      this.bindDateInput(this.refs.secondaryQcEndDate, () => this.updateDate('endDate', this.refs.secondaryQcEndDate.value));
+      this.refs.secondaryQcTargetCount.addEventListener('change', () => {
+        this.settings.targetCount = normalizePositiveInteger(this.refs.secondaryQcTargetCount.value, this.settings.targetCount || 10, 1, 999);
+        this.persistSettings().catch(() => undefined);
+        this.render();
+      });
+      this.refs.secondaryQcGroups.addEventListener('click', (event) => this.handleGroupSelection(event));
+      this.refs.popupLayer.addEventListener('click', (event) => this.handleGroupSelection(event));
+      this.refs.surface.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || target.closest('[data-role="group-picker"]')) return;
+        if (this.runtime.openGroupMenu) {
+          this.runtime.openGroupMenu = '';
+          this.render();
+        }
+      });
+      this.refs.surface.addEventListener('scroll', () => { if (this.runtime.openGroupMenu) this.render(); }, true);
+      if (this.handleViewportChange) window.removeEventListener('resize', this.handleViewportChange);
+      this.handleViewportChange = () => { if (this.runtime.openGroupMenu) this.render(); };
+      window.addEventListener('resize', this.handleViewportChange);
+      this.refs.startSecondaryQc.addEventListener('click', () => this.startSecondaryQcJob().catch((error) => this.failJob(error)));
+      this.refs.pauseResume.addEventListener('click', () => this.handlePauseResumeAction().catch((error) => this.failJob(error)));
+      this.refs.stop.addEventListener('click', () => this.stopCurrentJob().catch((error) => this.failJob(error)));
+      this.refs.clearConfig.addEventListener('click', () => this.clearConfigWorkbookData().catch((error) => this.failJob(error)));
+      this.refs.clearTagCache.addEventListener('click', () => this.clearTagLibraryCacheData().catch((error) => this.failJob(error)));
+      this.refs.downloads.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest('[data-download-role="secondaryQc"]')) this.exportSecondaryQcResult();
+      });
+    }
     handleGroupSelection(event) { const target = event.target; if (!(target instanceof HTMLElement)) return; const trigger = target.closest('[data-role="group-trigger"]'); if (trigger) { if (this.runtime.running) return; this.runtime.openGroupMenu = this.runtime.openGroupMenu ? '' : 'secondaryQc'; this.render(); return; } if (this.runtime.running) return; const categoryOption = target.closest('[data-role="category-option"]'); if (!categoryOption) return; const categoryKey = normalizeText(categoryOption.getAttribute('data-category-key')); if (!categoryKey) return; this.settings.categoryKey = this.settings.categoryKey === categoryKey ? '' : categoryKey; this.runtime.openGroupMenu = ''; this.persistSettings().catch(() => undefined); this.render(); }
     openDatePicker(input) { if (!input || input.disabled) return; if (typeof input.showPicker === 'function') { try { input.showPicker(); return; } catch (error) { } } input.focus(); }
     updateDate(key, value) { const maxDate = getTodayDateString(); const normalizedValue = normalizeDateInputValue(value, maxDate); if (key === 'startDate') { this.settings.startDate = normalizedValue; if (this.settings.endDate && this.settings.startDate && this.settings.endDate < this.settings.startDate) this.settings.endDate = ''; } else { this.settings.endDate = normalizedValue; if (this.settings.endDate && this.settings.startDate && this.settings.endDate < this.settings.startDate) this.settings.endDate = ''; } this.persistSettings().catch(() => undefined); this.render(); }
     setMinimized(nextValue) { this.runtime.minimized = Boolean(nextValue); this.settings.ui.panelMinimized = this.runtime.minimized; if (this.runtime.minimized) this.runtime.openGroupMenu = ''; this.persistSettings().catch(() => undefined); this.render(); }
-    openSettingsModal() { this.settingsDraft = cloneWorkbenchSettings(this.settings); this.settingsModalOpen = true; this.runtime.openGroupMenu = ''; this.syncSettingsToInputs(); this.render(); this.refs.settingsInput.focus(); }
+    openSettingsModal() { this.settingsDraft = cloneWorkbenchSettings(this.settings); this.settingsModalOpen = true; this.runtime.openGroupMenu = ''; this.syncSettingsToInputs(); this.render(); if (this.refs.configWorkbookFileInput) this.refs.configWorkbookFileInput.focus(); }
     closeSettingsModal() { this.settingsModalOpen = false; this.render(); }
-    async saveSettingsModal() { this.settings.secrets.arkApiKey = normalizeText(this.refs.settingsInput.value); const file = this.refs.tagLibraryFileInput && this.refs.tagLibraryFileInput.files && this.refs.tagLibraryFileInput.files.length ? this.refs.tagLibraryFileInput.files[0] : null; if (file) { const tagLibraryMeta = await saveUploadedTagLibraryFile(file); this.settings.tagLibraryFileName = tagLibraryMeta.fileName; this.settings.tagLibraryUploadedAt = tagLibraryMeta.uploadedAt; this.settings.tagLibraryCount = tagLibraryMeta.count; } this.settingsDraft = cloneWorkbenchSettings(this.settings); this.settingsModalOpen = false; this.render(); await this.persistSettings(); this.pushLog('设置已保存'); }
+    async saveSettingsModal() {
+      const workbookFile = this.refs.configWorkbookFileInput && this.refs.configWorkbookFileInput.files && this.refs.configWorkbookFileInput.files.length ? this.refs.configWorkbookFileInput.files[0] : null;
+      if (workbookFile) {
+        const workbookMeta = await saveUploadedConfigWorkbookFile(workbookFile);
+        this.settings.configWorkbookFileName = workbookMeta.fileName;
+        this.settings.configWorkbookUploadedAt = workbookMeta.uploadedAt;
+        this.settings.configWorkbookRuleCount = workbookMeta.categoryRuleCount;
+        this.settings.categoryRulesContent = workbookMeta.categoryRulesContent;
+        this.settings.tagLibraryFileName = workbookMeta.fileName;
+        this.settings.tagLibraryUploadedAt = workbookMeta.uploadedAt;
+        this.settings.tagLibraryCount = workbookMeta.tagLibraryCount;
+        this.settings.secrets.arkApiKey = workbookMeta.arkApiKey;
+      }
+      this.settingsDraft = cloneWorkbenchSettings(this.settings);
+      this.settingsModalOpen = false;
+      this.render();
+      await this.persistSettings();
+      this.pushLog('设置已保存');
+    }
+    async clearConfigWorkbookData() {
+      if (this.runtime.running) return;
+      const confirmed = window.confirm('这会清除已上传的配置 XLSX、品类规则和 API Key，不会清理标签缓存。确认清理吗？');
+      if (!confirmed) return;
+      this.settings.configWorkbookFileName = '';
+      this.settings.configWorkbookUploadedAt = '';
+      this.settings.configWorkbookRuleCount = 0;
+      this.settings.categoryRulesContent = '';
+      this.settings.secrets.arkApiKey = '';
+      await this.persistSettings();
+      this.settingsDraft = cloneWorkbenchSettings(this.settings);
+      this.syncSettingsToInputs();
+      this.render();
+      this.pushLog('已清理配置');
+    }
+    async clearTagLibraryCacheData() {
+      if (this.runtime.running) return;
+      const confirmed = window.confirm('这会清除本地标签库缓存，不会清理配置 XLSX、品类规则和 API Key。确认清理吗？');
+      if (!confirmed) return;
+      await clearCachedTagLibraryCsv();
+      this.settings.tagLibraryFileName = '';
+      this.settings.tagLibraryUploadedAt = '';
+      this.settings.tagLibraryCount = 0;
+      await this.persistSettings();
+      this.settingsDraft = cloneWorkbenchSettings(this.settings);
+      this.syncSettingsToInputs();
+      this.render();
+      this.pushLog('已清理标签缓存');
+    }
     renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'secondaryQc'; const triggerSummary = this.getGroupPickerSummary(); this.refs.secondaryQcGroups.innerHTML = `<div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
     renderStatus() { const pageText = isListPage() ? '当前页面：列表页' : isDetailPage() ? '当前页面：详情页，只保留质检处理；开始或继续任务请回列表页' : '当前页面：其他页面'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：二次质检</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
     renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div style="padding: 12px; border: 1px solid #d8e2ee; border-radius: 12px; background: #fff;"><div style="font-weight: 700; color: #17324f;">二次质检结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div style="margin-top: 4px; color: #6b7a90;">目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条</div><div class="ysp-daily-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="secondaryQc">下载质检表</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
@@ -5454,7 +5866,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     updateCheckpointStatus(text) { const checkpoint = this.getActiveCheckpoint(); this.runtime.statusText = text; if (checkpoint) checkpoint.statusText = text; this.renderStatus(); void this.persistActiveCheckpoint().catch(() => {}); }
     async saveCheckpoint() { if (!this.runtime.checkpoint) return; this.runtime.checkpoint.updatedAt = new Date().toISOString(); await storageSetCached({ [STORAGE_KEYS.checkpoint]: this.runtime.checkpoint }); }
     async clearCheckpoint() { await storageRemove(STORAGE_KEYS.checkpoint); this.runtime.checkpoint = null; }
-    async clearAllCachedData() { if (this.runtime.running) return; const checkpoint = this.runtime.checkpoint; const requestIds = uniqueTextList(this.getSecondaryQcInflightEntries(checkpoint).map((entry) => entry.requestId)); const clearKeys = [STORAGE_KEYS.report, STORAGE_KEYS.checkpoint]; if (requestIds.length) clearKeys.push(...this.buildSecondaryQcWorkerStorageKeys(requestIds)); const confirmed = window.confirm('这会清除质检本地缓存、已上传的标签库、结果和任务进度，不会清空已保存的日期和 API Key。确认清除吗？'); if (!confirmed) return; await storageRemove(clearKeys); await clearCachedTagLibraryCsv(); this.settings.tagLibraryFileName = ''; this.settings.tagLibraryUploadedAt = ''; this.settings.tagLibraryCount = 0; await this.persistSettings(); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.statusText = '已清除本地缓存'; this.runtime.logs = []; this.runtime.checkpoint = null; this.runtime.report = null; this.syncSettingsToInputs(); this.render(); }
     async stopCurrentJob() { if (!this.runtime.running) return; const checkpoint = this.getActiveCheckpoint(); const stoppedStatusText = '采集已结束，可以重新开始'; requestListJobAbort(this.runtime.listJobAbortToken); this.runtime.stopping = true; this.runtime.pauseRequested = false; this.runtime.statusText = stoppedStatusText; this.pushLog('采集已结束'); if (checkpoint) { checkpoint.status = 'stopped'; checkpoint.statusText = stoppedStatusText; const requestIds = uniqueTextList(this.getSecondaryQcInflightEntries(checkpoint).map((entry) => entry.requestId)); checkpoint.inflightEntries = []; await this.saveCheckpoint(); if (requestIds.length) await this.stopSecondaryQcRequests(requestIds); } this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.render(); }
     pauseCurrentJob() { if (!this.runtime.running) return; const inflightCount = this.getSecondaryQcInflightEntries(this.runtime.checkpoint).length; this.runtime.pauseRequested = true; this.runtime.stopping = false; this.runtime.statusText = inflightCount ? `正在暂停当前任务，等待 ${inflightCount} 个进行中视频完成` : '正在暂停当前任务'; this.pushLog(this.runtime.statusText); this.render(); }
     async handlePauseResumeAction() { if (this.runtime.running) { this.pauseCurrentJob(); return; } await this.resumePausedJob(); }
@@ -5563,8 +5974,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         [requestKey]: {
           apiKey,
           taskId: row.taskId,
+          itemKey: item.key,
+          primaryCategory: item.exportLabel,
           standardOperator: row.standardOperator,
-          qcOperator: checkpoint.qcOperator
+          qcOperator: row.qcOperator,
+          categoryRule: normalizeMultilineText(checkpoint.categoryRule)
         }
       });
       checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint).concat({
@@ -5674,7 +6088,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         vid: row.taskId,
         missingTags: missingTagsText,
         standardOperator: row.standardOperator,
-        qcOperator: checkpoint.qcOperator,
+        qcOperator: row.qcOperator,
         itemKey: descriptor.itemKey
       });
       checkpoint.itemRecordedCounts[itemIndex] = itemRecordedCount + 1;
@@ -5773,9 +6187,13 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (!categoryKey || !items.length) {
         throw new Error('请先选择一个质检品类');
       }
-      if (!apiKey) {
-        throw new Error('请先在设置里填写 ARK_API_KEY');
+      if (!normalizeText(this.settings.configWorkbookFileName)) {
+        throw new Error('请先在设置里上传配置 XLSX 文件');
       }
+      if (!apiKey) {
+        throw new Error('配置 XLSX 的 APIKEY 页缺少 ARK_API_KEY');
+      }
+      const categoryRule = getCategoryRuleForCategory(this.settings.categoryRulesContent, items[0].exportLabel);
       await this.persistSettings();
 
       this.runtime.running = true;
@@ -5799,7 +6217,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
         inflightEntries: [],
         processedTaskIds: [],
         rows: [],
-        qcOperator: getCurrentLoginName(),
+        categoryRule,
         logs: [],
         startedAt: new Date().toISOString(),
         statusText: '正在准备二次质检'
@@ -5808,6 +6226,11 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.pushLog('正在加载标签库');
       const tagLibrary = await loadTagLibrary();
       this.pushLog(`标签库已加载：${tagLibrary.count} 条`);
+      if (normalizeText(categoryRule)) {
+        this.pushLog(`配置表规则已加载：${items[0].exportLabel}`);
+      } else if (normalizeText(this.settings.categoryRulesContent)) {
+        this.pushLog(`配置表当前品类规则为空：${items[0].exportLabel}`);
+      }
       await this.saveCheckpoint();
       this.pushLog(
         `开始二次质检：${startDate === endDate ? startDate : `${startDate} 至 ${endDate}`}，品类 ${items[0].exportLabel}，目标 ${targetCount} 条，顺序执行，模型 ${SECONDARY_QC_MODEL_LABEL}`
