@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.12
+// @version      1.1.13
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -42,6 +42,10 @@
 
   const SCRIPT_VERSION = GM_info.script.version;
   const YANGSHIPIN_VIDEO_INFO_API_PATH = '/v1/player/get_video_info';
+  const CURRENT_TAB_ID = `tab-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  const CURRENT_TAB_OPENED_AT = Date.now();
+  let lastHandledCloseTabsSignalId = '';
+  let closeTabsSignalWatcher = 0;
   let latestYangshipinVideoInfoResponse = null;
   const yangshipinVideoInfoResponseListeners = [];
 
@@ -64,6 +68,10 @@
   pointer-events: auto;
 }
 
+#ysp-secondary-qc-panel-root.is-input-locked {
+  pointer-events: auto;
+}
+
 .ysp-daily-panel__backdrop {
   position: absolute;
   inset: 0;
@@ -73,6 +81,11 @@
 
 #ysp-secondary-qc-panel-root.is-focused .ysp-daily-panel__backdrop {
   background: rgba(8, 24, 40, 0.28);
+}
+
+#ysp-secondary-qc-panel-root.is-input-locked .ysp-daily-panel__backdrop {
+  pointer-events: auto;
+  background: rgba(6, 14, 24, 0.56);
 }
 
 .ysp-daily-panel {
@@ -1313,6 +1326,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     settings: 'yspSecondaryQcSettingsV1',
     report: 'yspSecondaryQcReportV1',
     checkpoint: 'yspSecondaryQcCheckpointV1',
+    pendingStart: 'yspSecondaryQcPendingStartV1',
+    closeTabsSignal: 'yspSecondaryQcCloseTabsSignalV1',
     workerRequestPrefix: 'yspSecondaryQcWorkerRequestV1:',
     workerResponsePrefix: 'yspSecondaryQcWorkerResponseV1:',
     workerProgressPrefix: 'yspSecondaryQcWorkerProgressV1:',
@@ -2015,6 +2030,10 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return location.pathname.startsWith('/stdList');
   }
 
+  function getSecondaryQcListPageUrl() {
+    return `${location.origin}/stdList`;
+  }
+
   function isDetailPage() {
     return location.pathname.startsWith('/stdDetail/');
   }
@@ -2620,6 +2639,76 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   function createRuntimeToken(prefix) {
     return `${prefix || 'ysp'}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  }
+
+  async function markPendingSecondaryQcStart() {
+    await storageSetCached({
+      [STORAGE_KEYS.pendingStart]: {
+        id: createRuntimeToken('start'),
+        sourceTabId: CURRENT_TAB_ID,
+        createdAt: Date.now()
+      }
+    });
+  }
+
+  async function consumePendingSecondaryQcStart() {
+    const state = await storageGet(STORAGE_KEYS.pendingStart);
+    const pendingStart = state[STORAGE_KEYS.pendingStart];
+    if (!pendingStart || typeof pendingStart !== 'object') {
+      return null;
+    }
+    await storageRemove(STORAGE_KEYS.pendingStart);
+    const createdAt = Number(pendingStart.createdAt) || 0;
+    if (!createdAt || Date.now() - createdAt > 60000) {
+      return null;
+    }
+    return pendingStart;
+  }
+
+  async function requestCloseOtherSecondaryQcTabs() {
+    await storageSetCached({
+      [STORAGE_KEYS.closeTabsSignal]: {
+        id: createRuntimeToken('close-tabs'),
+        sourceTabId: CURRENT_TAB_ID,
+        createdAt: Date.now()
+      }
+    });
+  }
+
+  async function closeCurrentTabForSecondaryQcStart() {
+    await closeCurrentWorkerPage();
+  }
+
+  async function handleCloseOtherTabsSignal() {
+    if (location.hostname !== 'std.video.cloud.cctv.com' && !isYangshipinMediaWorkerPage()) {
+      return;
+    }
+    const state = await storageGet(STORAGE_KEYS.closeTabsSignal);
+    const signal = state[STORAGE_KEYS.closeTabsSignal];
+    if (!signal || typeof signal !== 'object') {
+      return;
+    }
+    const signalId = normalizeText(signal.id);
+    const sourceTabId = normalizeText(signal.sourceTabId);
+    const createdAt = Number(signal.createdAt) || 0;
+    if (!signalId || signalId === lastHandledCloseTabsSignalId) {
+      return;
+    }
+    lastHandledCloseTabsSignalId = signalId;
+    if (sourceTabId === CURRENT_TAB_ID || !createdAt || createdAt < CURRENT_TAB_OPENED_AT || Date.now() - createdAt > 30000) {
+      return;
+    }
+    await closeCurrentTabForSecondaryQcStart();
+  }
+
+  function startCloseTabsSignalWatcher() {
+    if (closeTabsSignalWatcher) {
+      return;
+    }
+    closeTabsSignalWatcher = window.setInterval(() => {
+      handleCloseOtherTabsSignal().catch(() => undefined);
+    }, 600);
+    handleCloseOtherTabsSignal().catch(() => undefined);
   }
 
   function openUrlInNewTab(url) {
@@ -5805,6 +5894,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.panel = null;
       this.handleOutsideInteraction = null;
       this.handleViewportChange = null;
+      this.pageGuardEvents = ['pointerdown', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'touchstart', 'touchmove', 'wheel'];
       this.settingsModalOpen = false;
       this.settingsDraft = createDefaultWorkbenchSettings();
       this.settings = createDefaultWorkbenchSettings();
@@ -5812,7 +5902,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.refs = {};
     }
 
-    async init() { if (!isSupportedPage()) return; injectPanelStyle(); await this.clearExpiredCache(); await this.loadState(); this.mountPanel(); if (isListPage()) await this.tryResume(); }
+    async init() { if (!isSupportedPage()) return; injectPanelStyle(); await this.clearExpiredCache(); await this.loadState(); this.mountPanel(); if (isListPage()) { await this.tryResume(); await this.tryStartPendingSecondaryQcJob(); } }
     async clearExpiredCache() { const state = await storageGet(STORAGE_KEYS.checkpoint); const checkpoint = state[STORAGE_KEYS.checkpoint]; const cutoffDate = getQuarterCutoffDateString(new Date()); const dateValue = checkpoint && normalizeText(checkpoint.updatedAt || checkpoint.startedAt).slice(0, 10); if (dateValue && isDateExpiredByQuarter(dateValue, cutoffDate)) await storageRemove(STORAGE_KEYS.checkpoint); }
     async loadState() { const state = await storageGet([STORAGE_KEYS.settings, STORAGE_KEYS.report, STORAGE_KEYS.checkpoint]); this.settings = normalizeWorkbenchSettings(state[STORAGE_KEYS.settings]); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.runtime.minimized = Boolean(this.settings.ui.panelMinimized); this.runtime.report = normalizeSecondaryQcReport(state[STORAGE_KEYS.report]); this.runtime.checkpoint = normalizeSecondaryQcCheckpoint(state[STORAGE_KEYS.checkpoint]); this.runtime.logs = []; this.runtime.statusText = '等待开始'; this.runtime.running = false; this.runtime.jobType = ''; this.runtime.listJobAbortToken = 0; this.runtime.stopping = false; this.runtime.pauseRequested = false; if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '检测到未完成二次质检，正在准备继续'); return; } if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'paused') { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '存在已暂停质检，可点击继续任务'); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; return; } if (this.runtime.checkpoint && this.runtime.checkpoint.statusText) { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; } }
 
@@ -5834,7 +5924,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.render();
     }
 
-    destroy() { if (this.handleOutsideInteraction) { document.removeEventListener('pointerdown', this.handleOutsideInteraction, true); document.removeEventListener('mousedown', this.handleOutsideInteraction, true); document.removeEventListener('touchstart', this.handleOutsideInteraction, true); this.handleOutsideInteraction = null; } if (this.handleViewportChange) { window.removeEventListener('resize', this.handleViewportChange); this.handleViewportChange = null; } releasePageMuted(); if (this.panel && this.panel.isConnected) this.panel.remove(); this.panel = null; this.refs = {}; }
+    destroy() { if (this.handleOutsideInteraction) { this.pageGuardEvents.forEach((eventName) => document.removeEventListener(eventName, this.handleOutsideInteraction, true)); this.handleOutsideInteraction = null; } if (this.handleViewportChange) { window.removeEventListener('resize', this.handleViewportChange); this.handleViewportChange = null; } releasePageMuted(); if (this.panel && this.panel.isConnected) this.panel.remove(); this.panel = null; this.refs = {}; }
     persistActiveCheckpoint() { const checkpoint = this.getActiveCheckpoint(); return checkpoint && this.runtime.jobType ? this.saveCheckpoint() : Promise.resolve(); }
     getActiveCheckpoint() { return this.runtime.jobType === 'secondaryQc' ? this.runtime.checkpoint : null; }
     getListAbortCheck() { const abortToken = this.runtime.listJobAbortToken; return () => isListJobAbortRequested(abortToken); }
@@ -5867,26 +5957,38 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       }
     }
     bindDateInput(input, handler) { input.setAttribute('inputmode', 'none'); input.addEventListener('click', () => this.openDatePicker(input)); input.addEventListener('focus', () => window.setTimeout(() => this.openDatePicker(input), 0)); input.addEventListener('keydown', (event) => { if (event.key === 'Tab') return; event.preventDefault(); if (event.key === 'Enter' || event.key === ' ') this.openDatePicker(input); }); input.addEventListener('beforeinput', (event) => event.preventDefault()); input.addEventListener('paste', (event) => event.preventDefault()); input.addEventListener('drop', (event) => event.preventDefault()); input.addEventListener('wheel', (event) => event.preventDefault(), { passive: false }); input.addEventListener('change', handler); }
+    isPanelEventTarget(target) {
+      if (!(target instanceof Node)) {
+        return false;
+      }
+      return Boolean(
+        (this.refs.surface && this.refs.surface.contains(target))
+        || (this.refs.popupLayer && this.refs.popupLayer.contains(target))
+        || (this.refs.settingsMask && this.refs.settingsMask.contains(target))
+        || (this.refs.dock && this.refs.dock.contains(target))
+      );
+    }
     bindPanelEvents() {
       if (this.handleOutsideInteraction) {
-        document.removeEventListener('pointerdown', this.handleOutsideInteraction, true);
-        document.removeEventListener('mousedown', this.handleOutsideInteraction, true);
-        document.removeEventListener('touchstart', this.handleOutsideInteraction, true);
+        this.pageGuardEvents.forEach((eventName) => document.removeEventListener(eventName, this.handleOutsideInteraction, true));
       }
       this.handleOutsideInteraction = (event) => {
-        if (this.runtime.minimized || event.isTrusted === false) return;
+        if (event.isTrusted === false) return;
         const target = event.target;
         if (!(target instanceof Node)) return;
-        if (this.refs.surface && this.refs.surface.contains(target)) return;
-        if (this.refs.popupLayer && this.refs.popupLayer.contains(target)) return;
-        if (this.refs.settingsMask && this.refs.settingsMask.contains(target)) return;
+        if (this.isPanelEventTarget(target)) return;
+        if (this.runtime.running) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+          return;
+        }
+        if (this.runtime.minimized) return;
         this.setMinimized(true);
       };
-      document.addEventListener('pointerdown', this.handleOutsideInteraction, true);
-      document.addEventListener('mousedown', this.handleOutsideInteraction, true);
-      document.addEventListener('touchstart', this.handleOutsideInteraction, true);
-      this.refs.backdrop.addEventListener('click', () => this.setMinimized(true));
-      this.refs.minimize.addEventListener('click', () => this.setMinimized(true));
+      this.pageGuardEvents.forEach((eventName) => document.addEventListener(eventName, this.handleOutsideInteraction, { capture: true, passive: false }));
+      this.refs.backdrop.addEventListener('click', () => { if (!this.runtime.running) this.setMinimized(true); });
+      this.refs.minimize.addEventListener('click', () => { if (!this.runtime.running) this.setMinimized(true); });
       this.refs.dock.addEventListener('click', () => this.setMinimized(false));
       this.refs.openSettings.addEventListener('click', () => this.openSettingsModal());
       this.refs.closeSettings.addEventListener('click', () => this.closeSettingsModal());
@@ -5926,7 +6028,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     handleGroupSelection(event) { const target = event.target; if (!(target instanceof HTMLElement)) return; const trigger = target.closest('[data-role="group-trigger"]'); if (trigger) { if (this.runtime.running) return; this.runtime.openGroupMenu = this.runtime.openGroupMenu ? '' : 'secondaryQc'; this.render(); return; } if (this.runtime.running) return; const categoryOption = target.closest('[data-role="category-option"]'); if (!categoryOption) return; const categoryKey = normalizeText(categoryOption.getAttribute('data-category-key')); if (!categoryKey) return; this.settings.categoryKey = this.settings.categoryKey === categoryKey ? '' : categoryKey; this.runtime.openGroupMenu = ''; this.persistSettings().catch(() => undefined); this.render(); }
     openDatePicker(input) { if (!input || input.disabled) return; if (typeof input.showPicker === 'function') { try { input.showPicker(); return; } catch (error) { } } input.focus(); }
     updateDate(key, value) { const maxDate = getTodayDateString(); const normalizedValue = normalizeDateInputValue(value, maxDate); if (key === 'startDate') { this.settings.startDate = normalizedValue; if (this.settings.endDate && this.settings.startDate && this.settings.endDate < this.settings.startDate) this.settings.endDate = ''; } else { this.settings.endDate = normalizedValue; if (this.settings.endDate && this.settings.startDate && this.settings.endDate < this.settings.startDate) this.settings.endDate = ''; } this.persistSettings().catch(() => undefined); this.render(); }
-    setMinimized(nextValue) { this.runtime.minimized = Boolean(nextValue); this.settings.ui.panelMinimized = this.runtime.minimized; if (this.runtime.minimized) this.runtime.openGroupMenu = ''; this.persistSettings().catch(() => undefined); this.render(); }
+    setMinimized(nextValue) { if (this.runtime.running && nextValue) return; this.runtime.minimized = Boolean(nextValue); this.settings.ui.panelMinimized = this.runtime.minimized; if (this.runtime.minimized) this.runtime.openGroupMenu = ''; this.persistSettings().catch(() => undefined); this.render(); }
     openSettingsModal() { this.settingsDraft = cloneWorkbenchSettings(this.settings); this.settingsModalOpen = true; this.runtime.openGroupMenu = ''; this.syncSettingsToInputs(); this.render(); if (this.refs.configWorkbookFileInput) this.refs.configWorkbookFileInput.focus(); }
     closeSettingsModal() { this.settingsModalOpen = false; this.render(); }
     async saveSettingsModal() {
@@ -5993,16 +6095,18 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.pushLog('已清理缓存');
     }
     renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'secondaryQc'; const triggerSummary = this.getGroupPickerSummary(); this.refs.secondaryQcGroups.innerHTML = `<div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
-    renderStatus() { const pageText = isListPage() ? '当前页面：列表页，可开始或继续质检' : isDetailPage() ? '当前页面：详情页，正在处理单条视频；开始或继续任务请回列表页' : '当前页面：其他页面，请回标准化列表页操作'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：二次质检</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
+    renderStatus() { const pageText = isListPage() ? '当前页面：列表页，可开始或继续质检' : isDetailPage() ? '当前页面：详情页，点击开始会自动回到列表页' : '当前页面：其他页面，请回标准化列表页操作'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：二次质检</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
     renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div style="padding: 12px; border: 1px solid #d8e2ee; border-radius: 12px; background: #fff;"><div style="font-weight: 700; color: #17324f;">二次质检结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div style="margin-top: 4px; color: #6b7a90;">目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条</div><div class="ysp-daily-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="secondaryQc">下载质检表</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
     renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(formatUserVisibleLogText(log))}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
     render() {
       if (!this.panel) return;
       if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = '';
+      if (this.runtime.running && this.runtime.minimized) this.runtime.minimized = false;
       const listPageActive = isListPage();
       if (this.runtime.running) enforcePageMuted({ pausePlayback: isDetailPage() });
       else releasePageMuted();
       this.panel.classList.toggle('is-minimized', this.runtime.minimized);
+      this.panel.classList.toggle('is-input-locked', this.runtime.running);
       this.panel.classList.toggle('is-settings-open', this.settingsModalOpen);
       this.syncSettingsToInputs();
       this.renderGroupSelector();
@@ -6012,7 +6116,8 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       this.refs.secondaryQcStartDate.disabled = disabled;
       this.refs.secondaryQcEndDate.disabled = disabled;
       this.refs.secondaryQcTargetCount.disabled = disabled;
-      this.refs.startSecondaryQc.disabled = disabled || !listPageActive;
+      this.refs.startSecondaryQc.disabled = disabled;
+      if (this.refs.minimize) this.refs.minimize.disabled = disabled;
       this.refs.clearConfig.disabled = disabled || settingsBusy;
       this.refs.clearTagCache.disabled = disabled || settingsBusy;
       this.refs.stop.disabled = !disabled;
@@ -6040,8 +6145,31 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     async stopCurrentJob() { if (!this.runtime.running) return; const checkpoint = this.getActiveCheckpoint(); const stoppedStatusText = '任务已结束，可以重新开始'; requestListJobAbort(this.runtime.listJobAbortToken); this.runtime.stopping = true; this.runtime.pauseRequested = false; this.runtime.statusText = stoppedStatusText; this.pushLog('任务已结束'); if (checkpoint) { checkpoint.status = 'stopped'; checkpoint.statusText = stoppedStatusText; const requestIds = uniqueTextList(this.getSecondaryQcInflightEntries(checkpoint).map((entry) => entry.requestId)); checkpoint.inflightEntries = []; await this.saveCheckpoint(); if (requestIds.length) await this.stopSecondaryQcRequests(requestIds); } this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.render(); }
     pauseCurrentJob() { if (!this.runtime.running) return; const inflightCount = this.getSecondaryQcInflightEntries(this.runtime.checkpoint).length; this.runtime.pauseRequested = true; this.runtime.stopping = false; this.runtime.statusText = inflightCount ? `正在暂停当前任务，等待 ${inflightCount} 个进行中视频完成` : '正在暂停当前任务'; this.pushLog(this.runtime.statusText); this.render(); }
     async handlePauseResumeAction() { if (this.runtime.running) { this.pauseCurrentJob(); return; } await this.resumePausedJob(); }
-    async resumePausedJob() { if (this.runtime.running) return; if (!isListPage()) throw new Error('继续任务请回到标准化列表页'); const pausedTask = this.getPausedTaskMeta(); if (!pausedTask) throw new Error('当前没有可继续的暂停任务'); this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; pausedTask.checkpoint.status = 'running'; pausedTask.checkpoint.statusText = '正在继续质检'; this.runtime.statusText = pausedTask.checkpoint.statusText; await this.saveCheckpoint(); this.pushLog('继续质检'); this.render(); await this.runSecondaryQcFromCheckpoint(); }
+    async resumePausedJob() { if (this.runtime.running) return; if (!isListPage()) throw new Error('继续任务请回到标准化列表页'); const pausedTask = this.getPausedTaskMeta(); if (!pausedTask) throw new Error('当前没有可继续的暂停任务'); await requestCloseOtherSecondaryQcTabs(); this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.running = true; this.runtime.jobType = 'secondaryQc'; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.minimized = false; this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; pausedTask.checkpoint.status = 'running'; pausedTask.checkpoint.statusText = '正在继续质检'; this.runtime.statusText = pausedTask.checkpoint.statusText; await this.saveCheckpoint(); this.pushLog('继续质检'); this.render(); await this.runSecondaryQcFromCheckpoint(); }
     async tryResume() { if (!this.runtime.running) { this.render(); return; } if (this.runtime.jobType === 'secondaryQc' && this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.pushLog('检测到未完成二次质检，正在继续'); await this.runSecondaryQcFromCheckpoint(); return; } this.runtime.running = false; this.runtime.jobType = ''; this.render(); }
+    async startSecondaryQcAfterListPageReady() {
+      this.settings.ui.panelMinimized = false;
+      await this.persistSettings();
+      await markPendingSecondaryQcStart();
+      await requestCloseOtherSecondaryQcTabs();
+      this.runtime.minimized = false;
+      this.runtime.statusText = '正在回到列表页准备开始质检';
+      this.render();
+      location.assign(getSecondaryQcListPageUrl());
+    }
+    async tryStartPendingSecondaryQcJob() {
+      if (!isListPage() || this.runtime.running) {
+        return;
+      }
+      const pendingStart = await consumePendingSecondaryQcStart();
+      if (!pendingStart) {
+        return;
+      }
+      this.runtime.minimized = false;
+      this.runtime.statusText = '已回到列表页，正在开始质检';
+      this.render();
+      await this.startSecondaryQcJob({ fromAutoList: true });
+    }
     describeItem(item) { return item.exportLabel; }
     isCurrentJobStopRequested() { return isListJobAbortRequested(this.runtime.listJobAbortToken) || this.runtime.stopping; }
     getSecondaryQcInflightEntries(checkpoint) {
@@ -6333,14 +6461,19 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       return this.runtime.pauseRequested ? 'paused' : 'done';
     }
 
-    async startSecondaryQcJob() {
+    async startSecondaryQcJob(options) {
+      const config = options && typeof options === 'object' ? options : {};
       if (this.runtime.running) {
         return;
       }
-      this.runtime.listJobAbortToken = beginListJobAbortSession();
       if (!isListPage()) {
-        throw new Error('二次质检只能在标准化列表页启动');
+        if (config.fromAutoList) {
+          throw new Error('列表页还没有准备好，请稍后重试');
+        }
+        await this.startSecondaryQcAfterListPageReady();
+        return;
       }
+      this.runtime.listJobAbortToken = beginListJobAbortSession();
       const startDate = normalizeText(this.settings.startDate);
       const endDate = normalizeText(this.settings.endDate);
       const targetCount = normalizePositiveInteger(this.settings.targetCount, 10, 1, 999);
@@ -6371,11 +6504,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       }
       const categoryRule = getCategoryRuleForCategory(this.settings.categoryRulesContent, items[0].exportLabel);
       await this.persistSettings();
+      await requestCloseOtherSecondaryQcTabs();
+      await sleep(200);
 
       this.runtime.running = true;
       this.runtime.jobType = 'secondaryQc';
       this.runtime.stopping = false;
       this.runtime.pauseRequested = false;
+      this.runtime.minimized = false;
       this.runtime.logs = [];
       this.runtime.report = null;
       this.runtime.statusText = '正在准备二次质检';
@@ -6669,7 +6805,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       const currentPageKind = isDetailPage() ? 'detail' : 'list';
       const mountState = await ensureSecondaryQcMounted();
       if (isDetailPage()) { lastPageKind = currentPageKind; await ensureDetailWorkerHandled(); return; }
-      if (currentPageKind === 'list' && lastPageKind !== 'list' && mountState === 'noop' && app) await app.tryResume();
+      if (currentPageKind === 'list' && lastPageKind !== 'list' && mountState === 'noop' && app) { await app.tryResume(); await app.tryStartPendingSecondaryQcJob(); }
       lastPageKind = currentPageKind;
     } catch (error) {
       console.error('[央视频二次质检助手]', error);
@@ -6681,6 +6817,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   function queueBootstrap() { window.setTimeout(() => runBootstrap(), 60); }
   function installRouteHooks() { const methods = ['pushState', 'replaceState']; for (const method of methods) { const original = history[method]; history[method] = function wrappedHistoryMethod(...args) { const result = original.apply(this, args); window.dispatchEvent(new Event('ysp:secondary-qc-location-change')); return result; }; } const onLocationChange = () => { if (location.href === lastHref && document.getElementById('ysp-secondary-qc-panel-root')) return; lastHref = location.href; queueBootstrap(); }; window.addEventListener('popstate', onLocationChange); window.addEventListener('hashchange', onLocationChange); window.addEventListener('ysp:secondary-qc-location-change', onLocationChange); const observer = new MutationObserver(() => { if (!isSupportedPage()) return; if (!document.getElementById('ysp-secondary-qc-panel-root')) queueBootstrap(); }); observer.observe(document.documentElement, { childList: true, subtree: true }); }
 
+  startCloseTabsSignalWatcher();
   installRouteHooks();
   runBootstrap();
 })();
