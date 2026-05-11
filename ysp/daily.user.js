@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频日报采集器
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.3.5
+// @version      2.3.6
 // @description  在标准化系统页面采集日报数据，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -573,19 +573,24 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
 .ysp-daily-panel__dock {
   position: absolute;
-  top: 50%;
+  top: calc(50% - 86px);
   right: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 76px;
+  width: 42px;
+  height: 132px;
   border: 0;
-  border-radius: 18px 0 0 18px;
+  border-radius: 20px 0 0 20px;
   background: linear-gradient(180deg, rgba(15, 41, 66, 0.98), rgba(27, 82, 122, 0.94));
   color: #ffffff;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
   box-shadow: 0 16px 30px rgba(19, 45, 71, 0.22);
   transform: translateY(-50%) translateX(12px);
   opacity: 0;
@@ -2497,7 +2502,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
             <div class="ysp-daily-panel__side"><div class="ysp-daily-panel__status" data-role="status"></div><div class="ysp-daily-panel__log-card"><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">运行日志</span></div><div class="ysp-daily-panel__log-list" data-role="logs"></div></div><div class="ysp-daily-panel__result-card" data-role="downloads-card" hidden><div class="ysp-daily-panel__toolbar"><span class="ysp-daily-panel__label">下载中心</span></div><div class="ysp-daily-panel__download-list" data-role="downloads"></div></div><div class="ysp-daily-panel__actions"><button type="button" class="ysp-daily-panel__button" data-role="pause-resume">暂停任务</button><button type="button" class="ysp-daily-panel__button" data-role="stop">结束任务</button><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--danger" data-role="clear-data">清理缓存</button></div></div>
           </div>
         </div>
-        <button type="button" class="ysp-daily-panel__dock" data-role="dock"><</button>`;
+        <button type="button" class="ysp-daily-panel__dock" data-role="dock" aria-label="展开央视频日报采集器" title="展开央视频日报采集器">日报采集器</button>`;
       document.body.appendChild(root);
       this.panel = root;
       this.refs = { backdrop: root.querySelector('.ysp-daily-panel__backdrop'), popupLayer: root.querySelector('[data-role="popup-layer"]'), surface: root.querySelector('.ysp-daily-panel'), dock: root.querySelector('[data-role="dock"]'), minimize: root.querySelector('[data-role="minimize"]'), dailyStartDate: root.querySelector('#ysp-daily-start-date'), dailyEndDate: root.querySelector('#ysp-daily-end-date'), dailyGroups: root.querySelector('[data-role="daily-groups"]'), startDaily: root.querySelector('[data-role="start-daily"]'), pauseResume: root.querySelector('[data-role="pause-resume"]'), stop: root.querySelector('[data-role="stop"]'), clearData: root.querySelector('[data-role="clear-data"]'), status: root.querySelector('[data-role="status"]'), downloadsCard: root.querySelector('[data-role="downloads-card"]'), downloads: root.querySelector('[data-role="downloads"]'), logs: root.querySelector('[data-role="logs"]') };

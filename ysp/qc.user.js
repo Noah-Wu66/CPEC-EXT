@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.22
+// @version      1.1.23
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -621,19 +621,24 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
 .ysp-qc-panel__dock {
   position: absolute;
-  top: 50%;
+  top: calc(50% + 86px);
   right: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 76px;
+  width: 42px;
+  height: 132px;
   border: 0;
-  border-radius: 18px 0 0 18px;
+  border-radius: 20px 0 0 20px;
   background: linear-gradient(180deg, rgba(15, 41, 66, 0.98), rgba(27, 82, 122, 0.94));
   color: #ffffff;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
   box-shadow: 0 16px 30px rgba(19, 45, 71, 0.22);
   transform: translateY(-50%) translateX(12px);
   opacity: 0;
@@ -6168,7 +6173,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
             </div>
           </div>
         </div>
-        <button type="button" class="ysp-qc-panel__dock" data-role="dock"><</button>
+        <button type="button" class="ysp-qc-panel__dock" data-role="dock" aria-label="展开央视频二次质检助手" title="展开央视频二次质检助手">二次质检助手</button>
         <div class="ysp-qc-panel__modal-mask" data-role="settings-mask">
           <div class="ysp-qc-panel__modal">
             <div class="ysp-qc-panel__toolbar"><span class="ysp-qc-panel__label">设置</span></div>
