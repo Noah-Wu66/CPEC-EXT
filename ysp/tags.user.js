@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标签库采集器
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.8
+// @version      1.2.9
 // @description  通过标准化列表接口采集成品视频标签，并保存在浏览器本地数据库
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -32,6 +32,14 @@
   const COOLDOWN_MS = 10000;
   const MAX_EMPTY_NEW_PAGES = 50;
   const PANEL_ID = 'ysp-tag-crawler-root';
+  const nativeConsole = typeof console === 'object' ? console : null;
+  const logger = {
+    error(...args) {
+      if (nativeConsole && typeof nativeConsole.error === 'function') {
+        nativeConsole.error('[央视频标签库采集器]', ...args);
+      }
+    }
+  };
 
   const PANEL_STYLE = `
 #${PANEL_ID} {
@@ -95,6 +103,10 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
+}
+
+#${PANEL_ID} .ysp-tag-panel__tools + .ysp-tag-panel__tools {
+  margin-top: 8px;
 }
 
 #${PANEL_ID} button {
@@ -617,11 +629,11 @@
             <div class="ysp-tag-panel__tools">
               <button type="button" class="secondary" data-action="export-csv">导出CSV</button>
             </div>
-            <div class="ysp-tag-panel__tools" style="margin-top: 8px;">
+            <div class="ysp-tag-panel__tools">
               <button type="button" class="danger" data-action="stop">结束任务</button>
               <button type="button" class="danger" data-action="clear">清理缓存</button>
             </div>
-            <div class="ysp-tag-panel__tools" style="margin-top: 8px;">
+            <div class="ysp-tag-panel__tools">
               <button type="button" class="secondary" data-action="refresh">刷新数量</button>
             </div>
             <div class="ysp-tag-panel__log" data-role="log">暂无日志</div>
@@ -690,7 +702,7 @@
 
     failJob(error) {
       const message = error && error.message ? error.message : String(error);
-      console.error('[央视频标签库采集器]', error);
+      logger.error(error);
       this.setLog(message);
       this.setBusy(false);
     }
@@ -758,32 +770,54 @@
     app.init();
   }
 
-  function installRouteHooks() {
+  function createRouteWatcher(config) {
+    const eventName = config.eventName;
+    const panelId = config.panelId;
+    const onChange = config.onChange;
+    let lastHref = location.href;
+    let timer = 0;
     const methods = ['pushState', 'replaceState'];
-    for (const method of methods) {
-      const original = history[method];
-      history[method] = function (...args) {
-        const result = original.apply(this, args);
-        window.dispatchEvent(new Event('ysp:tag-location-change'));
-        return result;
-      };
-    }
-    const onLocationChange = () => {
-      queueMicrotask(() => ensurePanelMounted());
+
+    const schedule = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = 0;
+        onChange();
+      }, 60);
     };
-    window.addEventListener('popstate', onLocationChange);
-    window.addEventListener('hashchange', onLocationChange);
-    window.addEventListener('ysp:tag-location-change', onLocationChange);
-    const observer = new MutationObserver(() => {
-      if (!document.getElementById(PANEL_ID)) {
-        if (app) app.destroy();
-        app = null;
-        ensurePanelMounted();
+
+    const onLocationChange = () => {
+      const panelExists = document.getElementById(panelId);
+      if (location.href === lastHref && panelExists) return;
+      lastHref = location.href;
+      schedule();
+    };
+
+    return {
+      start() {
+        for (const method of methods) {
+          const original = history[method];
+          history[method] = function wrappedHistoryMethod(...args) {
+            const result = original.apply(this, args);
+            window.dispatchEvent(new Event(eventName));
+            return result;
+          };
+        }
+        window.addEventListener('popstate', onLocationChange);
+        window.addEventListener('hashchange', onLocationChange);
+        window.addEventListener(eventName, onLocationChange);
+        const observer = new MutationObserver(() => {
+          if (!document.getElementById(panelId)) schedule();
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
       }
-    });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    };
   }
 
-  installRouteHooks();
+  createRouteWatcher({
+    eventName: 'ysp:tag-location-change',
+    panelId: PANEL_ID,
+    onChange: ensurePanelMounted
+  }).start();
   ensurePanelMounted();
 })();

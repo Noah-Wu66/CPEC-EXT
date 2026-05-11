@@ -1,22 +1,95 @@
 // ==UserScript==
-// @name         数据采集器
-// @namespace    http://tampermonkey.net/
-// @version      1.2.33
-// @description  话题30天数据 + 用户微博数据，统一面板导出表格（多Sheet）
-// @author       Your Name
+// @name         央视军事数据采集器
+// @namespace    https://github.com/Noah-Wu66/CPEC-EXT
+// @version      1.2.34
+// @description  采集微博、微博话题、央视频和公众号数据，并统一导出表格
+// @author       Noah
 // @match        https://m.weibo.cn/*
 // @match        https://m.s.weibo.com/*
 // @match        https://w.yangshipin.cn/*
 // @match        https://yangshipin.cn/*
-// @updateURL    https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysjs.js
-// @downloadURL  https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysjs.js
+// @updateURL    https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysjs/ysjs.js
+// @downloadURL  https://raw.githubusercontent.com/Noah-Wu66/CPEC-EXT/main/ysjs/ysjs.js
 // @require      https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @run-at       document-idle
 // ==/UserScript==
 
 (function () {
     'use strict';
+
+    const APP_IDS = {
+        toast: 'weibo-scraper-toast',
+        busyStyle: 'weibo-scraper-style',
+        busyOverlay: 'weibo-scraper-busy-overlay',
+        hub: 'weibo-scraper-hub'
+    };
+
+    const CLASS_NAMES = {
+        busyCard: 'wsh-busy-card',
+        busyHeader: 'wsh-busy-header',
+        busySpinner: 'wsh-busy-spinner',
+        busyHeaderText: 'wsh-busy-header-text',
+        busyBadge: 'wsh-busy-badge',
+        busyTask: 'wsh-busy-task',
+        busyAction: 'wsh-busy-action',
+        busyDetail: 'wsh-busy-detail',
+        busyMeta: 'wsh-busy-meta',
+        busyNote: 'wsh-busy-note',
+        hubPanel: 'wsh-panel',
+        hubTitle: 'wsh-panel__title',
+        hubStatus: 'wsh-panel__status',
+        hubRow: 'wsh-panel__row',
+        hubLabel: 'wsh-panel__label',
+        hubInput: 'wsh-panel__input',
+        hubSectionLabel: 'wsh-panel__section-label',
+        hubButton: 'wsh-panel__button',
+        hubButtonVideo: 'wsh-panel__button--video',
+        hubButtonTopic: 'wsh-panel__button--topic',
+        hubButtonCctv: 'wsh-panel__button--cctv',
+        hubButtonWechat: 'wsh-panel__button--wechat',
+        hubButtonClear: 'wsh-panel__button--clear',
+        hubButtonExport: 'wsh-panel__button--export',
+        hubFooter: 'wsh-panel__footer',
+        hubFooterLink: 'wsh-panel__footer-link',
+        hubFooterIcon: 'wsh-panel__footer-icon'
+    };
+
+    const WEIBO_SELECTORS = {
+        card: '.card9',
+        anyCard: '.card',
+        publishTime: '.weibo-top .time, header .time, .time',
+        text: '.weibo-text',
+        statusLink: 'a[href*="/status/"]',
+        video: '.card-video',
+        videoPlayCount: '.m-box-col',
+        footer: 'footer',
+        footerCount: '.m-diy-btn h4'
+    };
+
+    const TOPIC_SELECTORS = {
+        detailTitle: '.topic-header-wrap .topic .text',
+        hostName: '.data.host-data .name',
+        panel: '.ui-pannel',
+        overviewItem: '.detail-data .item-col',
+        overviewLabel: '.des',
+        overviewValue: '.num',
+        hotBlock: '.area_gray_col',
+        hotLabel: '.area_gray_text',
+        hotRank: '.pos',
+        overviewTab: '.tab .tab_text',
+        topicLink: 'a'
+    };
+
+    const CCTV_SELECTORS = {
+        listItem: '.p-user-list-item',
+        link: 'a[href]',
+        image: 'img[data-src], img[src]',
+        detailTitle: '.video-main-l-title .title',
+        detailTime: '.video-main-l-time',
+        detailLike: '.icon .zan .fontSetRedHover'
+    };
 
     const STORAGE_KEY = '__weibo_scraper_hub_v1';
     const SCROLL_WAIT_MS = 1800;
@@ -39,9 +112,252 @@
     const WEIBO_TEXT_CACHE = new Map();
     const PANEL_Z_INDEX = 2147483647;
     const OVERLAY_Z_INDEX = 2147483646;
+    const APP_STYLE = `
+#${APP_IDS.toast} {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: ${PANEL_Z_INDEX};
+  max-width: 90vw;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font: 14px/1.5 sans-serif;
+}
+
+@keyframes wsh-busy-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+#${APP_IDS.busyOverlay} {
+  position: fixed;
+  inset: 0;
+  z-index: ${OVERLAY_Z_INDEX};
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(7, 11, 18, 0.62);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+.${CLASS_NAMES.busyCard} {
+  width: min(460px, calc(100vw - 32px));
+  padding: 22px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
+  background: linear-gradient(160deg, rgba(12, 18, 28, 0.96), rgba(20, 30, 46, 0.92));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+  color: #eef4ff;
+  font-family: Trebuchet MS, Microsoft YaHei, sans-serif;
+}
+
+.${CLASS_NAMES.busyHeader} {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.${CLASS_NAMES.busySpinner} {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: #ff8a3d;
+  border-radius: 50%;
+  animation: wsh-busy-spin 1s linear infinite;
+}
+
+.${CLASS_NAMES.busyHeaderText} {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.${CLASS_NAMES.busyBadge} {
+  color: #ffb277;
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+
+.${CLASS_NAMES.busyTask} {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.${CLASS_NAMES.busyAction} {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.${CLASS_NAMES.busyDetail} {
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.${CLASS_NAMES.busyMeta} {
+  margin-top: 14px;
+  color: #8ec5ff;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.${CLASS_NAMES.busyNote} {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+  line-height: 1.7;
+}
+`;
+
+    const HUB_PANEL_STYLE = `
+.${CLASS_NAMES.hubPanel} {
+  position: fixed;
+  top: 15px;
+  right: 15px;
+  z-index: ${PANEL_Z_INDEX};
+  width: 180px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  font-family: sans-serif;
+}
+
+.${CLASS_NAMES.hubTitle} {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.${CLASS_NAMES.hubStatus} {
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.${CLASS_NAMES.hubRow} {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.${CLASS_NAMES.hubLabel} {
+  flex: 0 0 auto;
+}
+
+.${CLASS_NAMES.hubInput} {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.${CLASS_NAMES.hubSectionLabel} {
+  margin: 6px 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.${CLASS_NAMES.hubButton} {
+  width: 100%;
+  margin: 4px 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.${CLASS_NAMES.hubButtonVideo} { background: #ff6b35; }
+.${CLASS_NAMES.hubButtonTopic} { background: #9b59b6; }
+.${CLASS_NAMES.hubButtonCctv} { background: #2d98da; }
+.${CLASS_NAMES.hubButtonWechat} { background: #16a085; }
+.${CLASS_NAMES.hubButtonClear} { background: #666; }
+.${CLASS_NAMES.hubButtonExport} { background: #27ae60; }
+
+.${CLASS_NAMES.hubFooter} {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: #666;
+  font-size: 12px;
+}
+
+.${CLASS_NAMES.hubFooterLink} {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #111;
+  text-decoration: none;
+}
+
+.${CLASS_NAMES.hubFooterIcon} {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+}
+`;
+
+    const nativeConsole = typeof console === 'object' ? console : null;
+    const logger = {
+        error(...args) {
+            if (nativeConsole && typeof nativeConsole.error === 'function') {
+                nativeConsole.error('[央视军事数据采集器]', ...args);
+            }
+        }
+    };
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
     function randInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
+
+    function injectStyleOnce(id, cssText) {
+        if (document.getElementById(id)) return;
+        const style = document.createElement('style');
+        style.id = id;
+        style.textContent = cssText;
+        document.head.appendChild(style);
+    }
+
+    function createNode(tagName, options) {
+        const node = document.createElement(tagName);
+        const config = options || {};
+        if (config.id) node.id = config.id;
+        if (config.className) node.className = config.className;
+        if (config.text !== undefined) node.textContent = config.text;
+        if (config.html !== undefined) node.innerHTML = config.html;
+        if (config.attrs) {
+            Object.keys(config.attrs).forEach((key) => {
+                const value = config.attrs[key];
+                if (value !== undefined && value !== null) node.setAttribute(key, String(value));
+            });
+        }
+        if (config.props) {
+            Object.assign(node, config.props);
+        }
+        return node;
+    }
+
+    function appendChildren(parent, children) {
+        children.filter(Boolean).forEach((child) => parent.appendChild(child));
+        return parent;
+    }
     async function humanScrollToBottom() {
         const maxSteps = randInt(10, 18);
         for (let i = 0; i < maxSteps; i++) {
@@ -161,9 +477,7 @@
     }
 
     function loadState() {
-        const raw = typeof GM_getValue === 'function'
-            ? GM_getValue(STORAGE_KEY, null)
-            : localStorage.getItem(STORAGE_KEY);
+        const raw = GM_getValue(STORAGE_KEY, null);
         const data = safeJsonParse(raw, null);
         return normalizeState(data);
     }
@@ -235,11 +549,7 @@
 
     function saveState(state) {
         const val = JSON.stringify(state);
-        if (typeof GM_setValue === 'function') {
-            GM_setValue(STORAGE_KEY, val);
-        } else {
-            localStorage.setItem(STORAGE_KEY, val);
-        }
+        GM_setValue(STORAGE_KEY, val);
     }
 
 
@@ -258,26 +568,10 @@
 
 
     function showToast(msg) {
-        const id = 'weibo-scraper-toast';
-        const old = document.getElementById(id);
+        injectStyleOnce(APP_IDS.busyStyle, APP_STYLE);
+        const old = document.getElementById(APP_IDS.toast);
         if (old) old.remove();
-        const div = document.createElement('div');
-        div.id = id;
-        div.textContent = msg;
-        div.style.cssText = [
-            'position: fixed',
-            'left: 50%',
-            'bottom: 18px',
-            'transform: translateX(-50%)',
-            'background: rgba(0,0,0,0.85)',
-            'color: #fff',
-            'padding: 12px 18px',
-            'border-radius: 12px',
-            'z-index: 2147483647',
-            'font-size: 14px',
-            'max-width: 90vw',
-            'font-family: sans-serif'
-        ].join(';');
+        const div = createNode('div', { id: APP_IDS.toast, text: msg });
         document.body.appendChild(div);
         setTimeout(() => div.remove(), 2500);
     }
@@ -289,92 +583,26 @@
             return busyOverlayRefs;
         }
 
-        const styleId = 'weibo-scraper-busy-style';
-        if (!document.getElementById(styleId)) {
-            const style = document.createElement('style');
-            style.id = styleId;
-            style.textContent = `
-                @keyframes weibo-scraper-busy-spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-            `;
-            document.head.appendChild(style);
-        }
+        injectStyleOnce(APP_IDS.busyStyle, APP_STYLE);
 
-        const root = document.createElement('div');
-        root.id = 'weibo-scraper-busy-overlay';
-        root.style.cssText = [
-            'position: fixed',
-            'inset: 0',
-            `z-index: ${OVERLAY_Z_INDEX}`,
-            'display: none',
-            'align-items: center',
-            'justify-content: center',
-            'padding: 24px',
-            'background: rgba(7, 11, 18, 0.62)',
-            'backdrop-filter: blur(4px)',
-            'pointer-events: none'
-        ].join(';');
+        const root = createNode('div', { id: APP_IDS.busyOverlay });
+        const card = createNode('div', { className: CLASS_NAMES.busyCard });
+        const header = createNode('div', { className: CLASS_NAMES.busyHeader });
+        const spinner = createNode('div', { className: CLASS_NAMES.busySpinner });
+        const headerText = createNode('div', { className: CLASS_NAMES.busyHeaderText });
+        const badge = createNode('div', { className: CLASS_NAMES.busyBadge, text: '执行中' });
+        const task = createNode('div', { className: CLASS_NAMES.busyTask });
+        const action = createNode('div', { className: CLASS_NAMES.busyAction });
+        const detail = createNode('div', { className: CLASS_NAMES.busyDetail });
+        const meta = createNode('div', { className: CLASS_NAMES.busyMeta });
+        const note = createNode('div', {
+            className: CLASS_NAMES.busyNote,
+            text: '页面变暗是正常现象，右上角面板仍可随时停止。'
+        });
 
-        const card = document.createElement('div');
-        card.style.cssText = [
-            'width: min(460px, calc(100vw - 32px))',
-            'border-radius: 22px',
-            'padding: 22px 24px',
-            'background: linear-gradient(160deg, rgba(12, 18, 28, 0.96), rgba(20, 30, 46, 0.92))',
-            'border: 1px solid rgba(255,255,255,0.16)',
-            'box-shadow: 0 24px 70px rgba(0,0,0,0.4)',
-            'color: #eef4ff',
-            'font-family: Trebuchet MS, Microsoft YaHei, sans-serif'
-        ].join(';');
-
-        const header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;gap:14px;margin-bottom:16px;';
-
-        const spinner = document.createElement('div');
-        spinner.style.cssText = [
-            'width: 18px',
-            'height: 18px',
-            'border-radius: 50%',
-            'border: 2px solid rgba(255,255,255,0.22)',
-            'border-top-color: #ff8a3d',
-            'animation: weibo-scraper-busy-spin 1s linear infinite',
-            'flex: 0 0 auto'
-        ].join(';');
-
-        const headerText = document.createElement('div');
-        headerText.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
-
-        const badge = document.createElement('div');
-        badge.textContent = '执行中';
-        badge.style.cssText = 'font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#ffb277;';
-
-        const task = document.createElement('div');
-        task.style.cssText = 'font-size:24px;font-weight:700;line-height:1.2;';
-
-        const action = document.createElement('div');
-        action.style.cssText = 'font-size:15px;line-height:1.6;color:rgba(255,255,255,0.9);';
-
-        const detail = document.createElement('div');
-        detail.style.cssText = 'margin-top:10px;font-size:13px;line-height:1.7;color:rgba(255,255,255,0.72);';
-
-        const meta = document.createElement('div');
-        meta.style.cssText = 'margin-top:14px;font-size:12px;line-height:1.6;color:#8ec5ff;';
-
-        const note = document.createElement('div');
-        note.textContent = '页面变暗是正常现象，右上角面板仍可随时停止。';
-        note.style.cssText = 'margin-top:12px;font-size:12px;line-height:1.7;color:rgba(255,255,255,0.58);';
-
-        headerText.appendChild(badge);
-        headerText.appendChild(task);
-        header.appendChild(spinner);
-        header.appendChild(headerText);
-        card.appendChild(header);
-        card.appendChild(action);
-        card.appendChild(detail);
-        card.appendChild(meta);
-        card.appendChild(note);
+        appendChildren(headerText, [badge, task]);
+        appendChildren(header, [spinner, headerText]);
+        appendChildren(card, [header, action, detail, meta, note]);
         root.appendChild(card);
         document.body.appendChild(root);
 
@@ -424,7 +652,7 @@
                     detail: '准备开始采集微博内容。'
                 };
             }
-            const cardCount = document.querySelectorAll('.card9').length;
+            const cardCount = document.querySelectorAll(WEIBO_SELECTORS.card).length;
             return {
                 task: '微博数据',
                 action: cardCount ? '正在采集微博数据' : '正在等待微博内容加载',
@@ -509,13 +737,8 @@
 
     function getPublishTimeText(card) {
         if (!card) return '';
-        const headerTime = card.querySelector('.weibo-top .time') || card.querySelector('header .time');
-        let timeStr = headerTime ? headerTime.textContent.trim() : '';
-        if (!timeStr) {
-            const anyTime = card.querySelector('.time');
-            timeStr = anyTime ? anyTime.textContent.trim() : '';
-        }
-        return timeStr;
+        const timeElement = card.querySelector(WEIBO_SELECTORS.publishTime);
+        return timeElement ? timeElement.textContent.trim() : '';
     }
 
     function getVueCreatedAt(card) {
@@ -721,7 +944,7 @@
     }
 
     function collectTopicsFromNode(node, sourcePublishTime, topicsMap) {
-        const anchors = Array.from(node.querySelectorAll('a'));
+        const anchors = Array.from(node.querySelectorAll(TOPIC_SELECTORS.topicLink));
         for (const a of anchors) {
             const t = (a.textContent || '').trim();
             if (!t) continue;
@@ -744,7 +967,7 @@
         let belowStartCount = 0;
         let inRangeCount = 0;
         const range = getCollectRange(state);
-        const cards = Array.from(document.querySelectorAll('.card'));
+        const cards = Array.from(document.querySelectorAll(WEIBO_SELECTORS.anyCard));
         for (const card of cards) {
             if (card.dataset.topicScanned) continue;
             const publishInfo = getCardPublishInfo(card);
@@ -798,26 +1021,26 @@
     }
 
     function getTopicFromDetailPage() {
-        const header = document.querySelector('.topic-header-wrap .topic .text');
+        const header = document.querySelector(TOPIC_SELECTORS.detailTitle);
         if (header && header.textContent) return normalizeTopicName(header.textContent);
         const q = new URLSearchParams(location.search).get('q') || '';
         return normalizeTopicName(q);
     }
 
     function getHostFromDetailPage() {
-        const el = document.querySelector('.data.host-data .name');
+        const el = document.querySelector(TOPIC_SELECTORS.hostName);
         if (el && el.textContent) return el.textContent.trim();
         return '';
     }
 
     function getOverviewMetricsRaw() {
-        const panel = Array.from(document.querySelectorAll('.ui-pannel')).find(p => (p.textContent || '').includes('数据总览'));
+        const panel = Array.from(document.querySelectorAll(TOPIC_SELECTORS.panel)).find(p => (p.textContent || '').includes('数据总览'));
         if (!panel) return {};
         const map = {};
-        const cols = Array.from(panel.querySelectorAll('.detail-data .item-col'));
+        const cols = Array.from(panel.querySelectorAll(TOPIC_SELECTORS.overviewItem));
         for (const col of cols) {
-            const des = col.querySelector('.des');
-            const num = col.querySelector('.num');
+            const des = col.querySelector(TOPIC_SELECTORS.overviewLabel);
+            const num = col.querySelector(TOPIC_SELECTORS.overviewValue);
             const k = des ? des.textContent.trim() : '';
             const v = num ? num.textContent.replace(/\s+/g, '').trim() : '';
             if (k) map[k] = v;
@@ -826,14 +1049,14 @@
     }
 
     function getHotSearchPeak() {
-        const panel = Array.from(document.querySelectorAll('.ui-pannel')).find(p => (p.textContent || '').includes('热搜记录'));
+        const panel = Array.from(document.querySelectorAll(TOPIC_SELECTORS.panel)).find(p => (p.textContent || '').includes('热搜记录'));
         if (!panel) return '';
-        const blocks = Array.from(panel.querySelectorAll('.area_gray_col'));
+        const blocks = Array.from(panel.querySelectorAll(TOPIC_SELECTORS.hotBlock));
         for (const block of blocks) {
-            const label = block.querySelector('.area_gray_text');
+            const label = block.querySelector(TOPIC_SELECTORS.hotLabel);
             if (!label) continue;
             if ((label.textContent || '').trim() !== '热搜榜最高位置') continue;
-            const pos = block.querySelector('.pos');
+            const pos = block.querySelector(TOPIC_SELECTORS.hotRank);
             if (!pos) return '';
             return (pos.textContent || '').trim();
         }
@@ -847,9 +1070,9 @@
     }
 
     function findOverviewRangeTab(range) {
-        const panel = Array.from(document.querySelectorAll('.ui-pannel')).find(p => (p.textContent || '').includes('数据总览'));
+        const panel = Array.from(document.querySelectorAll(TOPIC_SELECTORS.panel)).find(p => (p.textContent || '').includes('数据总览'));
         if (!panel) return null;
-        const tabs = Array.from(panel.querySelectorAll('.tab .tab_text'));
+        const tabs = Array.from(panel.querySelectorAll(TOPIC_SELECTORS.overviewTab));
         const label = getOverviewRangeLabel(range);
         return tabs.find(t => (t.textContent || '').trim() === label) || null;
     }
@@ -982,7 +1205,7 @@
                 location.href = buildDetailUrl(getTopicQueueItemName(state.topic.topics[state.topic.idx]));
             }
         } catch (e) {
-            console.error('话题采集失败', e);
+            logger.error('话题采集失败', e);
             showToast('话题抓取失败，已跳过');
             state = loadState();
             if (!state.topic.running) return;
@@ -1183,7 +1406,7 @@
 
     function findFullTextLink(card) {
         if (!card) return null;
-        const links = Array.from(card.querySelectorAll('.weibo-text a'));
+        const links = Array.from(card.querySelectorAll(`${WEIBO_SELECTORS.text} a`));
         return links.find(a => (a.textContent || '').trim() === '全文') || null;
     }
 
@@ -1216,7 +1439,7 @@
     }
 
     async function extractWeiboFullText(card) {
-        const textEl = card ? card.querySelector('.weibo-text') : null;
+        const textEl = card ? card.querySelector(WEIBO_SELECTORS.text) : null;
         const hasFullLink = !!findFullTextLink(card);
         const fallback = normalizeWeiboText(textEl ? textEl.textContent : '', hasFullLink);
         if (!hasFullLink) return fallback;
@@ -1238,7 +1461,7 @@
         if (cardWrap && cardWrap.dataset.id) {
             return `https://m.weibo.cn/status/${cardWrap.dataset.id}`;
         }
-        const fullTextLink = card.querySelector('a[href*="/status/"]');
+        const fullTextLink = card.querySelector(WEIBO_SELECTORS.statusLink);
         if (fullTextLink && fullTextLink.href) {
             return fullTextLink.href;
         }
@@ -1251,7 +1474,7 @@
     }
 
     async function collectVideoData(state) {
-        const cards = document.querySelectorAll('.card9');
+        const cards = document.querySelectorAll(WEIBO_SELECTORS.card);
         let addedCount = 0;
         let reachedStartBoundary = false;
         const existingLinks = new Set(state.video.results.map(r => r.链接));
@@ -1284,17 +1507,17 @@
                 continue;
             }
 
-            const videoEl = card.querySelector('.card-video');
+            const videoEl = card.querySelector(WEIBO_SELECTORS.video);
             let playCount = '';
             if (videoEl) {
-                const playCountEl = videoEl.querySelector('.m-box-col');
+                const playCountEl = videoEl.querySelector(WEIBO_SELECTORS.videoPlayCount);
                 const playCountStr = playCountEl ? playCountEl.textContent.trim() : '';
                 const parsed = parseCount(playCountStr.replace('次播放', ''));
                 playCount = parsed || 0;
             }
 
-            const footer = card.querySelector('footer');
-            const btns = footer ? footer.querySelectorAll('.m-diy-btn h4') : [];
+            const footer = card.querySelector(WEIBO_SELECTORS.footer);
+            const btns = footer ? footer.querySelectorAll(WEIBO_SELECTORS.footerCount) : [];
             const forward = btns[0] ? parseCount(btns[0].textContent) : 0;
             const comment = btns[1] ? parseCount(btns[1].textContent) : 0;
             const like = btns[2] ? parseCount(btns[2].textContent) : 0;
@@ -1356,13 +1579,13 @@
                     return runtime.limitHitStreak >= 2 ? {} : null;
                 },
                 getProgressSnapshot() {
-                    return `${document.querySelectorAll('.card').length}|${document.body.scrollHeight}`;
+                    return `${document.querySelectorAll(WEIBO_SELECTORS.anyCard).length}|${document.body.scrollHeight}`;
                 },
                 shouldStopOnStall(state, scan, runtime, repeatCount) {
                     return repeatCount >= NO_NEW_RETRY_LIMIT ? {} : null;
                 },
                 pauseByDays: {
-                    cardSelector: '.card',
+                    cardSelector: WEIBO_SELECTORS.anyCard,
                     days: 5,
                     minMs: TOPIC_SCROLL_BREAK_REST_MIN,
                     maxMs: TOPIC_SCROLL_BREAK_REST_MAX,
@@ -1422,13 +1645,13 @@
                     return scan.reachedStartBoundary ? { toast: '已超过开始时间，微博采集结束' } : null;
                 },
                 getProgressSnapshot() {
-                    return document.querySelectorAll('.card9').length;
+                    return document.querySelectorAll(WEIBO_SELECTORS.card).length;
                 },
                 shouldStopOnStall(state, scan, runtime, repeatCount) {
                     return repeatCount > 5 ? { toast: '没有更多内容，微博采集结束' } : null;
                 },
                 pauseByDays: {
-                    cardSelector: '.card9',
+                    cardSelector: WEIBO_SELECTORS.card,
                     days: 5,
                     minMs: 20000,
                     maxMs: 30000,
@@ -1538,19 +1761,19 @@
 
     function collectCctvVidsFromListDom() {
         const set = new Set();
-        const items = Array.from(document.querySelectorAll('.p-user-list-item'));
+        const items = Array.from(document.querySelectorAll(CCTV_SELECTORS.listItem));
         for (const item of items) {
             const trace = item.getAttribute('data-trace') || '';
             const traceMatch = trace.match(/fval1:([a-zA-Z0-9]+)/);
             if (traceMatch && traceMatch[1]) set.add(traceMatch[1]);
 
-            const anchors = Array.from(item.querySelectorAll('a[href]'));
+            const anchors = Array.from(item.querySelectorAll(CCTV_SELECTORS.link));
             for (const a of anchors) {
                 const vid = extractCctvVidFromLink(a.getAttribute('href') || '');
                 if (vid) set.add(vid);
             }
 
-            const imgs = Array.from(item.querySelectorAll('img[data-src], img[src]'));
+            const imgs = Array.from(item.querySelectorAll(CCTV_SELECTORS.image));
             for (const img of imgs) {
                 const src = img.getAttribute('data-src') || img.getAttribute('src') || '';
                 const imgMatch = src.match(/videoPic\/([a-zA-Z0-9]+)\//);
@@ -1625,14 +1848,14 @@
     }
 
     function parseCctvDetailInfo() {
-        const titleEl = document.querySelector('.video-main-l-title .title');
+        const titleEl = document.querySelector(CCTV_SELECTORS.detailTitle);
         const title = titleEl ? titleEl.textContent.trim() : '';
-        const timeEl = document.querySelector('.video-main-l-time');
+        const timeEl = document.querySelector(CCTV_SELECTORS.detailTime);
         const timeText = timeEl ? timeEl.textContent.replace(/\s+/g, ' ').trim() : '';
         const dateMatch = timeText.match(/(\d{4}-\d{1,2}-\d{1,2})/);
         const playMatch = timeText.match(/([\d.]+)(万|亿)?次观看/);
         const playCount = playMatch ? parseCount(`${playMatch[1]}${playMatch[2] || ''}`) : 0;
-        const likeEl = document.querySelector('.icon .zan .fontSetRedHover');
+        const likeEl = document.querySelector(CCTV_SELECTORS.detailLike);
         const likeCount = likeEl ? parseCount(likeEl.textContent) : 0;
         return {
             title,
@@ -1729,8 +1952,8 @@
 
         await waitFor(() => {
             if (isCctvMissingPage()) return true;
-            const t = document.querySelector('.video-main-l-title .title');
-            const timeEl = document.querySelector('.video-main-l-time');
+            const t = document.querySelector(CCTV_SELECTORS.detailTitle);
+            const timeEl = document.querySelector(CCTV_SELECTORS.detailTime);
             return !!(t && t.textContent.trim() && timeEl);
         }, 8000);
 
@@ -1885,7 +2108,7 @@
                 saveState(state);
                 showToast(`微信导入完成：${results.length}条`);
             } catch (e) {
-                console.error('微信CSV解析失败', e);
+                logger.error('微信CSV解析失败', e);
                 showToast('微信CSV解析失败');
             }
         };
@@ -2055,106 +2278,57 @@
 
     // ===== 统一面板 =====
     let panelRefs = null;
+    let panelRefreshTimer = 0;
 
     function createHubPanel() {
-        if (document.getElementById('weibo-scraper-hub')) return;
-        const container = document.createElement('div');
-        container.id = 'weibo-scraper-hub';
+        if (document.getElementById(APP_IDS.hub)) return;
+        const container = createNode('div', { id: APP_IDS.hub });
         const shadow = container.attachShadow({ mode: 'open' });
 
-        const wrap = document.createElement('div');
-        wrap.style.cssText = [
-            'position: fixed',
-            'top: 15px',
-            'right: 15px',
-            `z-index: ${PANEL_Z_INDEX}`,
-            'background: rgba(255,255,255,0.96)',
-            'border: 1px solid #ddd',
-            'border-radius: 12px',
-            'padding: 10px',
-            'width: 180px',
-            'font-family: sans-serif',
-            'box-shadow: 0 6px 20px rgba(0,0,0,0.2)'
-        ].join(';');
+        const style = createNode('style', { text: HUB_PANEL_STYLE });
+        const wrap = createNode('div', { className: CLASS_NAMES.hubPanel });
+        const title = createNode('div', { className: CLASS_NAMES.hubTitle, text: '数据采集面板' });
+        const status = createNode('div', { className: CLASS_NAMES.hubStatus });
+        const rangeRow = createNode('div', { className: CLASS_NAMES.hubRow });
+        const rangeLabel = createNode('span', { className: CLASS_NAMES.hubLabel, text: '数据周期' });
+        const rangeSelect = createNode('select', { className: CLASS_NAMES.hubInput });
+        const collectLabel = createNode('div', { className: CLASS_NAMES.hubSectionLabel, text: '采集区间' });
+        const rangeStartRow = createNode('div', { className: CLASS_NAMES.hubRow });
+        const rangeStartLabel = createNode('span', { className: CLASS_NAMES.hubLabel, text: '开始' });
+        const rangeStartInput = createNode('input', { className: CLASS_NAMES.hubInput, props: { type: 'datetime-local' } });
+        const rangeEndRow = createNode('div', { className: CLASS_NAMES.hubRow });
+        const rangeEndLabel = createNode('span', { className: CLASS_NAMES.hubLabel, text: '结束' });
+        const rangeEndInput = createNode('input', { className: CLASS_NAMES.hubInput, props: { type: 'datetime-local' } });
+        const btnVideo = createNode('button', { className: `${CLASS_NAMES.hubButton} ${CLASS_NAMES.hubButtonVideo}` });
+        const btnTopic = createNode('button', { className: `${CLASS_NAMES.hubButton} ${CLASS_NAMES.hubButtonTopic}` });
+        const btnCctv = createNode('button', { className: `${CLASS_NAMES.hubButton} ${CLASS_NAMES.hubButtonCctv}` });
+        const btnWechat = createNode('button', { className: `${CLASS_NAMES.hubButton} ${CLASS_NAMES.hubButtonWechat}`, text: '公众号数据' });
+        const btnClear = createNode('button', { className: `${CLASS_NAMES.hubButton} ${CLASS_NAMES.hubButtonClear}`, text: '清除数据' });
+        const btnExport = createNode('button', { className: `${CLASS_NAMES.hubButton} ${CLASS_NAMES.hubButtonExport}`, text: '导出表格' });
+        const footer = createNode('div', { className: CLASS_NAMES.hubFooter });
+        const footerText = createNode('span', { text: '作者：Noah' });
+        const footerLink = createNode('a', {
+            className: CLASS_NAMES.hubFooterLink,
+            attrs: {
+                href: 'https://github.com/Noah-Wu66',
+                target: '_blank',
+                rel: 'noopener noreferrer'
+            }
+        });
+        const footerIcon = createNode('span', {
+            className: CLASS_NAMES.hubFooterIcon,
+            html: '<svg viewBox="0 0 16 16" aria-hidden="true" width="16" height="16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path></svg>'
+        });
 
-        const title = document.createElement('div');
-        title.textContent = '数据采集面板';
-        title.style.cssText = 'font-weight:bold;margin-bottom:8px;font-size:13px;';
-
-        const status = document.createElement('div');
-        status.style.cssText = 'font-size:12px;line-height:1.6;margin-bottom:8px;';
-
-        const rangeRow = document.createElement('div');
-        const rangeLabel = document.createElement('span');
-        const rangeSelect = document.createElement('select');
-
-        const collectLabel = document.createElement('div');
-        const rangeStartRow = document.createElement('div');
-        const rangeStartLabel = document.createElement('span');
-        const rangeStartInput = document.createElement('input');
-        const rangeEndRow = document.createElement('div');
-        const rangeEndLabel = document.createElement('span');
-        const rangeEndInput = document.createElement('input');
-
-        const btnVideo = document.createElement('button');
-        const btnTopic = document.createElement('button');
-        const btnCctv = document.createElement('button');
-        const btnWechat = document.createElement('button');
-        const btnClear = document.createElement('button');
-        const btnExport = document.createElement('button');
-        const footer = document.createElement('div');
-        const footerText = document.createElement('span');
-        const footerLink = document.createElement('a');
-        const footerIcon = document.createElement('span');
-
-        const btnStyle = [
-            'width: 100%',
-            'margin: 4px 0',
-            'padding: 6px 8px',
-            'border-radius: 8px',
-            'border: none',
-            'cursor: pointer',
-            'font-size: 12px'
-        ].join(';');
-
-        rangeRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin:6px 0 6px 0;font-size:12px;';
-        rangeLabel.textContent = '数据周期';
-        rangeSelect.style.cssText = 'flex:1;min-width:0;padding:4px 6px;border:1px solid #ccc;border-radius:6px;font-size:12px;';
         const rangeOptions = [
             { value: 'all', label: '全部' },
             { value: '24h', label: '24小时' },
             { value: '30d', label: '30天' }
         ];
         rangeOptions.forEach((opt) => {
-            const option = document.createElement('option');
-            option.value = opt.value;
-            option.textContent = opt.label;
+            const option = createNode('option', { text: opt.label, attrs: { value: opt.value } });
             rangeSelect.appendChild(option);
         });
-
-        collectLabel.textContent = '采集区间';
-        collectLabel.style.cssText = 'margin:6px 0 4px 0;font-size:12px;font-weight:bold;';
-
-        rangeStartRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin:4px 0;font-size:12px;';
-        rangeStartLabel.textContent = '开始';
-        rangeStartInput.type = 'datetime-local';
-        rangeStartInput.style.cssText = 'flex:1;min-width:0;padding:4px 6px;border:1px solid #ccc;border-radius:6px;font-size:12px;';
-
-        rangeEndRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin:4px 0 8px 0;font-size:12px;';
-        rangeEndLabel.textContent = '结束';
-        rangeEndInput.type = 'datetime-local';
-        rangeEndInput.style.cssText = 'flex:1;min-width:0;padding:4px 6px;border:1px solid #ccc;border-radius:6px;font-size:12px;';
-
-
-        btnVideo.style.cssText = `${btnStyle};background:#ff6b35;color:#fff;`;
-        btnTopic.style.cssText = `${btnStyle};background:#9b59b6;color:#fff;`;
-        btnCctv.style.cssText = `${btnStyle};background:#2d98da;color:#fff;`;
-        btnWechat.style.cssText = `${btnStyle};background:#16a085;color:#fff;`;
-        btnClear.style.cssText = `${btnStyle};background:#666;color:#fff;`;
-        btnExport.style.cssText = `${btnStyle};background:#27ae60;color:#fff;`;
-        footer.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:6px;font-size:12px;color:#666;';
-        footerLink.style.cssText = 'display:inline-flex;align-items:center;gap:4px;color:#111;text-decoration:none;';
-        footerIcon.style.cssText = 'width:16px;height:16px;display:inline-block;';
 
         rangeSelect.onchange = () => {
             const state = loadState();
@@ -2197,44 +2371,33 @@
             showToast('已清空（保留数据周期、采集区间）');
         };
         btnExport.onclick = exportWorkbook;
-        btnClear.textContent = '清除数据';
-        btnWechat.textContent = '公众号数据';
-        btnExport.textContent = '导出表格';
-        footerText.textContent = '作者：Noah';
-        footerLink.href = 'https://github.com/Noah-Wu66';
-        footerLink.target = '_blank';
-        footerLink.rel = 'noopener noreferrer';
-        footerIcon.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" width="16" height="16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path></svg>';
 
-        wrap.appendChild(title);
-        wrap.appendChild(status);
-        rangeRow.appendChild(rangeLabel);
-        rangeRow.appendChild(rangeSelect);
-
-        wrap.appendChild(rangeRow);
-        wrap.appendChild(collectLabel);
-        rangeStartRow.appendChild(rangeStartLabel);
-        rangeStartRow.appendChild(rangeStartInput);
-        rangeEndRow.appendChild(rangeEndLabel);
-        rangeEndRow.appendChild(rangeEndInput);
-        wrap.appendChild(rangeStartRow);
-        wrap.appendChild(rangeEndRow);
-        wrap.appendChild(btnVideo);
-        wrap.appendChild(btnTopic);
-        wrap.appendChild(btnCctv);
-        wrap.appendChild(btnWechat);
-        wrap.appendChild(btnClear);
-        wrap.appendChild(btnExport);
+        appendChildren(rangeRow, [rangeLabel, rangeSelect]);
+        appendChildren(rangeStartRow, [rangeStartLabel, rangeStartInput]);
+        appendChildren(rangeEndRow, [rangeEndLabel, rangeEndInput]);
         footerLink.appendChild(footerIcon);
-        footer.appendChild(footerText);
-        footer.appendChild(footerLink);
-        wrap.appendChild(footer);
-        shadow.appendChild(wrap);
+        appendChildren(footer, [footerText, footerLink]);
+        appendChildren(wrap, [
+            title,
+            status,
+            rangeRow,
+            collectLabel,
+            rangeStartRow,
+            rangeEndRow,
+            btnVideo,
+            btnTopic,
+            btnCctv,
+            btnWechat,
+            btnClear,
+            btnExport,
+            footer
+        ]);
+        appendChildren(shadow, [style, wrap]);
         document.body.appendChild(container);
 
         panelRefs = { status, btnVideo, btnTopic, btnCctv, btnWechat, rangeSelect, rangeStartInput, rangeEndInput, shadow };
         refreshPanel();
-        setInterval(refreshPanel, 1000);
+        if (!panelRefreshTimer) panelRefreshTimer = setInterval(refreshPanel, 1000);
     }
 
     function refreshPanel() {

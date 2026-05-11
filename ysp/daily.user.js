@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频日报采集器
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      2.3.6
+// @version      2.3.7
 // @description  在标准化系统页面采集日报数据，并保存结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -25,6 +25,14 @@
   window.__YSP_DAILY_REPORT__ = true;
 
   const SCRIPT_VERSION = GM_info.script.version;
+  const nativeConsole = typeof console === 'object' ? console : null;
+  const logger = {
+    error(...args) {
+      if (nativeConsole && typeof nativeConsole.error === 'function') {
+        nativeConsole.error('[央视频日报采集器]', ...args);
+      }
+    }
+  };
   const PANEL_STYLE = `
 #ysp-daily-report-panel-root {
   position: fixed;
@@ -1136,6 +1144,20 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   border-radius: 16px;
   background: #fff;
 }
+
+.ysp-daily-panel__download-title {
+  font-weight: 700;
+  color: #17324f;
+}
+
+.ysp-daily-panel__download-meta {
+  margin-top: 6px;
+  color: #6b7a90;
+}
+
+.ysp-daily-panel__download-actions {
+  margin-top: 10px;
+}
   `;
 
   const CATEGORY_GROUPS = [
@@ -1343,10 +1365,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
   function cloneWorkbenchSettings(settings) {
     return normalizeWorkbenchSettings(JSON.parse(JSON.stringify(settings || createDefaultWorkbenchSettings())));
   }
-  /* ===================================================================
-   *  SHARED UTILITIES -- keep identical across tags/daily/qc
-   *  Last synced: 2026-05-11
-   * =================================================================== */
+  /* ========================= 基础工具 ========================= */
 
   function injectPanelStyle() {
     GM_addStyle(PANEL_STYLE);
@@ -1459,7 +1478,7 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     return formatInputDate(date);
   }
 
-  /* =================================================================== */
+  /* ========================= 页面工具 ========================= */
 
   function buildDateList(startDateString, endDateString) {
     const startDate = normalizeText(startDateString);
@@ -2549,12 +2568,29 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
     renderFloatingGroupMenu() {
       if (!this.refs.popupLayer) return;
-      if (!this.runtime.openGroupMenu || this.runtime.running || this.runtime.minimized) { this.refs.popupLayer.innerHTML = ''; return; }
+      if (!this.runtime.openGroupMenu || this.runtime.running || this.runtime.minimized) {
+        this.refs.popupLayer.innerHTML = '';
+        return;
+      }
       const layout = this.getGroupMenuLayout();
-      if (!layout) { this.refs.popupLayer.innerHTML = ''; return; }
-      const styleTokens = [`--menu-left:${layout.left}px`, `--menu-width:${layout.width}px`, `--menu-max-height:${layout.maxHeight}px`, layout.top === null ? 'top:auto' : `top:${layout.top}px`, layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`];
+      if (!layout) {
+        this.refs.popupLayer.innerHTML = '';
+        return;
+      }
+      const styleTokens = [
+        `--menu-left:${layout.left}px`,
+        `--menu-width:${layout.width}px`,
+        `--menu-max-height:${layout.maxHeight}px`,
+        layout.top === null ? 'top:auto' : `top:${layout.top}px`,
+        layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`
+      ];
       const selected = new Set(this.settings.groupIds);
-      this.refs.popupLayer.innerHTML = `<div class="ysp-daily-panel__group-menu" data-role="group-menu" role="listbox" aria-label="品类编组选项" style="${styleTokens.join(';')}">${SUBGROUP_ENTRIES.map((subgroup) => { const selectedClass = selected.has(subgroup.id) ? ' is-selected' : ''; return `<button type="button" class="ysp-daily-panel__group-option${selectedClass}" data-theme="${escapeXml(subgroup.theme)}" data-role="group-option" data-group-id="${escapeXml(subgroup.id)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-option-copy"><span class="ysp-daily-panel__group-option-meta">${escapeXml(subgroup.groupLabel)}</span><span class="ysp-daily-panel__group-option-label">${escapeXml(subgroup.label)}</span></span><span class="ysp-daily-panel__group-option-check">${selected.has(subgroup.id) ? '已选' : '选择'}</span></button>`; }).join('')}</div>`;
+      const optionsHtml = SUBGROUP_ENTRIES.map((subgroup) => {
+        const isSelected = selected.has(subgroup.id);
+        const selectedClass = isSelected ? ' is-selected' : '';
+        return `<button type="button" class="ysp-daily-panel__group-option${selectedClass}" data-theme="${escapeXml(subgroup.theme)}" data-role="group-option" data-group-id="${escapeXml(subgroup.id)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-option-copy"><span class="ysp-daily-panel__group-option-meta">${escapeXml(subgroup.groupLabel)}</span><span class="ysp-daily-panel__group-option-label">${escapeXml(subgroup.label)}</span></span><span class="ysp-daily-panel__group-option-check">${isSelected ? '已选' : '选择'}</span></button>`;
+      }).join('');
+      this.refs.popupLayer.innerHTML = `<div class="ysp-daily-panel__group-menu" data-role="group-menu" role="listbox" aria-label="品类编组选项" style="${styleTokens.join(';')}">${optionsHtml}</div>`;
     }
 
     async persistSettings() { await storageSetCached({ [STORAGE_KEYS.settings]: cloneWorkbenchSettings(this.settings) }); }
@@ -2649,7 +2685,14 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
     setMinimized(nextValue) { if (this.runtime.running && nextValue) return; this.runtime.minimized = Boolean(nextValue); this.settings.ui.panelMinimized = this.runtime.minimized; if (this.runtime.minimized) this.runtime.openGroupMenu = ''; this.persistSettings().catch(() => undefined); this.render(); }
     renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'daily'; const triggerSummary = this.getGroupPickerSummary(); this.refs.dailyGroups.innerHTML = `<div class="ysp-daily-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-daily-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-daily-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-daily-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
     renderStatus() { const pageText = isListPage() ? '当前页面：列表页' : '当前页面：其他页面'; this.refs.status.innerHTML = `<div class="ysp-daily-panel__status-head"><span class="ysp-daily-panel__label">当前状态</span></div><div class="ysp-daily-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-daily-panel__status-subtext">任务类型：日报</div><div class="ysp-daily-panel__status-subtext">${escapeXml(pageText)}</div>`; }
-    renderDownloads() { const cards = []; if (this.runtime.report) cards.push(`<div class="ysp-daily-panel__download-card"><div style="font-weight: 700; color: #17324f;">日报结果</div><div style="margin-top: 6px; color: #6b7a90;">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div class="ysp-daily-panel__actions" style="margin-top: 10px;"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="daily">下载日报</button></div></div>`); this.refs.downloadsCard.hidden = !cards.length; this.refs.downloads.innerHTML = cards.join(''); }
+    renderDownloads() {
+      const cards = [];
+      if (this.runtime.report) {
+        cards.push(`<div class="ysp-daily-panel__download-card"><div class="ysp-daily-panel__download-title">日报结果</div><div class="ysp-daily-panel__download-meta">${escapeXml(formatReportPeriod(this.runtime.report))}</div><div class="ysp-daily-panel__actions ysp-daily-panel__download-actions"><button type="button" class="ysp-daily-panel__button ysp-daily-panel__button--primary" data-download-role="daily">下载日报</button></div></div>`);
+      }
+      this.refs.downloadsCard.hidden = !cards.length;
+      this.refs.downloads.innerHTML = cards.join('');
+    }
     renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-daily-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-daily-panel__log-entry">${escapeXml(log)}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
     render() { if (!this.panel) return; if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = ''; const listPageActive = isListPage(); const disabled = this.runtime.running; this.panel.classList.toggle('is-running', disabled); this.panel.classList.toggle('is-minimized', !disabled && this.runtime.minimized); this.syncSettingsToInputs(); this.renderGroupSelector(); this.renderFloatingGroupMenu(); this.refs.dailyStartDate.disabled = disabled; this.refs.dailyEndDate.disabled = disabled; this.refs.startDaily.disabled = disabled || !listPageActive; this.refs.clearData.disabled = disabled; this.refs.minimize.disabled = disabled; this.refs.stop.disabled = !disabled; const pausedTask = this.getPausedTaskMeta(); this.refs.pauseResume.disabled = !disabled && (!pausedTask || !listPageActive); this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? '继续日报' : '继续任务'; this.refs.pauseResume.classList.toggle('ysp-daily-panel__button--primary', !disabled && Boolean(pausedTask)); this.refs.startDaily.textContent = disabled ? '日报运行中' : '开始日报'; this.renderStatus(); this.renderDownloads(); this.renderLogs(); }
     pushLog(message) { this.runtime.logs = mergeLogEntries(this.runtime.logs, [message]); const checkpoint = this.getActiveCheckpoint(); if (checkpoint) checkpoint.logs = this.runtime.logs.slice(); this.renderLogs(); void this.persistActiveCheckpoint().catch(() => {}); }
@@ -3012,7 +3055,6 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
 
   let app = null;
   let booting = false;
-  let lastHref = location.href;
 
   async function ensureDailyReportMounted() {
     if (!isSupportedPage()) { if (app) { app.destroy(); app = null; } return 'destroyed'; }
@@ -3029,25 +3071,63 @@ button.ysp-daily-panel__header-chip:hover:not(:disabled) {
       if (!isSupportedPage()) { if (app) { app.destroy(); app = null; } return; }
       await ensureDailyReportMounted();
     } catch (error) {
-      console.error('[央视频日报采集器]', error);
+      logger.error(error);
     } finally {
       booting = false;
     }
   }
 
-  function queueBootstrap() { window.setTimeout(() => runBootstrap(), 60); }
-
-  function installRouteHooks() {
+  function createRouteWatcher(config) {
+    const eventName = config.eventName;
+    const panelId = config.panelId;
+    const isActive = config.isActive;
+    const onChange = config.onChange;
+    let lastHref = location.href;
+    let timer = 0;
     const methods = ['pushState', 'replaceState'];
-    for (const method of methods) { const original = history[method]; history[method] = function wrappedHistoryMethod(...args) { const result = original.apply(this, args); window.dispatchEvent(new Event('ysp:daily-location-change')); return result; }; }
-    const onLocationChange = () => { if (location.href === lastHref && document.getElementById('ysp-daily-report-panel-root')) return; lastHref = location.href; queueBootstrap(); };
-    window.addEventListener('popstate', onLocationChange);
-    window.addEventListener('hashchange', onLocationChange);
-    window.addEventListener('ysp:daily-location-change', onLocationChange);
-    const observer = new MutationObserver(() => { if (!isSupportedPage()) return; if (!document.getElementById('ysp-daily-report-panel-root')) queueBootstrap(); });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+
+    const schedule = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = 0;
+        onChange();
+      }, 60);
+    };
+
+    const onLocationChange = () => {
+      const panelExists = document.getElementById(panelId);
+      if (location.href === lastHref && panelExists) return;
+      lastHref = location.href;
+      schedule();
+    };
+
+    return {
+      start() {
+        for (const method of methods) {
+          const original = history[method];
+          history[method] = function wrappedHistoryMethod(...args) {
+            const result = original.apply(this, args);
+            window.dispatchEvent(new Event(eventName));
+            return result;
+          };
+        }
+        window.addEventListener('popstate', onLocationChange);
+        window.addEventListener('hashchange', onLocationChange);
+        window.addEventListener(eventName, onLocationChange);
+        const observer = new MutationObserver(() => {
+          if (typeof isActive === 'function' && !isActive()) return;
+          if (!document.getElementById(panelId)) schedule();
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+      }
+    };
   }
 
-  installRouteHooks();
+  createRouteWatcher({
+    eventName: 'ysp:daily-location-change',
+    panelId: 'ysp-daily-report-panel-root',
+    isActive: isSupportedPage,
+    onChange: runBootstrap
+  }).start();
   runBootstrap();
 })();

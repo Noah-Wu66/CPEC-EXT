@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.0.0
+// @version      1.0.1
 // @description  在标准化系统页面执行视频标准化打标
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -21,14 +21,8 @@
 // @grant        GM_info
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
-// @connect      dashscope.aliyuncs.com
 // @connect      ark.cn-beijing.volces.com
 // @connect      std.video.cloud.cctv.com
-// @connect      yangshipin.cn
-// @connect      www.yangshipin.cn
-// @connect      m.yangshipin.cn
-// @connect      w.yangshipin.cn
-// @connect      mp4playcloud-cdn.ysp.cctv.cn
 // @run-at       document-start
 // ==/UserScript==
 
@@ -41,6 +35,14 @@
   window.__YSP_STANDARDIZATION__ = true;
 
   const SCRIPT_VERSION = GM_info.script.version;
+  const nativeConsole = typeof console === 'object' ? console : null;
+  const logger = {
+    error(...args) {
+      if (nativeConsole && typeof nativeConsole.error === 'function') {
+        nativeConsole.error('[央视频标准化助手]', ...args);
+      }
+    }
+  };
   const YANGSHIPIN_VIDEO_INFO_API_PATH = '/v1/player/get_video_info';
   const CURRENT_TAB_ID = `tab-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
   const CURRENT_TAB_OPENED_AT = Date.now();
@@ -1601,10 +1603,7 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
   function cloneWorkbenchSettings(settings) {
     return normalizeWorkbenchSettings(JSON.parse(JSON.stringify(settings || createDefaultWorkbenchSettings())));
   }
-  /* ===================================================================
-   *  SHARED UTILITIES -- keep identical across tags/daily/qc
-   *  Last synced: 2026-05-11
-   * =================================================================== */
+  /* ========================= 基础工具 ========================= */
 
   function injectPanelStyle() {
     GM_addStyle(PANEL_STYLE);
@@ -1950,7 +1949,7 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
     return formatInputDate(date);
   }
 
-  /* =================================================================== */
+  /* ========================= 页面工具 ========================= */
 
   function buildDateList(startDateString, endDateString) {
     const startDate = normalizeText(startDateString);
@@ -3647,7 +3646,7 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
     const request = buildStandardizationListApiParams(range, pageNumber, item);
     let response = null;
     try {
-      response = await gmXmlhttpRequestPromise({
+      response = await requestByGm({
         method: 'GET',
         url: buildStandardizationListApiUrl(request.params),
         headers: {
@@ -3957,7 +3956,7 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
     return extractTextFromResponsesObject(parsed);
   }
 
-  function gmXmlhttpRequestPromise(options) {
+  function requestByGm(options) {
     return new Promise((resolve, reject) => {
       const requestOptions = options || {};
       const { cancelCheck: rawCancelCheck, ...xhrOptions } = requestOptions;
@@ -4034,7 +4033,7 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
   }
 
   async function requestArkResponsesText(apiKey, payload, isStream, cancelCheck) {
-    const response = await gmXmlhttpRequestPromise({
+    const response = await requestByGm({
       method: 'POST',
       url: ARK_RESPONSES_URL,
       headers: {
@@ -6120,7 +6119,55 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
     getGroupPickerSummary() { const entry = getCategoryEntry(this.settings.categoryKey); return entry ? `${entry.groupLabel} / ${entry.exportLabel}` : '请选择标准化品类'; }
     getGroupTriggerElement() { return this.refs.standardizationGroups ? this.refs.standardizationGroups.querySelector('[data-role="group-trigger"]') : null; }
     getGroupMenuLayout() { const trigger = this.getGroupTriggerElement(); if (!trigger) return null; const rect = trigger.getBoundingClientRect(); const viewportPadding = 12; const gap = 8; const width = Math.min(Math.max(Math.round(rect.width), 360), Math.max(320, window.innerWidth - viewportPadding * 2)); const left = Math.min(Math.max(viewportPadding, Math.round(rect.left)), Math.max(viewportPadding, window.innerWidth - width - viewportPadding)); const preferredHeight = 360; const belowSpace = Math.max(160, Math.floor(window.innerHeight - rect.bottom - gap - viewportPadding)); const aboveSpace = Math.max(160, Math.floor(rect.top - gap - viewportPadding)); const openUpward = belowSpace < 220 && aboveSpace > belowSpace; return { left, width, maxHeight: Math.min(preferredHeight, openUpward ? aboveSpace : belowSpace), top: openUpward ? null : Math.round(rect.bottom + gap), bottom: openUpward ? Math.round(window.innerHeight - rect.top + gap) : null }; }
-    renderFloatingGroupMenu() { if (!this.refs.popupLayer) return; if (!this.runtime.openGroupMenu || this.runtime.running || this.runtime.minimized) { this.refs.popupLayer.innerHTML = ''; return; } const layout = this.getGroupMenuLayout(); if (!layout) { this.refs.popupLayer.innerHTML = ''; return; } const styleTokens = [`--menu-left:${layout.left}px`, `--menu-width:${layout.width}px`, `--menu-max-height:${layout.maxHeight}px`, layout.top === null ? 'top:auto' : `top:${layout.top}px`, layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`]; const selectedKey = normalizeText(this.settings.categoryKey); this.refs.popupLayer.innerHTML = `<div class="ysp-std-panel__group-menu" data-role="group-menu" role="listbox" aria-label="标准化品类选项" style="${styleTokens.join(';')}">${CATEGORY_ENTRIES.map((entry) => { const selectedClass = selectedKey === entry.key ? ' is-selected' : ''; return `<button type="button" class="ysp-std-panel__group-option${selectedClass}" data-theme="${escapeXml(entry.theme)}" data-role="category-option" data-category-key="${escapeXml(entry.key)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-std-panel__group-option-copy"><span class="ysp-std-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span><span class="ysp-std-panel__group-option-label">${escapeXml(entry.exportLabel)}</span></span><span class="ysp-std-panel__group-option-check">${selectedKey === entry.key ? '已选' : '选择'}</span></button>`; }).join('')}</div>`; }
+    renderFloatingGroupMenu() {
+      if (!this.refs.popupLayer) return;
+      if (!this.runtime.openGroupMenu || this.runtime.running || this.runtime.minimized) {
+        this.refs.popupLayer.innerHTML = '';
+        return;
+      }
+      const layout = this.getGroupMenuLayout();
+      if (!layout) {
+        this.refs.popupLayer.innerHTML = '';
+        return;
+      }
+      const styleTokens = [
+        `--menu-left:${layout.left}px`,
+        `--menu-width:${layout.width}px`,
+        `--menu-max-height:${layout.maxHeight}px`,
+        layout.top === null ? 'top:auto' : `top:${layout.top}px`,
+        layout.bottom === null ? 'bottom:auto' : `bottom:${layout.bottom}px`
+      ];
+      const selectedKey = normalizeText(this.settings.categoryKey);
+      const optionsHtml = CATEGORY_ENTRIES.map((entry) => {
+        const selected = selectedKey === entry.key;
+        const selectedClass = selected ? ' is-selected' : '';
+        return `
+          <button
+            type="button"
+            class="ysp-std-panel__group-option${selectedClass}"
+            data-theme="${escapeXml(entry.theme)}"
+            data-role="category-option"
+            data-category-key="${escapeXml(entry.key)}"
+            ${this.runtime.running ? 'disabled' : ''}
+          >
+            <span class="ysp-std-panel__group-option-copy">
+              <span class="ysp-std-panel__group-option-meta">${escapeXml(entry.groupLabel)}</span>
+              <span class="ysp-std-panel__group-option-label">${escapeXml(entry.exportLabel)}</span>
+            </span>
+            <span class="ysp-std-panel__group-option-check">${selected ? '已选' : '选择'}</span>
+          </button>
+        `;
+      }).join('');
+      this.refs.popupLayer.innerHTML = `
+        <div
+          class="ysp-std-panel__group-menu"
+          data-role="group-menu"
+          role="listbox"
+          aria-label="标准化品类选项"
+          style="${styleTokens.join(';')}"
+        >${optionsHtml}</div>
+      `;
+    }
     async persistSettings() { await storageSetCached({ [STORAGE_KEYS.settings]: cloneWorkbenchSettings(this.settings) }); }
     syncSettingsToInputs() {
       const maxDate = getTodayDateString();
@@ -7064,14 +7111,54 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
 
   let app = null;
   let booting = false;
-  let lastHref = location.href;
   let lastPageKind = '';
   let activeWorkerRequestId = '';
   let activeMediaWorkerRequestId = '';
 
-  async function ensureStandardizationMounted() { if (!isSupportedPage()) { if (app) { app.destroy(); app = null; } return 'destroyed'; } await waitForBodyReady(); if (!app) { app = new YspStandardizationApp(); await app.init(); return 'created'; } if (!document.getElementById('ysp-standardization-panel-root')) { app.mountPanel(); if (isListPage()) await app.tryResume(); else app.render(); return 'remounted'; } return 'noop'; }
-  async function ensureDetailWorkerHandled() { if (!isDetailPage()) { activeWorkerRequestId = ''; return; } const requestId = getStandardizationWorkerRequestIdFromLocation(); if (!requestId || requestId === activeWorkerRequestId) return; activeWorkerRequestId = requestId; await runStandardizationDetailWorker(requestId); }
-  async function ensureYangshipinMediaWorkerHandled() { if (!isYangshipinMediaWorkerPage()) { activeMediaWorkerRequestId = ''; return; } const requestId = getStandardizationMediaWorkerRequestIdFromLocation(); if (!requestId || requestId === activeMediaWorkerRequestId) return; activeMediaWorkerRequestId = requestId; await runStandardizationMediaWorker(requestId); }
+  async function ensureStandardizationMounted() {
+    if (!isSupportedPage()) {
+      if (app) {
+        app.destroy();
+        app = null;
+      }
+      return 'destroyed';
+    }
+    await waitForBodyReady();
+    if (!app) {
+      app = new YspStandardizationApp();
+      await app.init();
+      return 'created';
+    }
+    if (!document.getElementById('ysp-standardization-panel-root')) {
+      app.mountPanel();
+      if (isListPage()) await app.tryResume();
+      else app.render();
+      return 'remounted';
+    }
+    return 'noop';
+  }
+
+  async function ensureDetailWorkerHandled() {
+    if (!isDetailPage()) {
+      activeWorkerRequestId = '';
+      return;
+    }
+    const requestId = getStandardizationWorkerRequestIdFromLocation();
+    if (!requestId || requestId === activeWorkerRequestId) return;
+    activeWorkerRequestId = requestId;
+    await runStandardizationDetailWorker(requestId);
+  }
+
+  async function ensureYangshipinMediaWorkerHandled() {
+    if (!isYangshipinMediaWorkerPage()) {
+      activeMediaWorkerRequestId = '';
+      return;
+    }
+    const requestId = getStandardizationMediaWorkerRequestIdFromLocation();
+    if (!requestId || requestId === activeMediaWorkerRequestId) return;
+    activeMediaWorkerRequestId = requestId;
+    await runStandardizationMediaWorker(requestId);
+  }
 
   async function runBootstrap() {
     if (booting) return;
@@ -7085,16 +7172,64 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
       if (currentPageKind === 'list' && lastPageKind !== 'list' && mountState === 'noop' && app) { await app.tryResume(); await app.tryStartPendingStandardizationJob(); }
       lastPageKind = currentPageKind;
     } catch (error) {
-      console.error('[央视频标准化助手]', error);
+      logger.error(error);
     } finally {
       booting = false;
     }
   }
 
-  function queueBootstrap() { window.setTimeout(() => runBootstrap(), 60); }
-  function installRouteHooks() { const methods = ['pushState', 'replaceState']; for (const method of methods) { const original = history[method]; history[method] = function wrappedHistoryMethod(...args) { const result = original.apply(this, args); window.dispatchEvent(new Event('ysp:standardization-location-change')); return result; }; } const onLocationChange = () => { if (location.href === lastHref && document.getElementById('ysp-standardization-panel-root')) return; lastHref = location.href; queueBootstrap(); }; window.addEventListener('popstate', onLocationChange); window.addEventListener('hashchange', onLocationChange); window.addEventListener('ysp:standardization-location-change', onLocationChange); const observer = new MutationObserver(() => { if (!isSupportedPage()) return; if (!document.getElementById('ysp-standardization-panel-root')) queueBootstrap(); }); observer.observe(document.documentElement, { childList: true, subtree: true }); }
+  function createRouteWatcher(config) {
+    const eventName = config.eventName;
+    const panelId = config.panelId;
+    const isActive = config.isActive;
+    const onChange = config.onChange;
+    let lastHref = location.href;
+    let timer = 0;
+    const methods = ['pushState', 'replaceState'];
+
+    const schedule = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = 0;
+        onChange();
+      }, 60);
+    };
+
+    const onLocationChange = () => {
+      const panelExists = document.getElementById(panelId);
+      if (location.href === lastHref && panelExists) return;
+      lastHref = location.href;
+      schedule();
+    };
+
+    return {
+      start() {
+        for (const method of methods) {
+          const original = history[method];
+          history[method] = function wrappedHistoryMethod(...args) {
+            const result = original.apply(this, args);
+            window.dispatchEvent(new Event(eventName));
+            return result;
+          };
+        }
+        window.addEventListener('popstate', onLocationChange);
+        window.addEventListener('hashchange', onLocationChange);
+        window.addEventListener(eventName, onLocationChange);
+        const observer = new MutationObserver(() => {
+          if (typeof isActive === 'function' && !isActive()) return;
+          if (!document.getElementById(panelId)) schedule();
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+      }
+    };
+  }
 
   startCloseTabsSignalWatcher();
-  installRouteHooks();
+  createRouteWatcher({
+    eventName: 'ysp:standardization-location-change',
+    panelId: 'ysp-standardization-panel-root',
+    isActive: isSupportedPage,
+    onChange: runBootstrap
+  }).start();
   runBootstrap();
 })();
