@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.0.5
+// @version      1.0.6
 // @description  在标准化系统页面执行视频标准化打标
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1399,6 +1399,7 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
 
   const STORAGE_KEYS = {
     settings: 'yspStandardizationSettingsV1',
+    report: 'yspStandardizationReportV1',
     checkpoint: 'yspStandardizationCheckpointV1',
     seenTaskIds: 'yspStandardizationSeenTaskIdsV1',
     pendingStart: 'yspStandardizationPendingStartV1',
@@ -4845,6 +4846,100 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
     };
   }
 
+  function normalizeStandardReport(report) {
+    if (
+      !report
+      || typeof report !== 'object'
+      || report.version !== 1
+      || !normalizeText(report.startDate)
+      || !normalizeText(report.endDate)
+      || !normalizeText(report.fileName)
+      || !normalizeText(report.generatedAt)
+      || !Number.isInteger(report.targetCount)
+      || !Number.isInteger(report.actualCount)
+    ) {
+      return null;
+    }
+    const startDate = normalizeText(report.startDate);
+    const endDate = normalizeText(report.endDate);
+    const rows = Array.isArray(report.rows)
+      ? report.rows
+        .map((row) => {
+          if (!row || typeof row !== 'object') {
+            return null;
+          }
+          const vid = normalizeText(row.vid);
+          if (!vid) {
+            return null;
+          }
+          return {
+            vid,
+            standardTags: normalizeText(row.standardTags),
+            standardOperator: normalizeText(row.standardOperator),
+            category: normalizeText(row.category)
+          };
+        })
+        .filter(Boolean)
+      : [];
+    return {
+      version: 1,
+      startDate,
+      endDate,
+      targetCount: report.targetCount,
+      actualCount: report.actualCount,
+      fileName: normalizeText(report.fileName),
+      rows,
+      generatedAt: normalizeText(report.generatedAt)
+    };
+  }
+
+  function formatReportPeriod(report) {
+    if (!report) {
+      return '';
+    }
+    const startDate = report.startDate || '';
+    const endDate = report.endDate || startDate;
+    if (!startDate) {
+      return '';
+    }
+    return startDate === endDate ? startDate : `${startDate} 至 ${endDate}`;
+  }
+
+  function createStandardExportRows(records) {
+    return (Array.isArray(records) ? records : []).map((row) => ({
+      vid: row.vid || '',
+      standardTags: row.standardTags || '',
+      standardOperator: row.standardOperator || '',
+      category: row.category || row.itemKey || ''
+    }));
+  }
+
+  function exportStandardReport(report) {
+    const rows = Array.isArray(report && report.rows) ? report.rows : [];
+    const xlsxParser = (typeof XLSX !== 'undefined' ? XLSX : null)
+      || (typeof globalThis !== 'undefined' ? globalThis.XLSX : null)
+      || window.XLSX
+      || (typeof unsafeWindow !== 'undefined' ? unsafeWindow.XLSX : null);
+    if (!xlsxParser) {
+      throw new Error('XLSX 组件加载失败');
+    }
+    const header = ['id', '标准化标签', '标准化操作人', '品类'];
+    const data = [header, ...rows.map((row) => [row.vid, row.standardTags, row.standardOperator, row.category])];
+    const worksheet = xlsxParser.utils.aoa_to_sheet(data);
+    worksheet['!cols'] = [
+      { wch: 35 },
+      { wch: 50 },
+      { wch: 16 },
+      { wch: 16 }
+    ];
+    const workbook = xlsxParser.utils.book_new();
+    xlsxParser.utils.book_append_sheet(workbook, worksheet, '标准化');
+    const fileName = report && report.fileName
+      ? report.fileName
+      : `标准化 ${formatReportPeriod(report || {}) || formatInputDate(new Date())}`;
+    xlsxParser.writeFile(workbook, `${fileName}.xlsx`);
+  }
+
   function normalizeTagArray(value) {
     if (Array.isArray(value)) {
       return uniqueTextList(value.map((item) => normalizeTagDisplayName(item)));
@@ -5974,7 +6069,7 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
 
     async init() { if (!isSupportedPage()) return; injectPanelStyle(); await this.clearExpiredCache(); await this.loadState(); this.mountPanel(); if (isListPage()) { await this.tryResume(); await this.tryStartPendingStandardizationJob(); } }
     async clearExpiredCache() { const state = await storageGet(STORAGE_KEYS.checkpoint); const checkpoint = state[STORAGE_KEYS.checkpoint]; const cutoffDate = getQuarterCutoffDateString(new Date()); const dateValue = checkpoint && normalizeText(checkpoint.updatedAt || checkpoint.startedAt).slice(0, 10); if (dateValue && isDateExpiredByQuarter(dateValue, cutoffDate)) await storageRemove(STORAGE_KEYS.checkpoint); }
-    async loadState() { const state = await storageGet([STORAGE_KEYS.settings, STORAGE_KEYS.checkpoint, STORAGE_KEYS.seenTaskIds]); this.settings = normalizeWorkbenchSettings(state[STORAGE_KEYS.settings]); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.runtime.minimized = Boolean(this.settings.ui.panelMinimized); this.runtime.checkpoint = normalizeStandardizationCheckpoint(state[STORAGE_KEYS.checkpoint]); this.runtime.seenTaskIds = normalizeStandardizationSeenTaskIds(state[STORAGE_KEYS.seenTaskIds]); this.runtime.seenTaskIdSet = new Set(this.runtime.seenTaskIds); this.runtime.logs = []; this.runtime.statusText = '等待开始'; this.runtime.running = false; this.runtime.jobType = ''; this.runtime.listJobAbortToken = 0; this.runtime.stopping = false; this.runtime.pauseRequested = false; if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.runtime.running = true; this.runtime.jobType = 'standardization'; this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '检测到未完成标准化，正在准备继续'); return; } if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'paused') { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '存在已暂停标准化，可点击继续任务'); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; return; } if (this.runtime.checkpoint && this.runtime.checkpoint.statusText) { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; } }
+    async loadState() { const state = await storageGet([STORAGE_KEYS.settings, STORAGE_KEYS.report, STORAGE_KEYS.checkpoint, STORAGE_KEYS.seenTaskIds]); this.settings = normalizeWorkbenchSettings(state[STORAGE_KEYS.settings]); this.settingsDraft = cloneWorkbenchSettings(this.settings); this.runtime.minimized = Boolean(this.settings.ui.panelMinimized); this.runtime.report = normalizeStandardReport(state[STORAGE_KEYS.report]); this.runtime.checkpoint = normalizeStandardizationCheckpoint(state[STORAGE_KEYS.checkpoint]); this.runtime.seenTaskIds = normalizeStandardizationSeenTaskIds(state[STORAGE_KEYS.seenTaskIds]); this.runtime.seenTaskIdSet = new Set(this.runtime.seenTaskIds); this.runtime.logs = []; this.runtime.statusText = '等待开始'; this.runtime.running = false; this.runtime.jobType = ''; this.runtime.listJobAbortToken = 0; this.runtime.stopping = false; this.runtime.pauseRequested = false; if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'running') { this.runtime.running = true; this.runtime.jobType = 'standardization'; this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '检测到未完成标准化，正在准备继续'); return; } if (this.runtime.checkpoint && this.runtime.checkpoint.status === 'paused') { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText || '存在已暂停标准化，可点击继续任务'); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; return; } if (this.runtime.checkpoint && this.runtime.checkpoint.statusText) { this.runtime.statusText = formatUserVisibleLogText(this.runtime.checkpoint.statusText); this.runtime.logs = Array.isArray(this.runtime.checkpoint.logs) ? this.runtime.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; } }
 
     mountPanel() {
       const existing = document.getElementById('ysp-standardization-panel-root');
@@ -6045,6 +6140,10 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
             </div>
             <div class="ysp-std-panel__side">
               <div class="ysp-std-panel__status" data-role="status"></div>
+              <div class="ysp-std-panel__download-card" data-role="downloads-card" hidden>
+                <div class="ysp-std-panel__toolbar"><span class="ysp-std-panel__label">下载结果</span></div>
+                <div class="ysp-std-panel__download-list" data-role="downloads"></div>
+              </div>
               <div class="ysp-std-panel__log-card">
                 <div class="ysp-std-panel__toolbar"><span class="ysp-std-panel__label">运行日志</span></div>
                 <div class="ysp-std-panel__log-list" data-role="logs"></div>
@@ -6109,6 +6208,8 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
         clearConfig: root.querySelector('[data-role="clear-config"]'),
         clearTagCache: root.querySelector('[data-role="clear-tag-cache"]'),
         status: root.querySelector('[data-role="status"]'),
+        downloadsCard: root.querySelector('[data-role="downloads-card"]'),
+        downloads: root.querySelector('[data-role="downloads"]'),
         logs: root.querySelector('[data-role="logs"]')
       };
       this.bindPanelEvents();
@@ -6283,6 +6384,10 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
       this.refs.startStandardization.addEventListener('click', () => this.startStandardizationJob().catch((error) => this.failJob(error)));
       this.refs.pauseResume.addEventListener('click', () => this.handlePauseResumeAction().catch((error) => this.failJob(error)));
       this.refs.stop.addEventListener('click', () => this.stopCurrentJob().catch((error) => this.failJob(error)));
+      this.refs.downloads.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest('[data-download-role="standardization"]')) this.exportStandardResult();
+      });
       this.refs.clearConfig.addEventListener('click', () => this.clearConfigWorkbookData().catch((error) => this.failJob(error)));
       this.refs.clearTagCache.addEventListener('click', () => this.clearNonConfigCacheData().catch((error) => this.failJob(error)));
     }
@@ -6377,6 +6482,30 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
     renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'standardization'; const triggerSummary = this.getGroupPickerSummary(); this.refs.standardizationGroups.innerHTML = `<div class="ysp-std-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-std-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-std-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-std-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
     renderStatus() { const pageText = isListPage() ? '当前页面：列表页，可开始或继续标准化' : isDetailPage() ? '当前页面：详情页，点击开始会自动回到列表页' : '当前页面：其他页面，请回标准化列表页操作'; const runMode = getStandardizationRunModeLabel(this.settings.runMode); this.refs.status.innerHTML = `<div class="ysp-std-panel__status-head"><span class="ysp-std-panel__label">当前状态</span></div><div class="ysp-std-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-std-panel__status-subtext">任务类型：标准化</div><div class="ysp-std-panel__status-subtext">运行模式：${escapeXml(runMode)}</div><div class="ysp-std-panel__status-subtext">${escapeXml(pageText)}</div>`; }
     renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-std-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-std-panel__log-entry">${escapeXml(formatUserVisibleLogText(log))}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
+    renderDownloads() {
+      const cards = [];
+      if (this.runtime.report) {
+        cards.push(`
+          <div class="ysp-std-panel__download-card">
+            <div class="ysp-std-panel__download-title">标准化结果</div>
+            <div class="ysp-std-panel__download-meta">${escapeXml(formatReportPeriod(this.runtime.report))}</div>
+            <div class="ysp-std-panel__download-count">
+              目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条
+            </div>
+            <div class="ysp-std-panel__actions ysp-std-panel__download-actions">
+              <button
+                type="button"
+                class="ysp-std-panel__button ysp-std-panel__button--primary"
+                data-download-role="standardization"
+              >下载标准化表</button>
+            </div>
+          </div>
+        `);
+      }
+      this.refs.downloadsCard.hidden = !cards.length;
+      this.refs.downloads.innerHTML = cards.join('');
+    }
+    exportStandardResult() { if (!this.runtime.report) { this.pushLog('当前没有可下载的标准化结果'); return; } exportStandardReport(this.runtime.report); this.pushLog(`已导出标准化结果：目标 ${this.runtime.report.targetCount} 条，实际 ${this.runtime.report.actualCount} 条`); }
     render() {
       if (!this.panel) return;
       if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = '';
@@ -6418,6 +6547,7 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
       this.refs.pauseResume.textContent = disabled ? '暂停任务' : pausedTask ? '继续标准化' : '继续任务';
       this.refs.pauseResume.classList.toggle('ysp-std-panel__button--primary', !disabled && Boolean(pausedTask));
       this.refs.startStandardization.textContent = disabled ? '标准化运行中' : '开始标准化';
+      this.renderDownloads();
       this.renderStatus();
       this.renderLogs();
     }
@@ -6426,7 +6556,7 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
     updateCheckpointStatus(text) { const checkpoint = this.getActiveCheckpoint(); const statusText = formatUserVisibleLogText(text); this.runtime.statusText = statusText; if (checkpoint) checkpoint.statusText = statusText; this.renderStatus(); void this.persistActiveCheckpoint().catch(() => {}); }
     async saveCheckpoint() { if (!this.runtime.checkpoint) return; this.runtime.checkpoint.updatedAt = new Date().toISOString(); await storageSetCached({ [STORAGE_KEYS.checkpoint]: this.runtime.checkpoint }); }
     async clearCheckpoint() { await storageRemove(STORAGE_KEYS.checkpoint); this.runtime.checkpoint = null; }
-    async stopCurrentJob() { if (!this.runtime.running) return; const checkpoint = this.getActiveCheckpoint(); const stoppedStatusText = '任务已结束，可以重新开始'; requestListJobAbort(this.runtime.listJobAbortToken); this.runtime.stopping = true; this.runtime.pauseRequested = false; this.runtime.statusText = stoppedStatusText; this.pushLog('任务已结束'); if (checkpoint) { checkpoint.status = 'stopped'; checkpoint.statusText = stoppedStatusText; const requestIds = uniqueTextList(this.getStandardizationInflightEntries(checkpoint).map((entry) => entry.requestId)); checkpoint.inflightEntries = []; await this.saveCheckpoint(); if (requestIds.length) await this.stopStandardizationRequests(requestIds); } this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.render(); }
+    async stopCurrentJob() { if (!this.runtime.running) return; const checkpoint = this.getActiveCheckpoint(); let stoppedStatusText = '任务已结束，可以重新开始'; requestListJobAbort(this.runtime.listJobAbortToken); this.runtime.stopping = true; this.runtime.pauseRequested = false; this.runtime.statusText = stoppedStatusText; this.pushLog('任务已结束'); if (checkpoint) { checkpoint.status = 'stopped'; checkpoint.statusText = stoppedStatusText; const requestIds = uniqueTextList(this.getStandardizationInflightEntries(checkpoint).map((entry) => entry.requestId)); checkpoint.inflightEntries = []; await this.saveCheckpoint(); if (requestIds.length) await this.stopStandardizationRequests(requestIds); if (checkpoint.rows.length > 0) { const collectedRows = checkpoint.rows; const partialReport = { version: 1, startDate: checkpoint.startDate, endDate: checkpoint.endDate || checkpoint.startDate, targetCount: checkpoint.targetCount, actualCount: collectedRows.length, fileName: `标准化 ${checkpoint.startDate === checkpoint.endDate ? checkpoint.startDate : `${checkpoint.startDate}-${checkpoint.endDate}`}`, rows: createStandardExportRows(collectedRows), generatedAt: new Date().toISOString() }; this.runtime.report = partialReport; await storageSetCached({ [STORAGE_KEYS.report]: partialReport }); await this.clearCheckpoint(); stoppedStatusText = `任务已结束，已收集 ${collectedRows.length} 条标准化结果，可下载`; this.runtime.statusText = stoppedStatusText; this.pushLog(`已生成标准化结果，共 ${collectedRows.length} 条，可下载`); } } this.runtime.running = false; this.runtime.jobType = ''; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.render(); }
     pauseCurrentJob() { if (!this.runtime.running) return; const inflightCount = this.getStandardizationInflightEntries(this.runtime.checkpoint).length; this.runtime.pauseRequested = true; this.runtime.stopping = false; this.runtime.statusText = inflightCount ? `正在暂停当前任务，等待 ${inflightCount} 个进行中视频完成` : '正在暂停当前任务'; this.pushLog(this.runtime.statusText); this.render(); }
     async handlePauseResumeAction() { if (this.runtime.running) { this.pauseCurrentJob(); return; } await this.resumePausedJob(); }
     async resumePausedJob() { if (this.runtime.running) return; if (!isListPage()) throw new Error('继续任务请回到标准化列表页'); const pausedTask = this.getPausedTaskMeta(); if (!pausedTask) throw new Error('当前没有可继续的暂停任务'); await requestCloseOtherStandardizationTabs(); this.runtime.listJobAbortToken = beginListJobAbortSession(); this.runtime.running = true; this.runtime.jobType = 'standardization'; this.runtime.stopping = false; this.runtime.pauseRequested = false; this.runtime.minimized = false; this.runtime.logs = Array.isArray(pausedTask.checkpoint.logs) ? pausedTask.checkpoint.logs.slice(0, MAX_LOGS).map((log) => formatUserVisibleLogText(log)).filter(Boolean) : []; pausedTask.checkpoint.status = 'running'; pausedTask.checkpoint.statusText = '正在继续标准化'; this.runtime.statusText = pausedTask.checkpoint.statusText; await this.saveCheckpoint(); this.pushLog('继续标准化'); this.render(); await this.runStandardizationFromCheckpoint(); }
@@ -7077,6 +7207,20 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
       const checkpoint = this.runtime.checkpoint;
       const rows = checkpoint.rows.slice(0, checkpoint.targetCount);
       const skippedCount = Math.max(0, Math.trunc(Number(checkpoint.skippedCount) || 0));
+      const report = {
+        version: 1,
+        startDate: checkpoint.startDate,
+        endDate: checkpoint.endDate || checkpoint.startDate,
+        targetCount: checkpoint.targetCount,
+        actualCount: rows.length,
+        fileName: `标准化 ${checkpoint.startDate === checkpoint.endDate ? checkpoint.startDate : `${checkpoint.startDate}-${checkpoint.endDate}`}`,
+        rows: createStandardExportRows(rows),
+        generatedAt: new Date().toISOString()
+      };
+      this.runtime.report = report;
+      await storageSetCached({
+        [STORAGE_KEYS.report]: report
+      });
       await this.clearCheckpoint();
       this.runtime.running = false;
       this.runtime.jobType = '';
