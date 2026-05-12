@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.27
+// @version      1.1.30
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -3551,22 +3551,22 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
   async function saveUploadedConfigWorkbookFile(file) {
     if (!(file instanceof File)) {
-      throw new Error('请选择配置 XLSX 文件');
+      throw new Error('请选择核心配置 文件');
     }
     const fileName = normalizeText(file.name);
     if (!fileName.toLowerCase().endsWith('.xlsx')) {
       throw new Error('请上传 .xlsx 配置文件');
     }
     const xlsxParser = getXlsxParser();
-    const arrayBuffer = await readFileAsArrayBuffer(file, '配置 XLSX 文件读取失败');
+    const arrayBuffer = await readFileAsArrayBuffer(file, '核心配置 文件读取失败');
     const workbook = xlsxParser.read(arrayBuffer, { type: 'array' });
     if (!workbook || !Array.isArray(workbook.SheetNames) || workbook.SheetNames.length < 2) {
-      throw new Error('配置 XLSX 至少需要 2 个工作表');
+      throw new Error('核心配置 至少需要 2 个工作表');
     }
-    const tagSheet = getWorkbookSheet(workbook, 0, '第 1 页标签库', '配置 XLSX');
-    const apiSheet = getWorkbookSheet(workbook, 1, '第 2 页密钥', '配置 XLSX');
+    const tagSheet = getWorkbookSheet(workbook, 0, '第 1 页标签库', '核心配置');
+    const apiSheet = getWorkbookSheet(workbook, 1, '第 2 页密钥', '核心配置');
     if (normalizeText(apiSheet.name).toUpperCase() !== 'APIKEY') {
-      throw new Error('配置 XLSX 第 2 页工作表名称必须是 APIKEY');
+      throw new Error('核心配置 第 2 页工作表名称必须是 APIKEY');
     }
 
     const tagCsvText = xlsxParser.utils.sheet_to_csv(tagSheet.sheet, {
@@ -3593,19 +3593,19 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
   async function saveUploadedRuleWorkbookFile(file) {
     if (!(file instanceof File)) {
-      throw new Error('请选择规则 XLSX 文件');
+      throw new Error('请选择规则配置 文件');
     }
     const fileName = normalizeText(file.name);
     if (!fileName.toLowerCase().endsWith('.xlsx')) {
       throw new Error('请上传 .xlsx 规则文件');
     }
     const xlsxParser = getXlsxParser();
-    const arrayBuffer = await readFileAsArrayBuffer(file, '规则 XLSX 文件读取失败');
+    const arrayBuffer = await readFileAsArrayBuffer(file, '规则配置 文件读取失败');
     const workbook = xlsxParser.read(arrayBuffer, { type: 'array' });
     if (!workbook || !Array.isArray(workbook.SheetNames) || workbook.SheetNames.length < 1) {
-      throw new Error('规则 XLSX 至少需要 1 个工作表');
+      throw new Error('规则配置 至少需要 1 个工作表');
     }
-    const ruleSheet = getWorkbookSheet(workbook, 0, '第 1 页品类规则', '规则 XLSX');
+    const ruleSheet = getWorkbookSheet(workbook, 0, '第 1 页品类规则', '规则配置');
     const ruleMeta = buildCategoryRulesContentFromRows(worksheetToRows(xlsxParser, ruleSheet.sheet));
     return {
       fileName: fileName || '规则.xlsx',
@@ -3626,7 +3626,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
       const record = await readCachedTagLibraryRecord();
       const csvText = record && typeof record.text === 'string' ? record.text : '';
       if (!csvText) {
-        throw new Error('请先在设置里上传配置 XLSX 文件');
+        throw new Error('请先在设置里上传核心配置文件');
       }
       const library = buildTagLibraryFromCsv(csvText);
       TAG_LIBRARY_MEMORY_CACHE.library = library;
@@ -4634,6 +4634,9 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
   async function waitForDetailPageReady(cancelCheck) {
     await waitFor(() => {
+      if (!isDetailPage()) {
+        throw new Error('任务不存在或已被他人加锁');
+      }
       return findButtonByText('退出任务操作')
         && document.querySelector('.main-footer')
         && document.querySelector('.article-header');
@@ -6321,12 +6324,12 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
           <div class="ysp-qc-panel__modal">
             <div class="ysp-qc-panel__toolbar"><span class="ysp-qc-panel__label">设置</span></div>
             <label class="ysp-qc-panel__date-field" for="ysp-settings-config-workbook-file">
-              <span class="ysp-qc-panel__date-caption">上传配置 XLSX（标签库和密钥）</span>
+              <span class="ysp-qc-panel__date-caption">上传 核心配置.xlsx</span>
               <input id="ysp-settings-config-workbook-file" class="ysp-qc-panel__input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
             </label>
             <div class="ysp-qc-panel__status-subtext" data-role="config-workbook-file-status"></div>
             <label class="ysp-qc-panel__date-field" for="ysp-settings-rule-workbook-file">
-              <span class="ysp-qc-panel__date-caption">上传规则 XLSX（二次质检规则）</span>
+              <span class="ysp-qc-panel__date-caption">上传 规则配置.xlsx</span>
               <input id="ysp-settings-rule-workbook-file" class="ysp-qc-panel__input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
             </label>
             <div class="ysp-qc-panel__status-subtext" data-role="rule-workbook-file-status"></div>
@@ -6461,7 +6464,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
         const apiKeyReady = normalizeText(this.settingsDraft.secrets && this.settingsDraft.secrets.arkApiKey) ? '密钥已读取' : '密钥未读取';
         this.refs.configWorkbookFileStatus.textContent = savingText || (fileName
           ? `已上传：${fileName}${tagCount ? `，标签 ${tagCount} 条` : ''}，${apiKeyReady}`
-          : '未上传配置 XLSX');
+          : '未上传核心配置');
       }
       if (this.refs.ruleWorkbookFileStatus) {
         const savingText = normalizeText(this.runtime.settingsSavingText);
@@ -6469,7 +6472,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
         const ruleCount = Math.max(0, Math.trunc(Number(this.settingsDraft.ruleWorkbookRuleCount) || 0));
         this.refs.ruleWorkbookFileStatus.textContent = savingText || (fileName
           ? `已上传：${fileName}${ruleCount ? `，规则 ${ruleCount} 条` : ''}`
-          : '未上传规则 XLSX');
+          : '未上传规则配置');
       }
     }
     bindDateInput(input, handler) { input.setAttribute('inputmode', 'none'); input.addEventListener('click', () => this.openDatePicker(input)); input.addEventListener('focus', () => window.setTimeout(() => this.openDatePicker(input), 0)); input.addEventListener('keydown', (event) => { if (event.key === 'Tab') return; event.preventDefault(); if (event.key === 'Enter' || event.key === ' ') this.openDatePicker(input); }); input.addEventListener('beforeinput', (event) => event.preventDefault()); input.addEventListener('paste', (event) => event.preventDefault()); input.addEventListener('drop', (event) => event.preventDefault()); input.addEventListener('wheel', (event) => event.preventDefault(), { passive: false }); input.addEventListener('change', handler); }
@@ -6595,7 +6598,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
     }
     async clearConfigWorkbookData() {
       if (this.runtime.running) return;
-      const confirmed = window.confirm('这会清除配置 XLSX、规则 XLSX、品类规则和密钥，不会清理任务缓存和标签库缓存。确认清理吗？');
+      const confirmed = window.confirm('这会清除核心配置、规则配置、品类规则和密钥，不会清理任务缓存和标签库缓存。确认清理吗？');
       if (!confirmed) return;
       this.settings.configWorkbookFileName = '';
       this.settings.configWorkbookUploadedAt = '';
@@ -6615,7 +6618,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
     }
     async clearNonConfigCacheData() {
       if (this.runtime.running) return;
-      const confirmed = window.confirm('这会清除任务进度、下载结果、临时记录、历史已看过视频记录和当前日志，不会清理配置 XLSX、规则 XLSX、标签库、品类规则和密钥。确认清理吗？');
+      const confirmed = window.confirm('这会清除任务进度、下载结果、临时记录、历史已看过视频记录和当前日志，不会清理核心配置、规则配置、标签库、品类规则和密钥。确认清理吗？');
       if (!confirmed) return;
       await clearNonConfigCacheStorage();
       this.runtime.report = null;
@@ -6686,7 +6689,10 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
       if (this.refs.ruleWorkbookFileInput) this.refs.ruleWorkbookFileInput.disabled = disabled || settingsBusy;
       if (this.refs.saveSettings) {
         this.refs.saveSettings.disabled = disabled || settingsBusy;
-        this.refs.saveSettings.textContent = settingsBusy ? '保存中...' : '保存设置';
+        const hasConfig = Boolean(normalizeText(this.settingsDraft.configWorkbookFileName));
+        const hasRule = Boolean(normalizeText(this.settingsDraft.ruleWorkbookFileName));
+        const defaultLabel = (hasConfig && hasRule) ? '更新设置' : '保存设置';
+        this.refs.saveSettings.textContent = settingsBusy ? '保存中...' : defaultLabel;
         this.refs.saveSettings.classList.toggle('is-loading', settingsBusy);
       }
       if (this.refs.closeSettings) this.refs.closeSettings.disabled = settingsBusy;
@@ -7013,6 +7019,9 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
         if (message && message !== '任务已结束') {
           this.pushLog(`${prefixTaskError(taskId, message)}，已跳过当前条目`);
         }
+        if (taskId) {
+          await this.rememberSecondaryQcTaskSeen(taskId);
+        }
         await this.saveCheckpoint();
         return;
       }
@@ -7022,6 +7031,9 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
       } catch (error) {
         const message = normalizeText(error && error.message ? error.message : String(error)) || '详情页处理失败';
         this.pushLog(`${prefixTaskError(taskId, message)}，已跳过当前条目`);
+        if (taskId) {
+          await this.rememberSecondaryQcTaskSeen(taskId);
+        }
         await this.saveCheckpoint();
         return;
       }
@@ -7087,13 +7099,13 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
         throw new Error('请先选择一个质检品类');
       }
       if (!normalizeText(this.settings.configWorkbookFileName)) {
-        throw new Error('请先在设置里上传配置 XLSX 文件');
+        throw new Error('请先在设置里上传核心配置文件');
       }
       if (!apiKey) {
-        throw new Error('配置 XLSX 的密钥页缺少可用密钥');
+        throw new Error('核心配置 的密钥页缺少可用密钥');
       }
       if (!normalizeText(this.settings.ruleWorkbookFileName)) {
-        throw new Error('请先在设置里上传规则 XLSX 文件');
+        throw new Error('请先在设置里上传规则配置文件');
       }
       const categoryRule = getCategoryRuleForCategory(this.settings.categoryRulesContent, items[0].exportLabel);
       this.settings.reasoningEffort = reasoningEffort;
