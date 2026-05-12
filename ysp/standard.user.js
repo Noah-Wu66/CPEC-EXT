@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.0.4
+// @version      1.0.5
 // @description  在标准化系统页面执行视频标准化打标
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -4224,6 +4224,10 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
   async function waitForDetailPageReady(cancelCheck) {
     await waitFor(() => {
       if (!isDetailPage()) {
+        throw new Error('任务不存在或已被他人加锁');
+      }
+      const pageMessage = normalizeText(document.body && document.body.innerText || '');
+      if (pageMessage.includes('没有符合条件的任务') || pageMessage.includes('任务不存在或已被人加锁')) {
         throw new Error('任务不存在或已被他人加锁');
       }
       return findButtonByText('退出任务操作')

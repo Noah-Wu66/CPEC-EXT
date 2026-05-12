@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.30
+// @version      1.1.31
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -4635,6 +4635,10 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   async function waitForDetailPageReady(cancelCheck) {
     await waitFor(() => {
       if (!isDetailPage()) {
+        throw new Error('任务不存在或已被他人加锁');
+      }
+      const pageMessage = normalizeText(document.body && document.body.innerText || '');
+      if (pageMessage.includes('没有符合条件的任务') || pageMessage.includes('任务不存在或已被人加锁')) {
         throw new Error('任务不存在或已被他人加锁');
       }
       return findButtonByText('退出任务操作')
