@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频标准化助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.0.6
+// @version      1.0.7
 // @description  在标准化系统页面执行视频标准化打标
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1246,6 +1246,72 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
   border: 1px solid #d8e2ee;
   border-radius: 16px;
   background: #fff;
+}
+
+.ysp-std-panel__agent-status {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(232, 245, 233, 0.92), rgba(232, 245, 233, 0.78));
+  border: 1px solid rgba(56, 142, 60, 0.15);
+}
+
+.ysp-std-panel__agent-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ysp-std-panel__agent-status-header .ysp-std-panel__label {
+  margin-bottom: 0;
+}
+
+.ysp-std-panel__agent-list {
+  display: grid;
+  gap: 6px;
+}
+
+.ysp-std-panel__agent-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(25, 56, 84, 0.08);
+  font-size: 12px;
+}
+
+.ysp-std-panel__agent-id {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: #1e4260;
+}
+
+.ysp-std-panel__agent-task {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #35516a;
+}
+
+.ysp-std-panel__agent-item.is-completed {
+  background: linear-gradient(135deg, rgba(232, 245, 233, 0.8), rgba(232, 245, 233, 0.5));
+  border-color: rgba(56, 142, 60, 0.12);
+}
+
+.ysp-std-panel__agent-item.is-running {
+  background: linear-gradient(135deg, rgba(227, 242, 253, 0.8), rgba(227, 242, 253, 0.5));
+  border-color: rgba(30, 136, 229, 0.15);
+}
+
+.ysp-std-panel__agent-item.is-failed {
+  background: linear-gradient(135deg, rgba(255, 243, 224, 0.8), rgba(255, 243, 224, 0.5));
+  border-color: rgba(230, 81, 0, 0.12);
 }
   `;
 
@@ -6480,7 +6546,46 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
       this.pushLog('已清理缓存');
     }
     renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'standardization'; const triggerSummary = this.getGroupPickerSummary(); this.refs.standardizationGroups.innerHTML = `<div class="ysp-std-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-std-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-std-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-std-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
-    renderStatus() { const pageText = isListPage() ? '当前页面：列表页，可开始或继续标准化' : isDetailPage() ? '当前页面：详情页，点击开始会自动回到列表页' : '当前页面：其他页面，请回标准化列表页操作'; const runMode = getStandardizationRunModeLabel(this.settings.runMode); this.refs.status.innerHTML = `<div class="ysp-std-panel__status-head"><span class="ysp-std-panel__label">当前状态</span></div><div class="ysp-std-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-std-panel__status-subtext">任务类型：标准化</div><div class="ysp-std-panel__status-subtext">运行模式：${escapeXml(runMode)}</div><div class="ysp-std-panel__status-subtext">${escapeXml(pageText)}</div>`; }
+    renderStatus() {
+      const pageText = isListPage() ? '当前页面：列表页，可开始或继续标准化' : isDetailPage() ? '当前页面：详情页，点击开始会自动回到列表页' : '当前页面：其他页面，请回标准化列表页操作';
+      const runMode = getStandardizationRunModeLabel(this.settings.runMode);
+      let agentStatusHtml = '';
+
+      if (this.runtime.agentStatus) {
+        const { pending, running, completed, failed, agents } = this.runtime.agentStatus;
+        const agentLabels = ['代理 A', '代理 B', '代理 C', '代理 D', '代理 E'];
+        const agentItems = agents.map((agent, index) => {
+          const statusText = agent.status === 'running' ? '处理中' : agent.status === 'completed' ? '已完成' : '失败';
+          const statusClass = agent.status === 'running' ? 'is-running' : agent.status === 'completed' ? 'is-completed' : 'is-failed';
+          const duration = agent.completedAt ? Math.round((agent.completedAt - agent.startedAt) / 1000) : 0;
+          const durationText = agent.status !== 'running' ? ` (${duration}秒)` : '';
+          const label = index < agentLabels.length ? agentLabels[index] : `代理 ${index + 1}`;
+          return `<div class="ysp-std-panel__agent-item ${statusClass}">
+            <span class="ysp-std-panel__agent-id">${label}</span>
+            <span class="ysp-std-panel__agent-task">视频 ${agent.taskId.slice(0, 8)}... - ${statusText}${durationText}</span>
+          </div>`;
+        }).join('');
+
+        agentStatusHtml = `
+          <div class="ysp-std-panel__agent-status">
+            <div class="ysp-std-panel__agent-status-header">
+              <span class="ysp-std-panel__label">并行处理状态</span>
+              <span class="ysp-std-panel__badge">进行中: ${running}/5 | 待处理: ${pending} | 已完成: ${completed} | 失败: ${failed}</span>
+            </div>
+            <div class="ysp-std-panel__agent-list">${agentItems}</div>
+          </div>
+        `;
+      }
+
+      this.refs.status.innerHTML = `
+        <div class="ysp-std-panel__status-head"><span class="ysp-std-panel__label">当前状态</span></div>
+        <div class="ysp-std-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div>
+        <div class="ysp-std-panel__status-subtext">任务类型：标准化</div>
+        <div class="ysp-std-panel__status-subtext">运行模式：${escapeXml(runMode)}</div>
+        <div class="ysp-std-panel__status-subtext">${escapeXml(pageText)}</div>
+        ${agentStatusHtml}
+      `;
+    }
     renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-std-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-std-panel__log-entry">${escapeXml(formatUserVisibleLogText(log))}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
     renderDownloads() {
       const cards = [];
@@ -7162,6 +7267,9 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
         .map((record) => normalizeStandardizationApiRow(record))
         .filter(Boolean);
       let historicalSeenCount = 0;
+      const taskDataList = [];
+      const BATCH_SIZE = 5;
+
       for (let index = rows.length - 1; index >= 0; index -= 1) {
         if (this.isCurrentJobStopRequested()) {
           throw new Error('任务已结束');
@@ -7192,15 +7300,148 @@ button.ysp-std-panel__header-chip:hover:not(:disabled) {
           continue;
         }
         pageSeen.add(row.taskId);
-        const taskStatus = await this.runStandardizationRowTask(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
-        if (taskStatus === 'paused') {
-          return { status: 'paused', candidateCount, historicalSeenCount };
-        }
-        if (this.isStandardizationTargetReached(itemIndex, checkpoint)) {
-          return { status: 'done', candidateCount, historicalSeenCount };
+        taskDataList.push({ item, itemIndex, row, pageNumber, totalPages });
+
+        if (taskDataList.length >= BATCH_SIZE) {
+          break;
         }
       }
+
+      if (taskDataList.length > 0) {
+        this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页已收集 ${taskDataList.length} 个视频，开始并行处理`);
+        await this.runParallelAgents(taskDataList, cancelCheck);
+      }
+
       return { status: this.runtime.pauseRequested ? 'paused' : 'continue', candidateCount, historicalSeenCount };
+    }
+
+    async processSingleStandardizationAgent(taskData, cancelCheck) {
+      const { item, itemIndex, row, pageNumber, totalPages } = taskData;
+      try {
+        const descriptor = await this.launchStandardizationRowTask(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
+        const settled = await descriptor.promise;
+        if (settled.status === 'rejected') {
+          throw settled.error;
+        }
+        const response = settled.result && settled.result.response;
+        return {
+          taskId: row.taskId,
+          status: 'completed',
+          response,
+          descriptor: {
+            taskId: row.taskId,
+            itemKey: item.key,
+            itemIndex,
+            row
+          }
+        };
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        return {
+          taskId: row.taskId,
+          status: 'error',
+          error: message
+        };
+      }
+    }
+
+    async runParallelAgents(taskDataList, cancelCheck) {
+      const MAX_CONCURRENT = 5;
+      const pendingQueue = [...taskDataList];
+      const activeAgents = new Map();
+      const completedResults = [];
+
+      this.runtime.agentStatus = {
+        pending: pendingQueue.length,
+        running: 0,
+        completed: 0,
+        failed: 0,
+        agents: []
+      };
+      this.render();
+
+      while (pendingQueue.length > 0 || activeAgents.size > 0) {
+        if (this.isCurrentJobStopRequested()) {
+          throw new Error('任务已结束');
+        }
+        if (this.runtime.pauseRequested) {
+          break;
+        }
+
+        while (activeAgents.size < MAX_CONCURRENT && pendingQueue.length > 0) {
+          const data = pendingQueue.shift();
+          this.runtime.agentStatus.agents.push({
+            taskId: data.row.taskId,
+            status: 'running',
+            startedAt: Date.now()
+          });
+          this.runtime.agentStatus.running = activeAgents.size + 1;
+          this.runtime.agentStatus.pending = pendingQueue.length;
+          this.render();
+
+          const agentPromise = this.processSingleStandardizationAgent(data, cancelCheck)
+            .then((result) => {
+              const agent = this.runtime.agentStatus.agents.find(a => a.taskId === data.row.taskId);
+              if (agent) {
+                agent.status = result.status === 'completed' ? 'completed' : 'failed';
+                agent.completedAt = Date.now();
+              }
+              this.runtime.agentStatus.running = activeAgents.size - 1;
+              this.runtime.agentStatus.completed += result.status === 'completed' ? 1 : 0;
+              this.runtime.agentStatus.failed += result.status !== 'completed' ? 1 : 0;
+              this.render();
+              return result;
+            })
+            .catch((error) => {
+              const agent = this.runtime.agentStatus.agents.find(a => a.taskId === data.row.taskId);
+              if (agent) {
+                agent.status = 'failed';
+                agent.completedAt = Date.now();
+              }
+              this.runtime.agentStatus.running = activeAgents.size - 1;
+              this.runtime.agentStatus.failed += 1;
+              this.render();
+              return { taskId: data.row.taskId, status: 'error', error: error.message };
+            });
+
+          activeAgents.set(data.row.taskId, agentPromise);
+        }
+
+        if (activeAgents.size > 0) {
+          const settled = await Promise.race([...activeAgents.values()]);
+          activeAgents.delete(settled.taskId);
+          completedResults.push(settled);
+
+          await this.handleAgentResult(settled);
+        }
+      }
+
+      this.runtime.agentStatus = null;
+      this.render();
+      return completedResults;
+    }
+
+    async handleAgentResult(result) {
+      const checkpoint = this.runtime.checkpoint;
+      if (!checkpoint) return;
+
+      if (result.status === 'completed' && result.response) {
+        try {
+          await this.applyStandardizationTaskResponse(result.descriptor, result.response);
+        } catch (error) {
+          const message = normalizeText(error && error.message ? error.message : String(error)) || '处理失败';
+          registerCheckpointSkip(checkpoint);
+          this.pushLog(`${prefixTaskError(result.taskId, message)}，已跳过`);
+        }
+      } else if (result.status === 'error') {
+        registerCheckpointSkip(checkpoint);
+        this.pushLog(`${prefixTaskError(result.taskId, result.error || '处理失败')}，已跳过`);
+      }
+
+      if (result.taskId) {
+        await this.rememberStandardizationTaskSeen(result.taskId);
+      }
+      await this.saveCheckpoint();
     }
 
     async completeStandardizationJob() {

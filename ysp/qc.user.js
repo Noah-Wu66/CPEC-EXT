@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.0
+// @version      1.2.2
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1265,6 +1265,72 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
 .ysp-qc-panel__download-actions {
   margin-top: 10px;
+}
+
+.ysp-qc-panel__agent-status {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(232, 245, 233, 0.92), rgba(232, 245, 233, 0.78));
+  border: 1px solid rgba(56, 142, 60, 0.15);
+}
+
+.ysp-qc-panel__agent-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ysp-qc-panel__agent-status-header .ysp-qc-panel__label {
+  margin-bottom: 0;
+}
+
+.ysp-qc-panel__agent-list {
+  display: grid;
+  gap: 6px;
+}
+
+.ysp-qc-panel__agent-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(25, 56, 84, 0.08);
+  font-size: 12px;
+}
+
+.ysp-qc-panel__agent-id {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: #1e4260;
+}
+
+.ysp-qc-panel__agent-task {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #35516a;
+}
+
+.ysp-qc-panel__agent-item.is-completed {
+  background: linear-gradient(135deg, rgba(232, 245, 233, 0.8), rgba(232, 245, 233, 0.5));
+  border-color: rgba(56, 142, 60, 0.12);
+}
+
+.ysp-qc-panel__agent-item.is-running {
+  background: linear-gradient(135deg, rgba(227, 242, 253, 0.8), rgba(227, 242, 253, 0.5));
+  border-color: rgba(30, 136, 229, 0.15);
+}
+
+.ysp-qc-panel__agent-item.is-failed {
+  background: linear-gradient(135deg, rgba(255, 243, 224, 0.8), rgba(255, 243, 224, 0.5));
+  border-color: rgba(230, 81, 0, 0.12);
 }
   `;
 
@@ -6471,13 +6537,15 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
       if (this.runtime.agentStatus) {
         const { pending, running, completed, failed, agents } = this.runtime.agentStatus;
+        const agentLabels = ['代理 A', '代理 B', '代理 C', '代理 D', '代理 E'];
         const agentItems = agents.map((agent, index) => {
           const statusText = agent.status === 'running' ? '处理中' : agent.status === 'completed' ? '已完成' : '失败';
           const statusClass = agent.status === 'running' ? 'is-running' : agent.status === 'completed' ? 'is-completed' : 'is-failed';
           const duration = agent.completedAt ? Math.round((agent.completedAt - agent.startedAt) / 1000) : 0;
           const durationText = agent.status !== 'running' ? ` (${duration}秒)` : '';
+          const label = index < agentLabels.length ? agentLabels[index] : `代理 ${index + 1}`;
           return `<div class="ysp-qc-panel__agent-item ${statusClass}">
-            <span class="ysp-qc-panel__agent-id">Agent ${index + 1}</span>
+            <span class="ysp-qc-panel__agent-id">${label}</span>
             <span class="ysp-qc-panel__agent-task">视频 ${agent.taskId.slice(0, 8)}... - ${statusText}${durationText}</span>
           </div>`;
         }).join('');
