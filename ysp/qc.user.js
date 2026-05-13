@@ -1310,11 +1310,12 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   padding: 8px;
   gap: 6px;
   max-height: 420px;
-  overflow-y: auto;
+  overflow: auto;
 }
 
 .ysp-qc-panel__agent-cluster-list::-webkit-scrollbar {
   width: 4px;
+  height: 4px;
 }
 
 .ysp-qc-panel__agent-cluster-list::-webkit-scrollbar-track {
@@ -1334,6 +1335,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   border-radius: 10px;
   background: #fafafa;
   border: 1px solid rgba(0, 0, 0, 0.04);
+  min-width: 420px;
 }
 
 .ysp-qc-panel__agent-card-avatar {
@@ -1410,8 +1412,6 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   font-size: 12px;
   line-height: 1.4;
   color: #666666;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
