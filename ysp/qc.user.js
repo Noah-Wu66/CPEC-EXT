@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.1.32
+// @version      1.2.0
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1428,7 +1428,8 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
     workerProgressPrefix: 'yspSecondaryQcWorkerProgressV1:',
     workerStopPrefix: 'yspSecondaryQcWorkerStopV1:',
     mediaWorkerRequestPrefix: 'yspSecondaryQcMediaWorkerRequestV1:',
-    mediaWorkerResponsePrefix: 'yspSecondaryQcMediaWorkerResponseV1:'
+    mediaWorkerResponsePrefix: 'yspSecondaryQcMediaWorkerResponseV1:',
+    collectedDataPrefix: 'yspSecondaryQcCollectedDataV1:'
   };
   const MAX_LOGS = 200;
   const QUERY_TIMEOUT = 90000;
@@ -5966,198 +5967,22 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
       await ensureSecondaryQcWorkerNotStopped(requestId);
       await reportProgress('视频播放地址已获取', { stageLabel: '获取视频地址' });
 
-      await reportProgress('正在理解视频内容', { stageLabel: '视频理解' });
-      let videoSummaryRaw = '';
-      try {
-        videoSummaryRaw = await requestOmniVideoSummary(
-          apiKey,
-          videoUrl,
-          buildOmniVideoSummaryPrompt(titleText, detailCategoryContext),
-          categoryRule,
-          detailCategoryContext,
-          reasoningEffort,
-          cancelCheck
-        );
-      } catch (error) {
-        const videoInspectionMessage = normalizeText(error && error.message ? error.message : String(error));
-        if (!isModelVideoInspectionErrorMessage(videoInspectionMessage)) {
-          throw error;
-        }
-        const finalReason = '视频内容触发安全拦截，当前条目已跳过';
-        const evidenceSummary = 'AI 提示视频内容触发安全拦截';
-        await reportProgress('视频内容触发安全拦截，当前条目已跳过', {
-          stageLabel: '视频理解',
-          finalReason,
-          skipReason: 'content_inspection_failed',
-          evidenceSummary,
-          missingCandidates: [],
-          validatedCandidates: [],
-          rejectedCandidates: [],
-          logLines: [
-            `最终判断：${finalReason}`,
-            `证据摘要：${evidenceSummary}`
-          ]
-        });
-        responsePayload = {
-          status: 'completed',
-          skipped: true,
-          skipReason: 'content_inspection_failed'
-        };
-        await reportProgress('内容安全跳过完成，正在返回结果', { stageLabel: '已完成' });
-        return;
-      }
-      const videoAnalysis = normalizeOmniVideoAnalysis(parseModelJsonObject(videoSummaryRaw, '视频理解'));
-      const videoSummary = formatOmniVideoAnalysisForPrompt(videoAnalysis);
-      const baseEvidenceSummary = [
-        videoAnalysis.overallTheme ? `整体主题：${videoAnalysis.overallTheme}` : '',
-        videoAnalysis.titleClues.length ? `标题线索：${videoAnalysis.titleClues.join('、')}` : '',
-        videoAnalysis.repeatedSignals.length ? `重复信号：${videoAnalysis.repeatedSignals.join('、')}` : '',
-        videoAnalysis.strongEvidence.length ? `强证据：${videoAnalysis.strongEvidence.join('、')}` : '',
-        videoAnalysis.timeline.length
-          ? `时间线：${videoAnalysis.timeline.map((item) => `${item.time || '时间未标注'} ${item.summary || '无描述'}`).join('；')}`
-          : '',
-        videoAnalysis.uncertainPoints.length ? `不确定点：${videoAnalysis.uncertainPoints.join('、')}` : ''
-      ].filter(Boolean).join('\n');
-      await ensureSecondaryQcWorkerNotStopped(requestId);
-      await reportProgress('视频理解完成，正在整理证据', {
-        stageLabel: '视频理解',
-        logLines: [
-          videoAnalysis.overallTheme ? `整体主题：${videoAnalysis.overallTheme}` : '',
-          videoAnalysis.titleClues.length ? `标题线索：${videoAnalysis.titleClues.join('、')}` : '',
-          videoAnalysis.repeatedSignals.length ? `重复信号：${videoAnalysis.repeatedSignals.join('、')}` : '',
-          videoAnalysis.strongEvidence.length ? `强证据：${videoAnalysis.strongEvidence.join('、')}` : '',
-          videoAnalysis.timeline.length
-            ? `时间线：${videoAnalysis.timeline.map((item) => `${item.time || '时间未标注'} ${item.summary || '无描述'}`).join('；')}`
-            : '',
-          videoAnalysis.uncertainPoints.length ? `不确定点：${videoAnalysis.uncertainPoints.join('、')}` : ''
-        ]
-      });
-
-      await reportProgress('正在判断候选标签', { stageLabel: '候选标签判断' });
-      await reportProgress('正在加载标签库', { stageLabel: '标签库' });
-      const tagLibrary = await loadTagLibrary();
-      await reportProgress(`标签库已加载：${tagLibrary.count} 条`, { stageLabel: '标签库' });
-      const firstJudgeRaw = await requestTagJudge(
-        apiKey,
-        buildFirstTagJudgePrompt(titleText, detailCategoryContext, videoSummary, selectedTags),
-        categoryRule,
-        detailCategoryContext,
-        reasoningEffort,
-        cancelCheck
-      );
-      const firstJudge = parseModelJsonObject(firstJudgeRaw, '候选标签判断');
-      const searchCandidates = normalizeTagSearchCandidateArray(firstJudge.search_candidates);
-      const missingCandidates = searchCandidates.map((item) => item.keyword);
-      const firstSummary = normalizeText(firstJudge.summary);
-      await ensureSecondaryQcWorkerNotStopped(requestId);
-
-      await reportProgress(
-        searchCandidates.length
-          ? `正在验证候选标签（1/${searchCandidates.length}）`
-          : '当前没有候选标签需要验证',
-        {
-          stageLabel: '标签库验证',
-          logLines: [
-            firstSummary ? `候选标签判断：${firstSummary}` : '',
-            missingCandidates.length ? `候选关键词：${missingCandidates.join('、')}` : '候选关键词：无',
-            `标签库记录：${tagLibrary.count} 条`
-          ],
-          validatedCandidates: searchCandidates.map((item) => ({
-            keyword: item.keyword,
-            searchReason: item.reason,
-            options: [],
-            accepted: null,
-            reason: '',
-            matchedOption: null
-          }))
-        }
-      );
-      const searchResults = [];
-      for (let candidateIndex = 0; candidateIndex < searchCandidates.length; candidateIndex += 1) {
-        const candidate = searchCandidates[candidateIndex];
-        if (!candidate || !candidate.keyword) {
-          continue;
-        }
-        await reportProgress(`正在验证候选标签（${candidateIndex + 1}/${searchCandidates.length}）`);
-        await ensureSecondaryQcWorkerNotStopped(requestId);
-        const options = searchTagLibraryOptions(tagLibrary, candidate.keyword, selectedTags);
-        searchResults.push({
-          keyword: candidate.keyword,
-          reason: candidate.reason,
-          options
-        });
-        await reportProgress(`候选标签 ${candidate.keyword} 检索完成`, {
-          stageLabel: '标签库验证',
-          logLines: [
-            candidate.reason ? `检索原因：${candidate.reason}` : '',
-            `标签库结果：${options.map((option) => formatTagDetailForDisplay(option)).join('；') || '标签库无结果'}`
-          ]
-        });
-      }
-
-      await reportProgress('正在进行最终标签裁定', { stageLabel: '最终标签裁定' });
-      const finalJudgeRaw = await requestTagJudge(
-        apiKey,
-        buildFinalTagJudgePrompt(
-          titleText,
-          detailCategoryContext,
-          videoSummary,
-          selectedTags,
-          {
-            search_candidates: searchCandidates,
-            summary: firstSummary
-          },
-          searchResults
-        ),
-        categoryRule,
-        detailCategoryContext,
-        reasoningEffort,
-        cancelCheck
-      );
-      const finalJudge = parseModelJsonObject(finalJudgeRaw, '最终标签裁定');
-      const missingTagsActionable = normalizeTagArray(finalJudge.missing_tags_actionable);
-      const candidateDecisions = normalizeCandidateDecisionArray(finalJudge.candidate_decisions);
-      const validatedCandidates = buildValidatedCandidates(searchResults, candidateDecisions);
-      const rejectedCandidates = validatedCandidates
-        .filter((item) => item.accepted === false)
-        .map((item) => ({
-          keyword: item.keyword,
-          reason: item.reason
-        }));
-      const evidenceSummary = normalizeText(finalJudge.evidence_summary) || [firstSummary, baseEvidenceSummary].filter(Boolean).join('\n');
-      const finalReason = normalizeText(finalJudge.final_reason) || firstSummary;
-      const missingTagsText = buildMissingTagRecordText(missingTagsActionable);
-      await reportProgress('最终标签裁定完成，正在整理结果', {
-        stageLabel: '最终标签裁定',
-        logLines: [
-          evidenceSummary ? `证据摘要：${evidenceSummary.replace(/\n+/g, '；')}` : '',
-          validatedCandidates.length
-            ? `候选标签裁定：${validatedCandidates.map((item) => {
-              const resultLabel = item.accepted === true ? '采纳' : item.accepted === false ? '放弃' : '待定';
-              const parts = [`${item.keyword}(${resultLabel})`];
-              if (item.reason) {
-                parts.push(item.reason);
-              }
-              if (item.matchedOption) {
-                parts.push(`采纳结果 ${formatTagDetailForDisplay(item.matchedOption)}`);
-              }
-              return parts.join('，');
-            }).join('；')}`
-            : '候选标签裁定：无',
-          rejectedCandidates.length
-            ? `放弃候选：${rejectedCandidates.map((item) => `${item.keyword}（${item.reason || '暂无说明'}）`).join('；')}`
-            : '放弃候选：无',
-          missingTagsActionable.length ? `最终补打标签：${missingTagsActionable.join('、')}` : '最终补打标签：无',
-          missingTagsText ? `写入结果的漏打标签：${missingTagsText}` : '写入结果的漏打标签：无',
-          finalReason ? `最终判断：${finalReason}` : ''
-        ]
-      });
+      await reportProgress('数据收集完成，正在返回结果', { stageLabel: '已完成' });
 
       responsePayload = {
-        status: 'completed',
-        missingTagsActionable
+        status: 'collected',
+        collectedData: {
+          titleText,
+          durationSeconds,
+          videoVid,
+          selectedTags,
+          detailCategoryContext,
+          videoUrl,
+          categoryRule,
+          reasoningEffort,
+          apiKey
+        }
       };
-      await reportProgress('处理完成，正在返回结果', { stageLabel: '已完成' });
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
       responsePayload = {
@@ -6640,7 +6465,42 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
       this.pushLog('已清理缓存');
     }
     renderGroupSelector() { const open = !this.runtime.running && this.runtime.openGroupMenu === 'secondaryQc'; const triggerSummary = this.getGroupPickerSummary(); this.refs.secondaryQcGroups.innerHTML = `<div class="ysp-qc-panel__group-picker${open ? ' is-open' : ''}" data-role="group-picker"><button type="button" class="ysp-qc-panel__group-trigger" data-role="group-trigger" aria-expanded="${open ? 'true' : 'false'}" title="${escapeXml(triggerSummary)}" ${this.runtime.running ? 'disabled' : ''}><span class="ysp-qc-panel__group-trigger-text">${escapeXml(triggerSummary)}</span><span class="ysp-qc-panel__group-trigger-icon">${open ? '▲' : '▼'}</span></button></div>`; }
-    renderStatus() { const pageText = isListPage() ? '当前页面：列表页，可开始或继续质检' : isDetailPage() ? '当前页面：详情页，点击开始会自动回到列表页' : '当前页面：其他页面，请回标准化列表页操作'; this.refs.status.innerHTML = `<div class="ysp-qc-panel__status-head"><span class="ysp-qc-panel__label">当前状态</span></div><div class="ysp-qc-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div><div class="ysp-qc-panel__status-subtext">任务类型：二次质检</div><div class="ysp-qc-panel__status-subtext">${escapeXml(pageText)}</div>`; }
+    renderStatus() {
+      const pageText = isListPage() ? '当前页面：列表页，可开始或继续质检' : isDetailPage() ? '当前页面：详情页，点击开始会自动回到列表页' : '当前页面：其他页面，请回标准化列表页操作';
+      let agentStatusHtml = '';
+
+      if (this.runtime.agentStatus) {
+        const { pending, running, completed, failed, agents } = this.runtime.agentStatus;
+        const agentItems = agents.map((agent, index) => {
+          const statusText = agent.status === 'running' ? '处理中' : agent.status === 'completed' ? '已完成' : '失败';
+          const statusClass = agent.status === 'running' ? 'is-running' : agent.status === 'completed' ? 'is-completed' : 'is-failed';
+          const duration = agent.completedAt ? Math.round((agent.completedAt - agent.startedAt) / 1000) : 0;
+          const durationText = agent.status !== 'running' ? ` (${duration}秒)` : '';
+          return `<div class="ysp-qc-panel__agent-item ${statusClass}">
+            <span class="ysp-qc-panel__agent-id">Agent ${index + 1}</span>
+            <span class="ysp-qc-panel__agent-task">视频 ${agent.taskId.slice(0, 8)}... - ${statusText}${durationText}</span>
+          </div>`;
+        }).join('');
+
+        agentStatusHtml = `
+          <div class="ysp-qc-panel__agent-status">
+            <div class="ysp-qc-panel__agent-status-header">
+              <span class="ysp-qc-panel__label">并行处理状态</span>
+              <span class="ysp-qc-panel__badge">进行中: ${running}/5 | 待处理: ${pending} | 已完成: ${completed} | 失败: ${failed}</span>
+            </div>
+            <div class="ysp-qc-panel__agent-list">${agentItems}</div>
+          </div>
+        `;
+      }
+
+      this.refs.status.innerHTML = `
+        <div class="ysp-qc-panel__status-head"><span class="ysp-qc-panel__label">当前状态</span></div>
+        <div class="ysp-qc-panel__status-value">${escapeXml(this.runtime.statusText || '等待开始')}</div>
+        <div class="ysp-qc-panel__status-subtext">任务类型：二次质检</div>
+        <div class="ysp-qc-panel__status-subtext">${escapeXml(pageText)}</div>
+        ${agentStatusHtml}
+      `;
+    }
     renderDownloads() {
       const cards = [];
       if (this.runtime.report) {
@@ -7306,6 +7166,294 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
       return 'done';
     }
 
+    async collectVideoData(item, itemIndex, row, pageNumber, totalPages, cancelCheck) {
+      const checkpoint = this.runtime.checkpoint;
+      const activeCancelCheck = typeof cancelCheck === 'function' ? cancelCheck : this.getListAbortCheck();
+      const apiKey = normalizeText(this.settings.secrets.arkApiKey);
+      const requestId = createRuntimeToken('collect');
+      const requestKey = buildSecondaryQcWorkerRequestKey(requestId);
+      const responseKey = buildSecondaryQcWorkerResponseKey(requestId);
+      const detailUrl = `${location.origin}/stdDetail/${encodeURIComponent(row.taskId)}?select_type=2&ysp_qc_request=${encodeURIComponent(requestId)}`;
+
+      await storageRemove([responseKey]);
+      await storageSetCached({
+        [requestKey]: {
+          apiKey,
+          taskId: row.taskId,
+          itemKey: item.key,
+          primaryCategory: item.exportLabel,
+          standardOperator: row.standardOperator,
+          qcOperator: row.qcOperator,
+          categoryRule: normalizeMultilineText(checkpoint.categoryRule),
+          reasoningEffort: normalizeSecondaryQcReasoningEffort(checkpoint.reasoningEffort),
+          mode: 'collect'
+        }
+      });
+
+      checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint).concat({
+        taskId: row.taskId,
+        requestId,
+        itemKey: item.key,
+        startedAt: new Date().toISOString()
+      });
+      await this.saveCheckpoint();
+
+      this.pushLog(`${this.describeItem(item)}：第 ${pageNumber}/${totalPages} 页正在收集 ${formatTaskLogPrefix(row.taskId)} 的数据`);
+      openUrlInNewTab(detailUrl);
+
+      try {
+        const response = await waitForSecondaryQcWorkerResponse(
+          requestId,
+          WORKER_RESPONSE_TIMEOUT,
+          (progress) => {
+            if (this.isCurrentJobStopRequested()) return;
+            const progressText = normalizeText(progress && progress.text);
+            const progressLogLines = normalizeProgressLogLines(progress && progress.logLines);
+            const lines = [progressText, ...progressLogLines].filter(Boolean);
+            const uniqueLines = lines.filter((line, index) => lines.indexOf(line) === index);
+            uniqueLines.forEach((line) => {
+              this.pushLog(`${formatTaskLogPrefix(row.taskId)}：${line}`);
+            });
+          },
+          activeCancelCheck
+        );
+
+        checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint)
+          .filter((entry) => entry.requestId !== requestId);
+
+        if (!response || response.status !== 'collected') {
+          this.pushLog(`${formatTaskLogPrefix(row.taskId)}：数据收集失败，已跳过`);
+          return null;
+        }
+
+        this.pushLog(`${formatTaskLogPrefix(row.taskId)}：数据收集完成`);
+        return {
+          requestId,
+          taskId: row.taskId,
+          itemKey: item.key,
+          itemIndex,
+          row,
+          pageNumber,
+          totalPages,
+          collectedData: response.collectedData,
+          status: 'collected'
+        };
+      } catch (error) {
+        checkpoint.inflightEntries = this.getSecondaryQcInflightEntries(checkpoint)
+          .filter((entry) => entry.requestId !== requestId);
+        await this.saveCheckpoint();
+        throw error;
+      }
+    }
+
+    async processSingleVideoAgent(collectedItem, cancelCheck) {
+      const { taskId, collectedData } = collectedItem;
+      const { apiKey, videoUrl, titleText, detailCategoryContext, categoryRule, reasoningEffort, selectedTags } = collectedData;
+
+      try {
+        this.pushLog(`${formatTaskLogPrefix(taskId)}：开始 AI 处理`);
+
+        // 步骤1：视频理解
+        this.pushLog(`${formatTaskLogPrefix(taskId)}：正在理解视频内容`);
+        let videoSummaryRaw = '';
+        try {
+          videoSummaryRaw = await requestOmniVideoSummary(
+            apiKey,
+            videoUrl,
+            buildOmniVideoSummaryPrompt(titleText, detailCategoryContext),
+            categoryRule,
+            detailCategoryContext,
+            reasoningEffort,
+            cancelCheck
+          );
+        } catch (error) {
+          const videoInspectionMessage = normalizeText(error && error.message ? error.message : String(error));
+          if (isModelVideoInspectionErrorMessage(videoInspectionMessage)) {
+            this.pushLog(`${formatTaskLogPrefix(taskId)}：视频内容触发安全拦截，已跳过`);
+            return {
+              taskId,
+              status: 'skipped',
+              skipReason: 'content_inspection_failed'
+            };
+          }
+          throw error;
+        }
+
+        const videoAnalysis = normalizeOmniVideoAnalysis(parseModelJsonObject(videoSummaryRaw, '视频理解'));
+        const videoSummary = formatOmniVideoAnalysisForPrompt(videoAnalysis);
+        this.pushLog(`${formatTaskLogPrefix(taskId)}：视频理解完成，主题：${videoAnalysis.overallTheme || '无'}`);
+
+        // 步骤2：候选标签判断
+        this.pushLog(`${formatTaskLogPrefix(taskId)}：正在判断候选标签`);
+        const tagLibrary = await loadTagLibrary();
+        const firstJudgeRaw = await requestTagJudge(
+          apiKey,
+          buildFirstTagJudgePrompt(titleText, detailCategoryContext, videoSummary, selectedTags),
+          categoryRule,
+          detailCategoryContext,
+          reasoningEffort,
+          cancelCheck
+        );
+        const firstJudge = parseModelJsonObject(firstJudgeRaw, '候选标签判断');
+        const searchCandidates = normalizeTagSearchCandidateArray(firstJudge.search_candidates);
+        const firstSummary = normalizeText(firstJudge.summary);
+        this.pushLog(`${formatTaskLogPrefix(taskId)}：候选标签判断完成，${searchCandidates.length} 个候选`);
+
+        // 步骤3：标签库检索
+        const searchResults = [];
+        for (let candidateIndex = 0; candidateIndex < searchCandidates.length; candidateIndex += 1) {
+          const candidate = searchCandidates[candidateIndex];
+          if (!candidate || !candidate.keyword) continue;
+          const options = searchTagLibraryOptions(tagLibrary, candidate.keyword, selectedTags);
+          searchResults.push({
+            keyword: candidate.keyword,
+            reason: candidate.reason,
+            options
+          });
+          this.pushLog(`${formatTaskLogPrefix(taskId)}：候选标签 ${candidate.keyword} 检索完成，${options.length} 个结果`);
+        }
+
+        // 步骤4：最终裁定
+        this.pushLog(`${formatTaskLogPrefix(taskId)}：正在进行最终标签裁定`);
+        const finalJudgeRaw = await requestTagJudge(
+          apiKey,
+          buildFinalTagJudgePrompt(
+            titleText, detailCategoryContext, videoSummary, selectedTags,
+            { search_candidates: searchCandidates, summary: firstSummary },
+            searchResults
+          ),
+          categoryRule,
+          detailCategoryContext,
+          reasoningEffort,
+          cancelCheck
+        );
+        const finalJudge = parseModelJsonObject(finalJudgeRaw, '最终标签裁定');
+        const missingTagsActionable = normalizeTagArray(finalJudge.missing_tags_actionable);
+        this.pushLog(`${formatTaskLogPrefix(taskId)}：AI 处理完成，${missingTagsActionable.length} 个漏打标签`);
+
+        return {
+          taskId,
+          status: 'completed',
+          missingTagsActionable
+        };
+
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        this.pushLog(`${formatTaskLogPrefix(taskId)}：AI 处理失败：${message}`);
+        return {
+          taskId,
+          status: 'error',
+          error: message
+        };
+      }
+    }
+
+    async runParallelAgents(collectedDataList, cancelCheck) {
+      const MAX_CONCURRENT = 5;
+      const pendingQueue = [...collectedDataList];
+      const activeAgents = new Map();
+      const completedResults = [];
+
+      this.runtime.agentStatus = {
+        pending: pendingQueue.length,
+        running: 0,
+        completed: 0,
+        failed: 0,
+        agents: []
+      };
+      this.render();
+
+      while (pendingQueue.length > 0 || activeAgents.size > 0) {
+        if (this.isCurrentJobStopRequested()) {
+          throw new Error('任务已结束');
+        }
+        if (this.runtime.pauseRequested) {
+          break;
+        }
+
+        // 启动新的Agent
+        while (activeAgents.size < MAX_CONCURRENT && pendingQueue.length > 0) {
+          const data = pendingQueue.shift();
+          const agentIndex = this.runtime.agentStatus.agents.length;
+          this.runtime.agentStatus.agents.push({
+            taskId: data.taskId,
+            status: 'running',
+            startedAt: Date.now()
+          });
+          this.runtime.agentStatus.running = activeAgents.size + 1;
+          this.runtime.agentStatus.pending = pendingQueue.length;
+          this.render();
+
+          const agentPromise = this.processSingleVideoAgent(data, cancelCheck)
+            .then((result) => {
+              const agent = this.runtime.agentStatus.agents.find(a => a.taskId === data.taskId);
+              if (agent) {
+                agent.status = result.status === 'completed' ? 'completed' : 'failed';
+                agent.completedAt = Date.now();
+              }
+              this.runtime.agentStatus.running = activeAgents.size - 1;
+              this.runtime.agentStatus.completed += result.status === 'completed' ? 1 : 0;
+              this.runtime.agentStatus.failed += result.status !== 'completed' ? 1 : 0;
+              this.render();
+              return result;
+            })
+            .catch((error) => {
+              const agent = this.runtime.agentStatus.agents.find(a => a.taskId === data.taskId);
+              if (agent) {
+                agent.status = 'failed';
+                agent.completedAt = Date.now();
+              }
+              this.runtime.agentStatus.running = activeAgents.size - 1;
+              this.runtime.agentStatus.failed += 1;
+              this.render();
+              return { taskId: data.taskId, status: 'error', error: error.message };
+            });
+
+          activeAgents.set(data.taskId, agentPromise);
+        }
+
+        // 等待任意一个完成
+        if (activeAgents.size > 0) {
+          const settled = await Promise.race([...activeAgents.values()]);
+          activeAgents.delete(settled.taskId);
+          completedResults.push(settled);
+
+          // 处理结果
+          await this.handleAgentResult(settled);
+        }
+      }
+
+      this.runtime.agentStatus = null;
+      this.render();
+      return completedResults;
+    }
+
+    async handleAgentResult(result) {
+      const checkpoint = this.runtime.checkpoint;
+      if (!checkpoint) return;
+
+      if (result.status === 'completed' && result.missingTagsActionable && result.missingTagsActionable.length > 0) {
+        const missingTagsText = buildMissingTagRecordText(result.missingTagsActionable);
+        checkpoint.rows.push({
+          vid: result.taskId,
+          missingTags: missingTagsText,
+          standardOperator: '',
+          qcOperator: '',
+          itemKey: ''
+        });
+        this.pushLog(`${formatTaskLogPrefix(result.taskId)}：已记录漏打标签 ${missingTagsText}`);
+      } else if (result.status === 'completed') {
+        this.pushLog(`${formatTaskLogPrefix(result.taskId)}：未发现漏打标签`);
+      } else if (result.status === 'skipped') {
+        this.pushLog(`${formatTaskLogPrefix(result.taskId)}：已跳过（${result.skipReason}）`);
+      } else {
+        this.pushLog(`${formatTaskLogPrefix(result.taskId)}：处理失败，已跳过`);
+      }
+
+      await this.rememberSecondaryQcTaskSeen(result.taskId);
+      await this.saveCheckpoint();
+    }
+
     async processSecondaryQcApiPage(item, itemIndex, records, pageNumber, totalPages, cancelCheck) {
       const checkpoint = this.runtime.checkpoint;
       const pageSeen = new Set();
@@ -7314,6 +7462,11 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
         .map((record) => normalizeSecondaryQcApiRow(record))
         .filter(Boolean);
       let historicalSeenCount = 0;
+
+      // 阶段1：收集数据（顺序）
+      const collectedDataList = [];
+      const BATCH_SIZE = 10;
+
       for (let index = rows.length - 1; index >= 0; index -= 1) {
         if (this.isCurrentJobStopRequested()) {
           throw new Error('任务已结束');
@@ -7325,7 +7478,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
           checkpoint.rows.length >= checkpoint.targetCount
           || (checkpoint.itemRecordedCounts[itemIndex] || 0) >= (checkpoint.itemTargetCounts[itemIndex] || 0)
         ) {
-          return { status: 'done', candidateCount, historicalSeenCount };
+          break;
         }
         const row = rows[index];
         if (!isSecondaryQcApiRowCandidate(row, item)) {
@@ -7344,14 +7497,25 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
           continue;
         }
         pageSeen.add(row.taskId);
-        const taskStatus = await this.runSecondaryQcRowTask(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
-        if (taskStatus === 'paused') {
-          return { status: 'paused', candidateCount, historicalSeenCount };
+
+        // 收集数据
+        const collectedData = await this.collectVideoData(item, itemIndex, row, pageNumber, totalPages, cancelCheck);
+        if (collectedData) {
+          collectedDataList.push(collectedData);
         }
-        if (this.isSecondaryQcTargetReached(itemIndex, checkpoint)) {
-          return { status: 'done', candidateCount, historicalSeenCount };
+
+        // 如果收集够了，开始处理
+        if (collectedDataList.length >= BATCH_SIZE) {
+          break;
         }
       }
+
+      // 阶段2：并行处理
+      if (collectedDataList.length > 0) {
+        this.pushLog(`${this.describeItem(item)}：已收集 ${collectedDataList.length} 个视频数据，开始并行处理`);
+        await this.runParallelAgents(collectedDataList, cancelCheck);
+      }
+
       return { status: this.runtime.pauseRequested ? 'paused' : 'continue', candidateCount, historicalSeenCount };
     }
 
