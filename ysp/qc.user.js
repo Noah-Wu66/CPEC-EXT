@@ -1335,7 +1335,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   border-radius: 10px;
   background: #fafafa;
   border: 1px solid rgba(0, 0, 0, 0.04);
-  min-width: 420px;
+  min-width: 320px;
 }
 
 .ysp-qc-panel__agent-card-avatar {
@@ -1436,8 +1436,12 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 }
 
 .ysp-qc-panel__agent-card-progress-dot.is-running {
-  background: #8bc34a;
-  animation: ysp-qc-agent-dot-pulse 1.2s ease-in-out infinite;
+  animation: ysp-qc-agent-dot-wave 1.2s ease-in-out infinite;
+}
+
+@keyframes ysp-qc-agent-dot-wave {
+  0%, 100% { background: #e8e8e8; }
+  50% { background: #8bc34a; }
 }
   `;
 
@@ -1647,6 +1651,12 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
     '泽克', '布雷', '茜茜', '达蒙', '伊娃'
   ];
 
+  const AGENT_STATUS_LABELS = {
+    running: ['查看中', '分析中', '处理中', '质检中', '解析中', '研判中'],
+    completed: ['已完成', '已结束', '已归档', '已通过'],
+    failed: ['失败', '异常', '已中断']
+  };
+
   const AGENT_AVATAR_COLORS = [
     '#E57373', '#F06292', '#BA68C8', '#9575CD', '#7986CB',
     '#64B5F6', '#4FC3F7', '#4DD0E1', '#4DB6AC', '#81C784',
@@ -1664,6 +1674,11 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
     const avatarUrl = getAgentAvatarUrl(name);
     const number = String(index + 1).padStart(2, '0');
     return { name, avatarUrl, number };
+  }
+
+  function getAgentStatusLabel(status) {
+    const labels = AGENT_STATUS_LABELS[status] || ['处理中'];
+    return labels[Math.floor(Math.random() * labels.length)];
   }
 
   function createDefaultWorkbenchSettings() {
@@ -6675,14 +6690,15 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
         const totalAgents = agents.length;
         const agentCards = agents.map((agent) => {
           const profile = agent.profile || generateAgentProfile(0);
-          const statusText = agent.status === 'running' ? '查看中' : agent.status === 'completed' ? '已完成' : '失败';
+          const statusText = agent.statusLabel || (agent.status === 'running' ? '处理中' : agent.status === 'completed' ? '已完成' : '失败');
           const statusClass = agent.status === 'running' ? 'is-running' : agent.status === 'completed' ? 'is-completed' : 'is-failed';
           const taskDesc = agent.taskDesc || `视频 ${agent.taskId ? agent.taskId.slice(0, 8) : ''}...`;
-          const progressDots = Array.from({ length: 10 }, (_, i) => {
+          const progressDots = Array.from({ length: 4 }, (_, i) => {
             const dotClass = agent.status === 'completed' ? 'is-active' : agent.status === 'running' ? 'is-running' : '';
-            return `<span class="ysp-qc-panel__agent-card-progress-dot ${dotClass}"></span>`;
+            const delayStyle = agent.status === 'running' ? ` style="animation-delay: ${i * 0.25}s;"` : '';
+            return `<span class="ysp-qc-panel__agent-card-progress-dot ${dotClass}"${delayStyle}></span>`;
           }).join('');
-          const statusInHeader = agent.status === 'running' ? `<span class="ysp-qc-panel__agent-card-status-text">${statusText}</span>` : '';
+          const statusInHeader = `<span class="ysp-qc-panel__agent-card-status-text">${statusText}</span>`;
           return `<div class="ysp-qc-panel__agent-card">
             <div class="ysp-qc-panel__agent-card-avatar">
               <img src="${escapeXml(profile.avatarUrl)}" alt="${escapeXml(profile.name)}" loading="lazy" />
@@ -7612,7 +7628,8 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
             status: 'running',
             startedAt: Date.now(),
             profile,
-            taskDesc: `分析任务：视频 ${data.taskId ? data.taskId.slice(0, 8) : ''}... 二次质检 ### 背景 标准化操作人：${normalizeText(data.row && data.row.standardOperator)}`
+            statusLabel: getAgentStatusLabel('running'),
+            taskDesc: `分析：视频 ${data.taskId ? data.taskId.slice(0, 6) : ''}...`
           });
           this.runtime.agentStatus.running = activeAgents.size + 1;
           this.runtime.agentStatus.pending = pendingQueue.length;
@@ -7623,6 +7640,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
               const agent = this.runtime.agentStatus.agents.find(a => a.taskId === data.taskId);
               if (agent) {
                 agent.status = result.status === 'completed' ? 'completed' : 'failed';
+                agent.statusLabel = getAgentStatusLabel(agent.status);
                 agent.completedAt = Date.now();
               }
               this.runtime.agentStatus.running = activeAgents.size - 1;
@@ -7635,6 +7653,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
               const agent = this.runtime.agentStatus.agents.find(a => a.taskId === data.taskId);
               if (agent) {
                 agent.status = 'failed';
+                agent.statusLabel = getAgentStatusLabel('failed');
                 agent.completedAt = Date.now();
               }
               this.runtime.agentStatus.running = activeAgents.size - 1;
