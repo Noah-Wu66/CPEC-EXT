@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.2.2
+// @version      1.3.0
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1267,70 +1267,177 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   margin-top: 10px;
 }
 
-.ysp-qc-panel__agent-status {
+  .ysp-qc-panel__agent-cluster {
   margin-top: 10px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(232, 245, 233, 0.92), rgba(232, 245, 233, 0.78));
-  border: 1px solid rgba(56, 142, 60, 0.15);
+  border-radius: 12px;
+  background: #f5f5f5;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 
-.ysp-qc-panel__agent-status-header {
+.ysp-qc-panel__agent-cluster-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.ysp-qc-panel__agent-cluster-header-icon {
+  font-size: 14px;
+}
+
+.ysp-qc-panel__agent-cluster-header-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #333333;
+}
+
+.ysp-qc-panel__agent-cluster-header-divider {
+  color: #cccccc;
+  font-size: 12px;
+}
+
+.ysp-qc-panel__agent-cluster-header-subtitle {
+  font-size: 12px;
+  color: #888888;
+}
+
+.ysp-qc-panel__agent-cluster-list {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.ysp-qc-panel__agent-cluster-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ysp-qc-panel__agent-cluster-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ysp-qc-panel__agent-cluster-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+}
+
+.ysp-qc-panel__agent-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fafafa;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.ysp-qc-panel__agent-card-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #f0f0f0;
+}
+
+.ysp-qc-panel__agent-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ysp-qc-panel__agent-card-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ysp-qc-panel__agent-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
 }
 
-.ysp-qc-panel__agent-status-header .ysp-qc-panel__label {
-  margin-bottom: 0;
+.ysp-qc-panel__agent-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333333;
 }
 
-.ysp-qc-panel__agent-list {
-  display: grid;
-  gap: 6px;
-}
-
-.ysp-qc-panel__agent-item {
+.ysp-qc-panel__agent-card-header-right {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(25, 56, 84, 0.08);
+  flex-shrink: 0;
+}
+
+.ysp-qc-panel__agent-card-status-text {
+  font-size: 11px;
+  color: #888888;
+}
+
+.ysp-qc-panel__agent-card-number {
   font-size: 12px;
-}
-
-.ysp-qc-panel__agent-id {
-  flex: 0 0 auto;
   font-weight: 700;
-  color: #1e4260;
+  color: #999999;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.ysp-qc-panel__agent-task {
+.ysp-qc-panel__agent-card-task-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ysp-qc-panel__agent-card-task-prefix {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #bbbbbb;
+  line-height: 1.4;
+}
+
+.ysp-qc-panel__agent-card-task-text {
   flex: 1 1 auto;
   min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #666666;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #35516a;
 }
 
-.ysp-qc-panel__agent-item.is-completed {
-  background: linear-gradient(135deg, rgba(232, 245, 233, 0.8), rgba(232, 245, 233, 0.5));
-  border-color: rgba(56, 142, 60, 0.12);
+.ysp-qc-panel__agent-card-progress {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: 6px;
 }
 
-.ysp-qc-panel__agent-item.is-running {
-  background: linear-gradient(135deg, rgba(227, 242, 253, 0.8), rgba(227, 242, 253, 0.5));
-  border-color: rgba(30, 136, 229, 0.15);
+.ysp-qc-panel__agent-card-progress-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: #e8e8e8;
+  transition: background 0.3s ease;
 }
 
-.ysp-qc-panel__agent-item.is-failed {
-  background: linear-gradient(135deg, rgba(255, 243, 224, 0.8), rgba(255, 243, 224, 0.5));
-  border-color: rgba(230, 81, 0, 0.12);
+.ysp-qc-panel__agent-card-progress-dot.is-active {
+  background: #8bc34a;
+}
+
+.ysp-qc-panel__agent-card-progress-dot.is-running {
+  background: #8bc34a;
+  animation: ysp-qc-agent-dot-pulse 1.2s ease-in-out infinite;
 }
   `;
 
@@ -1530,6 +1637,34 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
     library: null,
     loadingPromise: null
   };
+
+  const AGENT_NAMES = [
+    '向宁', '阿耶莎', '奎因', '艾伦', '唯特',
+    '柯恩', '泰德', '韦多', '林恩', '瑞克',
+    '莫迪', '索尔', '凯尔', '乔恩', '艾达',
+    '尼尔', '欧文', '佩里', '昆西', '罗伊',
+    '萨姆', '缇娜', '尤娜', '薇拉', '威尔',
+    '泽克', '布雷', '茜茜', '达蒙', '伊娃'
+  ];
+
+  const AGENT_AVATAR_COLORS = [
+    '#E57373', '#F06292', '#BA68C8', '#9575CD', '#7986CB',
+    '#64B5F6', '#4FC3F7', '#4DD0E1', '#4DB6AC', '#81C784',
+    '#AED581', '#DCE775', '#FFF176', '#FFD54F', '#FFB74D',
+    '#FF8A65', '#A1887F', '#90A4AE', '#FF7043', '#8D6E63'
+  ];
+
+  function getAgentAvatarUrl(name) {
+    const normalizedName = normalizeText(name);
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(normalizedName)}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+  }
+
+  function generateAgentProfile(index) {
+    const name = AGENT_NAMES[index % AGENT_NAMES.length];
+    const avatarUrl = getAgentAvatarUrl(name);
+    const number = String(index + 1).padStart(2, '0');
+    return { name, avatarUrl, number };
+  }
 
   function createDefaultWorkbenchSettings() {
     return {
@@ -6537,26 +6672,47 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
       if (this.runtime.agentStatus) {
         const { pending, running, completed, failed, agents } = this.runtime.agentStatus;
-        const agentLabels = ['代理 A', '代理 B', '代理 C', '代理 D', '代理 E'];
-        const agentItems = agents.map((agent, index) => {
-          const statusText = agent.status === 'running' ? '处理中' : agent.status === 'completed' ? '已完成' : '失败';
+        const totalAgents = agents.length;
+        const agentCards = agents.map((agent) => {
+          const profile = agent.profile || generateAgentProfile(0);
+          const statusText = agent.status === 'running' ? '查看中' : agent.status === 'completed' ? '已完成' : '失败';
           const statusClass = agent.status === 'running' ? 'is-running' : agent.status === 'completed' ? 'is-completed' : 'is-failed';
-          const duration = agent.completedAt ? Math.round((agent.completedAt - agent.startedAt) / 1000) : 0;
-          const durationText = agent.status !== 'running' ? ` (${duration}秒)` : '';
-          const label = index < agentLabels.length ? agentLabels[index] : `代理 ${index + 1}`;
-          return `<div class="ysp-qc-panel__agent-item ${statusClass}">
-            <span class="ysp-qc-panel__agent-id">${label}</span>
-            <span class="ysp-qc-panel__agent-task">视频 ${agent.taskId.slice(0, 8)}... - ${statusText}${durationText}</span>
+          const taskDesc = agent.taskDesc || `视频 ${agent.taskId ? agent.taskId.slice(0, 8) : ''}...`;
+          const progressDots = Array.from({ length: 10 }, (_, i) => {
+            const dotClass = agent.status === 'completed' ? 'is-active' : agent.status === 'running' ? 'is-running' : '';
+            return `<span class="ysp-qc-panel__agent-card-progress-dot ${dotClass}"></span>`;
+          }).join('');
+          const statusInHeader = agent.status === 'running' ? `<span class="ysp-qc-panel__agent-card-status-text">${statusText}</span>` : '';
+          return `<div class="ysp-qc-panel__agent-card">
+            <div class="ysp-qc-panel__agent-card-avatar">
+              <img src="${escapeXml(profile.avatarUrl)}" alt="${escapeXml(profile.name)}" loading="lazy" />
+            </div>
+            <div class="ysp-qc-panel__agent-card-main">
+              <div class="ysp-qc-panel__agent-card-header">
+                <span class="ysp-qc-panel__agent-card-name">${escapeXml(profile.name)}</span>
+                <div class="ysp-qc-panel__agent-card-header-right">
+                  ${statusInHeader}
+                  <span class="ysp-qc-panel__agent-card-number">${profile.number}</span>
+                </div>
+              </div>
+              <div class="ysp-qc-panel__agent-card-task-row">
+                <span class="ysp-qc-panel__agent-card-task-prefix">└</span>
+                <span class="ysp-qc-panel__agent-card-task-text">${escapeXml(taskDesc)}</span>
+                <div class="ysp-qc-panel__agent-card-progress">${progressDots}</div>
+              </div>
+            </div>
           </div>`;
         }).join('');
 
         agentStatusHtml = `
-          <div class="ysp-qc-panel__agent-status">
-            <div class="ysp-qc-panel__agent-status-header">
-              <span class="ysp-qc-panel__label">并行处理状态</span>
-              <span class="ysp-qc-panel__badge">进行中: ${running}/5 | 待处理: ${pending} | 已完成: ${completed} | 失败: ${failed}</span>
+          <div class="ysp-qc-panel__agent-cluster">
+            <div class="ysp-qc-panel__agent-cluster-header">
+              <span class="ysp-qc-panel__agent-cluster-header-icon">🧬</span>
+              <span class="ysp-qc-panel__agent-cluster-header-title">Agent 集群</span>
+              <span class="ysp-qc-panel__agent-cluster-header-divider">|</span>
+              <span class="ysp-qc-panel__agent-cluster-header-subtitle">${totalAgents} 个并行任务</span>
             </div>
-            <div class="ysp-qc-panel__agent-list">${agentItems}</div>
+            <div class="ysp-qc-panel__agent-cluster-list">${agentCards}</div>
           </div>
         `;
       }
@@ -7315,8 +7471,15 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
     }
 
     async processSingleVideoAgent(collectedItem, cancelCheck) {
-      const { taskId, collectedData } = collectedItem;
+      const { taskId, collectedData, row, itemKey, itemIndex } = collectedItem;
       const { apiKey, videoUrl, titleText, detailCategoryContext, categoryRule, reasoningEffort, selectedTags } = collectedData;
+      const resultMeta = {
+        taskId,
+        itemKey,
+        itemIndex,
+        standardOperator: normalizeText(row.standardOperator),
+        qcOperator: normalizeText(row.qcOperator)
+      };
 
       try {
         this.pushLog(`${formatTaskLogPrefix(taskId)}：开始 AI 处理`);
@@ -7339,7 +7502,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
           if (isModelVideoInspectionErrorMessage(videoInspectionMessage)) {
             this.pushLog(`${formatTaskLogPrefix(taskId)}：视频内容触发安全拦截，已跳过`);
             return {
-              taskId,
+              ...resultMeta,
               status: 'skipped',
               skipReason: 'content_inspection_failed'
             };
@@ -7400,7 +7563,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
         this.pushLog(`${formatTaskLogPrefix(taskId)}：AI 处理完成，${missingTagsActionable.length} 个漏打标签`);
 
         return {
-          taskId,
+          ...resultMeta,
           status: 'completed',
           missingTagsActionable
         };
@@ -7409,7 +7572,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
         const message = error && error.message ? error.message : String(error);
         this.pushLog(`${formatTaskLogPrefix(taskId)}：AI 处理失败：${message}`);
         return {
-          taskId,
+          ...resultMeta,
           status: 'error',
           error: message
         };
@@ -7443,10 +7606,13 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
         while (activeAgents.size < MAX_CONCURRENT && pendingQueue.length > 0) {
           const data = pendingQueue.shift();
           const agentIndex = this.runtime.agentStatus.agents.length;
+          const profile = generateAgentProfile(agentIndex);
           this.runtime.agentStatus.agents.push({
             taskId: data.taskId,
             status: 'running',
-            startedAt: Date.now()
+            startedAt: Date.now(),
+            profile,
+            taskDesc: `分析任务：视频 ${data.taskId ? data.taskId.slice(0, 8) : ''}... 二次质检 ### 背景 标准化操作人：${normalizeText(data.row && data.row.standardOperator)}`
           });
           this.runtime.agentStatus.running = activeAgents.size + 1;
           this.runtime.agentStatus.pending = pendingQueue.length;
@@ -7474,7 +7640,15 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
               this.runtime.agentStatus.running = activeAgents.size - 1;
               this.runtime.agentStatus.failed += 1;
               this.render();
-              return { taskId: data.taskId, status: 'error', error: error.message };
+              return {
+                taskId: data.taskId,
+                itemKey: data.itemKey,
+                itemIndex: data.itemIndex,
+                standardOperator: normalizeText(data.row.standardOperator),
+                qcOperator: normalizeText(data.row.qcOperator),
+                status: 'error',
+                error: error.message
+              };
             });
 
           activeAgents.set(data.taskId, agentPromise);
@@ -7502,14 +7676,25 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
       if (result.status === 'completed' && result.missingTagsActionable && result.missingTagsActionable.length > 0) {
         const missingTagsText = buildMissingTagRecordText(result.missingTagsActionable);
+        const itemTargetCount = checkpoint.itemTargetCounts[result.itemIndex] || 0;
+        const itemRecordedCount = checkpoint.itemRecordedCounts[result.itemIndex] || 0;
+        if (checkpoint.rows.length >= checkpoint.targetCount || itemRecordedCount >= itemTargetCount) {
+          this.pushLog(`${formatTaskLogPrefix(result.taskId)}：结果已返回，但当前目标已满，未再落表`);
+          await this.rememberSecondaryQcTaskSeen(result.taskId);
+          await this.saveCheckpoint();
+          return;
+        }
         checkpoint.rows.push({
           vid: result.taskId,
           missingTags: missingTagsText,
-          standardOperator: '',
-          qcOperator: '',
-          itemKey: ''
+          standardOperator: result.standardOperator,
+          qcOperator: result.qcOperator,
+          itemKey: result.itemKey
         });
-        this.pushLog(`${formatTaskLogPrefix(result.taskId)}：已记录漏打标签 ${missingTagsText}`);
+        checkpoint.itemRecordedCounts[result.itemIndex] = itemRecordedCount + 1;
+        this.pushLog(
+          `${formatTaskLogPrefix(result.taskId)}：已记录漏打标签 ${missingTagsText}（${checkpoint.itemRecordedCounts[result.itemIndex]}/${itemTargetCount}）`
+        );
       } else if (result.status === 'completed') {
         this.pushLog(`${formatTaskLogPrefix(result.taskId)}：未发现漏打标签`);
       } else if (result.status === 'skipped') {
