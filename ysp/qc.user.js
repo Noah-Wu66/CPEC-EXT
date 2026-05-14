@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         央视频二次质检助手
 // @namespace    https://github.com/Noah-Wu66/CPEC-EXT
-// @version      1.3.1
+// @version      1.3.2
 // @description  在标准化系统页面执行二次质检，并导出结果
 // @author       Noah
 // @match        http://std.video.cloud.cctv.com/*
@@ -1269,9 +1269,9 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
   .ysp-qc-panel__agent-cluster {
   margin-top: 10px;
-  border-radius: 12px;
-  background: #f5f5f5;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(25, 56, 84, 0.08);
   overflow: hidden;
 }
 
@@ -1280,8 +1280,8 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  background: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(25, 56, 84, 0.08);
+  background: rgba(244, 249, 255, 0.6);
 }
 
 .ysp-qc-panel__agent-cluster-header-icon {
@@ -1291,17 +1291,17 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 .ysp-qc-panel__agent-cluster-header-title {
   font-size: 13px;
   font-weight: 700;
-  color: #333333;
+  color: #18344c;
 }
 
 .ysp-qc-panel__agent-cluster-header-divider {
-  color: #cccccc;
+  color: #c8d4e0;
   font-size: 12px;
 }
 
 .ysp-qc-panel__agent-cluster-header-subtitle {
   font-size: 12px;
-  color: #888888;
+  color: #5d7082;
 }
 
 .ysp-qc-panel__agent-cluster-list {
@@ -1323,7 +1323,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 }
 
 .ysp-qc-panel__agent-cluster-list::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(23, 56, 84, 0.12);
   border-radius: 2px;
 }
 
@@ -1332,9 +1332,9 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: #fafafa;
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.9));
+  border: 1px solid rgba(25, 56, 84, 0.06);
   min-width: 320px;
 }
 
@@ -1344,7 +1344,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   height: 32px;
   border-radius: 50%;
   overflow: hidden;
-  background: #f0f0f0;
+  background: rgba(244, 249, 255, 0.8);
 }
 
 .ysp-qc-panel__agent-card-avatar img {
@@ -1371,7 +1371,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 .ysp-qc-panel__agent-card-name {
   font-size: 13px;
   font-weight: 600;
-  color: #333333;
+  color: #18344c;
 }
 
 .ysp-qc-panel__agent-card-header-right {
@@ -1383,13 +1383,13 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
 .ysp-qc-panel__agent-card-status-text {
   font-size: 11px;
-  color: #888888;
+  color: #5d7082;
 }
 
 .ysp-qc-panel__agent-card-number {
   font-size: 12px;
   font-weight: 700;
-  color: #999999;
+  color: #8a9eb2;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -1402,7 +1402,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 .ysp-qc-panel__agent-card-task-prefix {
   flex-shrink: 0;
   font-size: 12px;
-  color: #bbbbbb;
+  color: #b0c0d0;
   line-height: 1.4;
 }
 
@@ -1411,7 +1411,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   min-width: 0;
   font-size: 12px;
   line-height: 1.4;
-  color: #666666;
+  color: #40556f;
   white-space: nowrap;
 }
 
@@ -1427,12 +1427,12 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
   width: 5px;
   height: 5px;
   border-radius: 1px;
-  background: #e8e8e8;
+  background: #d8e2ee;
   transition: background 0.3s ease;
 }
 
 .ysp-qc-panel__agent-card-progress-dot.is-active {
-  background: #8bc34a;
+  background: #1f7d94;
 }
 
 .ysp-qc-panel__agent-card-progress-dot.is-running {
@@ -1440,8 +1440,8 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 }
 
 @keyframes ysp-qc-agent-dot-wave {
-  0%, 100% { background: #e8e8e8; }
-  50% { background: #8bc34a; }
+  0%, 100% { background: #d8e2ee; }
+  50% { background: #1f7d94; }
 }
   `;
 
@@ -2281,7 +2281,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
     if (location.hostname !== 'std.video.cloud.cctv.com') {
       return false;
     }
-    return isListPage() || isDetailPage();
+    return isListPage();
   }
 
   function isYangshipinMediaWorkerPage() {
@@ -6484,6 +6484,18 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
         >${optionsHtml}</div>
       `;
     }
+    repositionFloatingGroupMenu() {
+      if (!this.refs.popupLayer) return;
+      const menu = this.refs.popupLayer.querySelector('[data-role="group-menu"]');
+      if (!menu) return;
+      const layout = this.getGroupMenuLayout();
+      if (!layout) { this.refs.popupLayer.innerHTML = ''; return; }
+      menu.style.setProperty('--menu-left', layout.left + 'px');
+      menu.style.setProperty('--menu-width', layout.width + 'px');
+      menu.style.setProperty('--menu-max-height', layout.maxHeight + 'px');
+      if (layout.top !== null) { menu.style.top = layout.top + 'px'; menu.style.bottom = 'auto'; }
+      else { menu.style.bottom = layout.bottom + 'px'; menu.style.top = 'auto'; }
+    }
     async persistSettings() { await storageSetCached({ [STORAGE_KEYS.settings]: cloneWorkbenchSettings(this.settings) }); }
     syncSettingsToInputs() {
       const maxDate = getTodayDateString();
@@ -6577,9 +6589,9 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
           this.render();
         }
       });
-      this.refs.surface.addEventListener('scroll', () => { if (this.runtime.openGroupMenu) this.render(); }, true);
+      this.refs.surface.addEventListener('scroll', () => { if (this.runtime.openGroupMenu) this.repositionFloatingGroupMenu(); }, true);
       if (this.handleViewportChange) window.removeEventListener('resize', this.handleViewportChange);
-      this.handleViewportChange = () => { if (this.runtime.openGroupMenu) this.render(); };
+      this.handleViewportChange = () => { if (this.runtime.openGroupMenu) this.repositionFloatingGroupMenu(); };
       window.addEventListener('resize', this.handleViewportChange);
       this.refs.startSecondaryQc.addEventListener('click', () => this.startSecondaryQcJob().catch((error) => this.failJob(error)));
       this.refs.pauseResume.addEventListener('click', () => this.handlePauseResumeAction().catch((error) => this.failJob(error)));
@@ -6692,13 +6704,13 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
           const profile = agent.profile || generateAgentProfile(0);
           const statusText = agent.statusLabel || (agent.status === 'running' ? '处理中' : agent.status === 'completed' ? '已完成' : '失败');
           const statusClass = agent.status === 'running' ? 'is-running' : agent.status === 'completed' ? 'is-completed' : 'is-failed';
-          const taskDesc = agent.taskDesc || `视频 ${agent.taskId ? agent.taskId.slice(0, 8) : ''}...`;
+          const taskDesc = agent.taskDesc || `视频 ${agent.taskId ? escapeXml(agent.taskId.slice(0, 8)) : ''}...`;
           const progressDots = Array.from({ length: 4 }, (_, i) => {
             const dotClass = agent.status === 'completed' ? 'is-active' : agent.status === 'running' ? 'is-running' : '';
             const delayStyle = agent.status === 'running' ? ` style="animation-delay: ${i * 0.25}s;"` : '';
             return `<span class="ysp-qc-panel__agent-card-progress-dot ${dotClass}"${delayStyle}></span>`;
           }).join('');
-          const statusInHeader = `<span class="ysp-qc-panel__agent-card-status-text">${statusText}</span>`;
+          const statusInHeader = `<span class="ysp-qc-panel__agent-card-status-text">${escapeXml(statusText)}</span>`;
           return `<div class="ysp-qc-panel__agent-card">
             <div class="ysp-qc-panel__agent-card-avatar">
               <img src="${escapeXml(profile.avatarUrl)}" alt="${escapeXml(profile.name)}" loading="lazy" />
@@ -6764,7 +6776,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
       this.refs.downloadsCard.hidden = !cards.length;
       this.refs.downloads.innerHTML = cards.join('');
     }
-    renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-qc-panel__report-empty">暂无日志</div>'; return; } this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-qc-panel__log-entry">${escapeXml(formatUserVisibleLogText(log))}</div>`).join(''); this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
+    renderLogs() { if (!this.runtime.logs.length) { this.refs.logs.innerHTML = '<div class="ysp-qc-panel__report-empty">暂无日志</div>'; this._lastRenderedLogCount = 0; return; } const currentCount = this.runtime.logs.length; if (!this._lastRenderedLogCount || this._lastRenderedLogCount > currentCount || !this.refs.logs.querySelector('.ysp-qc-panel__log-entry')) { this.refs.logs.innerHTML = this.runtime.logs.map((log) => `<div class="ysp-qc-panel__log-entry">${escapeXml(formatUserVisibleLogText(log))}</div>`).join(''); } else { const fragment = document.createDocumentFragment(); for (let i = this._lastRenderedLogCount; i < currentCount; i++) { const div = document.createElement('div'); div.className = 'ysp-qc-panel__log-entry'; div.textContent = formatUserVisibleLogText(this.runtime.logs[i]); fragment.appendChild(div); } if (fragment.childNodes.length) this.refs.logs.appendChild(fragment); } this._lastRenderedLogCount = currentCount; this.refs.logs.scrollTop = this.refs.logs.scrollHeight; }
     render() {
       if (!this.panel) return;
       if (this.runtime.running && this.runtime.openGroupMenu) this.runtime.openGroupMenu = '';
@@ -7737,7 +7749,7 @@ button.ysp-qc-panel__header-chip:hover:not(:disabled) {
 
       // 阶段1：收集数据（顺序）
       const collectedDataList = [];
-      const BATCH_SIZE = 10;
+      const BATCH_SIZE = 50;
 
       for (let index = rows.length - 1; index >= 0; index -= 1) {
         if (this.isCurrentJobStopRequested()) {
